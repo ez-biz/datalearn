@@ -101,9 +101,8 @@ model SQLProblem {
   difficulty        Difficulty
   description       String     @db.Text
   schemaDescription String     @db.Text
-  sqlSchema         String     @db.Text
-  schemaId          String?
-  schema            SqlSchema? @relation(fields: [schemaId], references: [id])
+  schemaId          String
+  schema            SqlSchema  @relation(fields: [schemaId], references: [id])
   expectedOutput    String     @db.Text
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
