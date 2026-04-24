@@ -17,6 +17,7 @@ export function ProblemWorkspace({ initialSql, schemaSql, expectedOutput }: Prob
     return (
         <SqlPlayground
             initialSchema={schemaSql}
+            initialQuery={initialSql}
         />
     )
 }

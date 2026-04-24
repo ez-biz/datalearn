@@ -6,14 +6,16 @@ import { ResultTable } from "./ResultTable"
 import { initDuckDB } from "@/lib/duckdb"
 import { AsyncDuckDB } from "@duckdb/duckdb-wasm"
 
-const INITIAL_QUERY = "SELECT * FROM users LIMIT 10;"
+const DEFAULT_QUERY = "SELECT * FROM users LIMIT 10;"
 
 interface SqlPlaygroundProps {
     initialSchema?: string
+    initialQuery?: string
 }
 
-export function SqlPlayground({ initialSchema }: SqlPlaygroundProps) {
-    const [query, setQuery] = useState(INITIAL_QUERY)
+export function SqlPlayground({ initialSchema, initialQuery }: SqlPlaygroundProps) {
+    const defaultQuery = initialQuery || (initialSchema ? "-- Write your SQL query here\nSELECT * FROM customers LIMIT 10;" : DEFAULT_QUERY)
+    const [query, setQuery] = useState(defaultQuery)
     const [results, setResults] = useState<any[]>([])
     const [error, setError] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
@@ -31,17 +33,28 @@ export function SqlPlayground({ initialSchema }: SqlPlaygroundProps) {
                 const conn = await db.connect()
                 connRef.current = conn
 
-                // Seed some data
-                if (initialSchema) {
-                    await conn.query(initialSchema)
-                } else {
-                    await conn.query(`
-                        CREATE TABLE users (id INTEGER, name VARCHAR, role VARCHAR);
-                        INSERT INTO users VALUES 
-                        (1, 'Alice', 'Engineer'), 
-                        (2, 'Bob', 'Data Scientist'),
-                        (3, 'Charlie', 'Manager');
-                    `)
+                // Determine which schema to load
+                const schema = initialSchema || `
+                    CREATE TABLE users (id INTEGER, name VARCHAR, role VARCHAR);
+                    INSERT INTO users VALUES (1, 'Alice', 'Engineer');
+                    INSERT INTO users VALUES (2, 'Bob', 'Data Scientist');
+                    INSERT INTO users VALUES (3, 'Charlie', 'Manager');
+                `
+
+                // Execute schema statements one at a time
+                // DuckDB-WASM query() can struggle with multi-statement strings
+                const statements = schema
+                    .split(/;\s*\n|;\s*$/)
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0)
+
+                for (const stmt of statements) {
+                    try {
+                        await conn.query(stmt)
+                    } catch (stmtError: any) {
+                        console.error("Statement failed:", stmt.substring(0, 80), stmtError.message)
+                        throw stmtError
+                    }
                 }
 
                 setInitializing(false)

@@ -1,24 +1,30 @@
 "use server"
 
-import Parser from 'rss-parser'
 import { unstable_cache } from 'next/cache'
 
-const parser = new Parser()
-const FEED_URL = "https://dataengineeringweekly.substack.com/feed" // Example feed
+const FEED_URL = "https://dataengineeringweekly.substack.com/feed"
+
+function extractTag(xml: string, tag: string): string {
+    const match = xml.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`))
+    return (match?.[1] || match?.[2] || "").trim()
+}
 
 const getCachedNews = unstable_cache(
     async () => {
-        const feed = await parser.parseURL(FEED_URL)
-        return feed.items.map(item => ({
-            title: item.title,
-            link: item.link,
-            pubDate: item.pubDate,
-            contentSnippet: item.contentSnippet,
+        const res = await fetch(FEED_URL, { next: { revalidate: 3600 } })
+        const xml = await res.text()
+
+        const items = xml.split("<item>").slice(1, 6) // Top 5
+        return items.map(item => ({
+            title: extractTag(item, "title"),
+            link: extractTag(item, "link"),
+            pubDate: extractTag(item, "pubDate"),
+            contentSnippet: extractTag(item, "description").replace(/<[^>]+>/g, "").slice(0, 200),
             source: "Data Engineering Weekly"
-        })).slice(0, 5) // Top 5 news
+        }))
     },
     ['news-feed'],
-    { revalidate: 3600 } // Cache for 1 hour
+    { revalidate: 3600 }
 )
 
 export async function getNews() {

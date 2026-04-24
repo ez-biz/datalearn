@@ -66,21 +66,31 @@ def etl_process():
 
     await prisma.sQLProblem.upsert({
         where: { slug: 'simple-select' },
-        update: {},
+        update: {
+            sqlSchema: [
+                "CREATE TABLE users (id INTEGER, name VARCHAR, role VARCHAR)",
+                "INSERT INTO users VALUES (1, 'Alice', 'Engineer')",
+                "INSERT INTO users VALUES (2, 'Bob', 'Sales')"
+            ].join(';\n') + ';',
+        },
         create: {
             title: 'Simple Select',
             slug: 'simple-select',
             difficulty: 'EASY',
             description: 'Select all columns from the users table.',
             schemaDescription: 'Table `users` with columns: id, name, role',
-            sqlSchema: "CREATE TABLE users (id INTEGER, name VARCHAR, role VARCHAR); INSERT INTO users VALUES (1, 'Alice', 'Engineer'), (2, 'Bob', 'Sales');",
+            sqlSchema: [
+                "CREATE TABLE users (id INTEGER, name VARCHAR, role VARCHAR)",
+                "INSERT INTO users VALUES (1, 'Alice', 'Engineer')",
+                "INSERT INTO users VALUES (2, 'Bob', 'Sales')"
+            ].join(';\n') + ';',
             expectedOutput: '[{"id":1,"name":"Alice","role":"Engineer"},{"id":2,"name":"Bob","role":"Sales"}]'
         }
     })
 
     await prisma.sQLProblem.upsert({
         where: { slug: 'total-revenue-per-customer' },
-        update: {},
+        update: { sqlSchema: ECOMMERCE_SCHEMA },
         create: {
             title: 'Total Revenue Per Customer',
             slug: 'total-revenue-per-customer',
@@ -94,7 +104,7 @@ def etl_process():
 
     await prisma.sQLProblem.upsert({
         where: { slug: 'top-selling-products' },
-        update: {},
+        update: { sqlSchema: ECOMMERCE_SCHEMA },
         create: {
             title: 'Top Selling Products',
             slug: 'top-selling-products',
