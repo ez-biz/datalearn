@@ -16,7 +16,8 @@ export async function getProblems() {
 export async function getProblem(slug: string) {
     try {
         const problem = await prisma.sQLProblem.findUnique({
-            where: { slug }
+            where: { slug },
+            include: { schema: true },
         })
         return { success: true, data: problem }
     } catch (error) {
