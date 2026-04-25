@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { CheckCircle2, Loader2, Play, Send } from "lucide-react"
+import { CheckCircle2, Loader2, Play, RotateCcw, Send } from "lucide-react"
 import { SqlEditor } from "./SqlEditor"
 import { ResultTable } from "./ResultTable"
 import { ValidationResult as ValidationResultView } from "./ValidationResult"
@@ -15,25 +15,37 @@ const DEFAULT_QUERY = "-- Write your SQL query here.\n\nSELECT 1 AS hello;"
 
 interface SqlPlaygroundProps {
     initialSchema?: string
-    initialQuery?: string
     problemSlug?: string
+    query?: string
+    onQueryChange?: (query: string) => void
     onSubmit?: (userResult: unknown[]) => Promise<ValidationResult>
+    onReset?: () => void
 }
 
 type Tab = "results" | "verdict"
 
 export function SqlPlayground({
     initialSchema,
-    initialQuery,
     problemSlug,
+    query: queryProp,
+    onQueryChange,
     onSubmit,
+    onReset,
 }: SqlPlaygroundProps) {
-    const defaultQuery =
-        initialQuery ||
-        (initialSchema
-            ? "-- Write your SQL query here.\n-- Inspect the schema panel for available tables.\n"
-            : DEFAULT_QUERY)
-    const [query, setQuery] = useState(defaultQuery)
+    const controlled = queryProp !== undefined
+    const placeholder = initialSchema
+        ? "-- Write your SQL query here.\n-- Inspect the schema panel for available tables.\n"
+        : DEFAULT_QUERY
+    const [internalQuery, setInternalQuery] = useState(placeholder)
+    const query = controlled ? (queryProp || placeholder) : internalQuery
+    const setQuery = (v: string) => {
+        if (controlled) {
+            onQueryChange?.(v)
+        } else {
+            setInternalQuery(v)
+        }
+    }
+
     const [results, setResults] = useState<any[]>([])
     const [error, setError] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
@@ -46,6 +58,8 @@ export function SqlPlayground({
 
     const dbRef = useRef<AsyncDuckDB | null>(null)
     const connRef = useRef<any>(null)
+    const queryRef = useRef(query)
+    queryRef.current = query
 
     useEffect(() => {
         async function loadDB() {
@@ -88,11 +102,12 @@ export function SqlPlayground({
 
     async function runQuery(): Promise<any[] | null> {
         if (!connRef.current) return null
-        const arrowTable = await connRef.current.query(query)
+        const arrowTable = await connRef.current.query(queryRef.current)
         return arrowTable.toArray().map((row: any) => row.toJSON())
     }
 
     const handleRun = async () => {
+        if (loading || submitting || initializing) return
         setLoading(true)
         setError(null)
         setResults([])
@@ -115,6 +130,7 @@ export function SqlPlayground({
 
     const handleSubmit = async () => {
         if (!onSubmit || !problemSlug) return
+        if (loading || submitting) return
         setSubmitting(true)
         setValidation(null)
         setError(null)
@@ -139,6 +155,28 @@ export function SqlPlayground({
         }
     }
 
+    // Global keyboard shortcuts
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) {
+            const mod = e.metaKey || e.ctrlKey
+            if (!mod) return
+            if (e.key === "Enter") {
+                if (e.shiftKey) {
+                    if (onSubmit && problemSlug) {
+                        e.preventDefault()
+                        handleSubmit()
+                    }
+                } else {
+                    e.preventDefault()
+                    handleRun()
+                }
+            }
+        }
+        window.addEventListener("keydown", onKey)
+        return () => window.removeEventListener("keydown", onKey)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [onSubmit, problemSlug, loading, submitting, initializing])
+
     if (initializing) {
         return (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -150,6 +188,8 @@ export function SqlPlayground({
 
     const showSubmit = Boolean(onSubmit && problemSlug)
     const submitDisabled = submitting || loading || !hasRunOnce
+    const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
+    const modKey = isMac ? "⌘" : "Ctrl"
 
     return (
         <div className="flex flex-col h-full gap-3">
@@ -158,6 +198,7 @@ export function SqlPlayground({
                     value={query}
                     onChange={(v) => setQuery(v || "")}
                     onRun={handleRun}
+                    onSubmit={showSubmit ? handleSubmit : undefined}
                     running={loading}
                 />
             </div>
@@ -185,17 +226,30 @@ export function SqlPlayground({
                         />
                     )}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                     {elapsedMs != null && !loading && !submitting && (
                         <span className="text-xs text-muted-foreground tabular-nums hidden sm:inline">
                             {elapsedMs} ms
                         </span>
+                    )}
+                    {onReset && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={onReset}
+                            disabled={loading || submitting}
+                            title="Reset draft (clears editor and removes saved local draft)"
+                        >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Reset</span>
+                        </Button>
                     )}
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={handleRun}
                         disabled={loading || submitting}
+                        title={`Run (${modKey} ↵)`}
                     >
                         <Play className="h-3.5 w-3.5" />
                         Run
@@ -205,7 +259,11 @@ export function SqlPlayground({
                             size="sm"
                             onClick={handleSubmit}
                             disabled={submitDisabled}
-                            title={!hasRunOnce ? "Run your query at least once before submitting." : undefined}
+                            title={
+                                !hasRunOnce
+                                    ? "Run your query at least once before submitting."
+                                    : `Submit (${modKey} ⇧ ↵)`
+                            }
                         >
                             {submitting ? (
                                 <>

@@ -16,7 +16,8 @@ model User {
   role          UserRole  @default(USER)
   accounts      Account[]
   sessions      Session[]
-  
+  submissions   Submission[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -105,6 +106,8 @@ model SQLProblem {
   schema            SqlSchema  @relation(fields: [schemaId], references: [id])
   expectedOutput    String     @db.Text
   ordered           Boolean    @default(false)
+  hints             String[]   @default([])
+  submissions       Submission[]
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 }
@@ -113,6 +116,28 @@ enum Difficulty {
   EASY
   MEDIUM
   HARD
+}
+
+model Submission {
+  id        String           @id @default(cuid())
+  userId    String
+  problemId String
+  status    SubmissionStatus
+  code      String           @db.Text
+  reason    String?          @db.Text
+  createdAt DateTime         @default(now())
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem   SQLProblem       @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@index([userId, problemId, createdAt])
+  @@index([userId, createdAt])
+  @@index([userId, status])
+}
+
+enum SubmissionStatus {
+  ACCEPTED
+  WRONG_ANSWER
 }
 
 model Page {
