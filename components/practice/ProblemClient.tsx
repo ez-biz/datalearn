@@ -26,6 +26,14 @@ interface ProblemClientProps {
     expectedColumns: string[] | null
     initialHistory: ProblemHistoryEntry[]
     isSolved: boolean
+    relatedArticles: Array<{
+        id: string
+        slug: string
+        title: string
+        summary: string | null
+        readingMinutes: number | null
+        topic: { slug: string }
+    }>
 }
 
 const DRAFT_PREFIX = "dl:draft:"
@@ -43,6 +51,7 @@ export function ProblemClient({
     expectedColumns,
     initialHistory,
     isSolved,
+    relatedArticles,
 }: ProblemClientProps) {
     const [query, setQuery] = useState("")
     const [hydrated, setHydrated] = useState(false)
@@ -167,6 +176,7 @@ export function ProblemClient({
                     expectedColumns={expectedColumns}
                     history={history}
                     isSolved={solved}
+                    relatedArticles={relatedArticles}
                     onLoadCode={loadCode}
                 />
             </aside>

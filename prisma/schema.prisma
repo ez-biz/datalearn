@@ -19,6 +19,7 @@ model User {
   submissions   Submission[]
   apiKeys       ApiKey[]
   reports       ProblemReport[]
+  articles      Article[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -75,17 +76,59 @@ model Topic {
 }
 
 model Article {
-  id        String   @id @default(cuid())
-  title     String
-  slug      String   @unique
-  content   String   @db.Text
-  published Boolean  @default(false)
-  topicId   String
-  topic     Topic    @relation(fields: [topicId], references: [id])
-  authorId  String
-  // author    User     @relation(fields: [authorId], references: [id]) // Optional link to User
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String        @id @default(cuid())
+  title           String
+  slug            String        @unique
+  content         String        @db.Text
+  status          ArticleStatus @default(DRAFT)
+  summary         String?       @db.Text
+  readingMinutes  Int?
+  reviewNotes     String?       @db.Text
+  reviewedAt      DateTime?
+  reviewedBy      String?
+  topicId         String
+  topic           Topic         @relation(fields: [topicId], references: [id])
+  authorId        String
+  author          User          @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  tags            Tag[]         @relation("ArticleTags")
+  relatedProblems SQLProblem[]  @relation("ArticleProblems")
+  versions        ArticleVersion[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([status])
+  @@index([topicId, status])
+  @@index([authorId])
+}
+
+enum ArticleStatus {
+  DRAFT
+  SUBMITTED
+  PUBLISHED
+  ARCHIVED
+}
+
+/**
+ * Immutable snapshot of an article at the moment it was published.
+ * Created automatically on transitions to PUBLISHED.
+ */
+model ArticleVersion {
+  id            String   @id @default(cuid())
+  articleId     String
+  article       Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  title         String
+  slug          String
+  content       String   @db.Text
+  summary       String?  @db.Text
+  topicId       String
+  tagSlugs      String[]
+  relatedProblemSlugs String[]
+  publishedById String?
+  capturedAt    DateTime @default(now())
+
+  @@unique([articleId, versionNumber])
+  @@index([articleId, capturedAt])
 }
 
 model SqlSchema {
@@ -114,6 +157,7 @@ model SQLProblem {
   tags              Tag[]      @relation("ProblemTags")
   submissions       Submission[]
   reports           ProblemReport[]
+  relatedArticles   Article[]  @relation("ArticleProblems")
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 
@@ -132,6 +176,7 @@ model Tag {
   name      String       @unique
   slug      String       @unique
   problems  SQLProblem[] @relation("ProblemTags")
+  articles  Article[]    @relation("ArticleTags")
   createdAt DateTime     @default(now())
 }
 

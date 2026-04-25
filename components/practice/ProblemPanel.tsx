@@ -13,7 +13,17 @@ import {
 import { DifficultyBadge, Badge } from "@/components/ui/Badge"
 import { cn } from "@/lib/utils"
 import { HistoryPanel } from "./HistoryPanel"
+import { RelatedArticlesPanel } from "./RelatedArticlesPanel"
 import type { ProblemHistoryEntry } from "@/actions/submissions"
+
+export type RelatedArticle = {
+    id: string
+    slug: string
+    title: string
+    summary: string | null
+    readingMinutes: number | null
+    topic: { slug: string }
+}
 
 type Tab = "description" | "schema" | "hints" | "history"
 
@@ -36,6 +46,7 @@ interface ProblemPanelProps {
     expectedColumns: string[] | null
     history: ProblemHistoryEntry[]
     isSolved: boolean
+    relatedArticles: RelatedArticle[]
     onLoadCode: (code: string) => void
 }
 
@@ -52,6 +63,7 @@ export function ProblemPanel({
     expectedColumns,
     history,
     isSolved,
+    relatedArticles,
     onLoadCode,
 }: ProblemPanelProps) {
     const [tab, setTab] = useState<Tab>("description")
@@ -119,6 +131,7 @@ export function ProblemPanel({
                         tablesLoading={tablesLoading}
                         expectedRows={expectedRows}
                         expectedColumns={expectedColumns}
+                        relatedArticles={relatedArticles}
                     />
                 )}
                 {tab === "schema" && (
@@ -143,9 +156,11 @@ function DescriptionTab({
     tablesLoading,
     expectedRows,
     expectedColumns,
+    relatedArticles,
 }: {
     description: string | null
     schemaDescription: string | null
+    relatedArticles: RelatedArticle[]
     tableInfos: TableInfo[] | null
     tablesLoading: boolean
     expectedRows: Record<string, unknown>[] | null
@@ -228,6 +243,10 @@ function DescriptionTab({
                         </div>
                     )}
                 </section>
+            )}
+
+            {relatedArticles.length > 0 && (
+                <RelatedArticlesPanel articles={relatedArticles} />
             )}
         </div>
     )

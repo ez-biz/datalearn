@@ -1,10 +1,11 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ChevronLeft, FileText } from "lucide-react"
+import { ChevronLeft, Clock, FileText } from "lucide-react"
 import { getTopic } from "@/actions/content"
 import { notFound } from "next/navigation"
 import { Container } from "@/components/ui/Container"
 import { Card } from "@/components/ui/Card"
+import { Badge } from "@/components/ui/Badge"
 import { EmptyState } from "@/components/ui/EmptyState"
 
 type Props = {
@@ -57,26 +58,61 @@ export default async function TopicPage({ params }: Props) {
                 />
             ) : (
                 <Card className="overflow-hidden divide-y divide-border">
-                    {topic.articles.map((article: any, i: number) => (
+                    {topic.articles.map((article, i) => (
                         <Link
                             key={article.id}
                             href={`/learn/${topicSlug}/${article.slug}`}
-                            className="flex items-center gap-4 p-5 hover:bg-surface-muted/60 transition-colors group"
+                            className="flex items-start gap-4 p-5 hover:bg-surface-muted/60 transition-colors group"
                         >
-                            <span className="hidden sm:inline-block w-6 text-xs tabular-nums text-muted-foreground">
+                            <span className="hidden sm:inline-block w-6 mt-0.5 text-xs tabular-nums text-muted-foreground">
                                 {String(i + 1).padStart(2, "0")}
                             </span>
                             <div className="flex-1 min-w-0">
                                 <h2 className="font-medium text-foreground group-hover:text-primary transition-colors">
                                     {article.title}
                                 </h2>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                    {new Date(article.createdAt).toLocaleDateString(undefined, {
-                                        year: "numeric",
-                                        month: "short",
-                                        day: "numeric",
-                                    })}
-                                </p>
+                                {article.summary && (
+                                    <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+                                        {article.summary}
+                                    </p>
+                                )}
+                                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                    <span>
+                                        {new Date(article.createdAt).toLocaleDateString(
+                                            undefined,
+                                            {
+                                                year: "numeric",
+                                                month: "short",
+                                                day: "numeric",
+                                            }
+                                        )}
+                                    </span>
+                                    {article.readingMinutes != null && (
+                                        <>
+                                            <span>·</span>
+                                            <span className="inline-flex items-center gap-1 tabular-nums">
+                                                <Clock className="h-3 w-3" />
+                                                {article.readingMinutes} min
+                                            </span>
+                                        </>
+                                    )}
+                                    {article.tags.length > 0 && (
+                                        <>
+                                            <span>·</span>
+                                            <span className="inline-flex flex-wrap gap-1">
+                                                {article.tags.slice(0, 3).map((t) => (
+                                                    <Badge
+                                                        key={t.id}
+                                                        variant="secondary"
+                                                        className="normal-case tracking-normal text-[10px] py-0 px-1.5"
+                                                    >
+                                                        {t.slug}
+                                                    </Badge>
+                                                ))}
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </Link>
                     ))}
