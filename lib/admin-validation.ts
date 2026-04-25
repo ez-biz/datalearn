@@ -9,6 +9,14 @@ export const SlugSchema = z
     .regex(slugRegex, "Slug must be lowercase letters, digits, and hyphens.")
 
 export const Difficulty = z.enum(["EASY", "MEDIUM", "HARD"])
+export const ProblemStatus = z.enum(["DRAFT", "BETA", "PUBLISHED", "ARCHIVED"])
+export const ProblemReportKind = z.enum([
+    "WRONG_ANSWER",
+    "UNCLEAR_DESCRIPTION",
+    "BROKEN_SCHEMA",
+    "TYPO",
+    "OTHER",
+])
 
 export const SqlSchemaCreateInput = z.object({
     name: z.string().min(1).max(100),
@@ -26,6 +34,7 @@ export const ProblemCreateInput = z
         title: z.string().min(1).max(200),
         slug: SlugSchema,
         difficulty: Difficulty,
+        status: ProblemStatus.default("DRAFT"),
         description: z.string().min(1).max(20_000),
         schemaDescription: z.string().max(2_000).default(""),
         ordered: z.boolean().default(false),
@@ -69,6 +78,7 @@ export const ProblemUpdateInput = z.object({
     title: z.string().min(1).max(200).optional(),
     slug: SlugSchema.optional(),
     difficulty: Difficulty.optional(),
+    status: ProblemStatus.optional(),
     description: z.string().min(1).max(20_000).optional(),
     schemaDescription: z.string().max(2_000).optional(),
     ordered: z.boolean().optional(),
@@ -96,6 +106,12 @@ export const ProblemUpdateInput = z.object({
 export const ApiKeyCreateInput = z.object({
     name: z.string().min(1).max(100),
     expiresAt: z.coerce.date().optional(),
+})
+
+export const ProblemReportCreateInput = z.object({
+    problemSlug: SlugSchema,
+    kind: ProblemReportKind,
+    message: z.string().min(1).max(4_000),
 })
 
 export function slugify(input: string): string {

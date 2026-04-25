@@ -66,12 +66,19 @@ export default async function AdminProblemsPage() {
                                 className="grid grid-cols-1 md:grid-cols-[1fr_8rem_1fr_1fr_6rem_3rem] items-center gap-4 px-5 py-3"
                             >
                                 <div className="min-w-0">
-                                    <Link
-                                        href={`/admin/problems/${p.slug}/edit`}
-                                        className="font-medium hover:text-primary transition-colors truncate block"
-                                    >
-                                        {p.title}
-                                    </Link>
+                                    <div className="flex items-center gap-2">
+                                        <Link
+                                            href={`/admin/problems/${p.slug}/edit`}
+                                            className="font-medium hover:text-primary transition-colors truncate"
+                                        >
+                                            {p.title}
+                                        </Link>
+                                        {p.status !== "PUBLISHED" && (
+                                            <Badge variant="secondary" className="normal-case tracking-normal">
+                                                {p.status.toLowerCase()}
+                                            </Badge>
+                                        )}
+                                    </div>
                                     <p className="text-xs text-muted-foreground font-mono truncate">
                                         /{p.slug}
                                     </p>

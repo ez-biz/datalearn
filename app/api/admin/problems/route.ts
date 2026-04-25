@@ -76,6 +76,7 @@ export const POST = withAdmin(async (req) => {
                     title: input.title,
                     slug: input.slug,
                     difficulty: input.difficulty,
+                    status: input.status,
                     description: input.description,
                     schemaDescription: input.schemaDescription,
                     schemaId,

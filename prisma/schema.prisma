@@ -18,6 +18,7 @@ model User {
   sessions      Session[]
   submissions   Submission[]
   apiKeys       ApiKey[]
+  reports       ProblemReport[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -101,6 +102,7 @@ model SQLProblem {
   title             String
   slug              String     @unique
   difficulty        Difficulty
+  status            ProblemStatus @default(PUBLISHED)
   description       String     @db.Text
   schemaDescription String     @db.Text
   schemaId          String
@@ -111,8 +113,18 @@ model SQLProblem {
   hints             String[]   @default([])
   tags              Tag[]      @relation("ProblemTags")
   submissions       Submission[]
+  reports           ProblemReport[]
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
+
+  @@index([status])
+}
+
+enum ProblemStatus {
+  DRAFT
+  BETA
+  PUBLISHED
+  ARCHIVED
 }
 
 model Tag {
@@ -175,4 +187,28 @@ model ApiKey {
   createdAt  DateTime  @default(now())
 
   @@index([createdById])
+}
+
+model ProblemReport {
+  id         String              @id @default(cuid())
+  problemId  String
+  problem    SQLProblem          @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  kind       ProblemReportKind
+  message    String              @db.Text
+  resolvedAt DateTime?
+  resolvedBy String?
+  createdAt  DateTime            @default(now())
+
+  @@index([resolvedAt])
+  @@index([problemId, createdAt])
+}
+
+enum ProblemReportKind {
+  WRONG_ANSWER
+  UNCLEAR_DESCRIPTION
+  BROKEN_SCHEMA
+  TYPO
+  OTHER
 }

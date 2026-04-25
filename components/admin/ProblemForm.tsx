@@ -12,6 +12,7 @@ import { useProblemDB } from "@/lib/use-problem-db"
 import { slugify } from "@/lib/admin-validation"
 
 type Difficulty = "EASY" | "MEDIUM" | "HARD"
+type ProblemStatus = "DRAFT" | "BETA" | "PUBLISHED" | "ARCHIVED"
 
 interface SchemaOption {
     id: string
@@ -24,6 +25,7 @@ export interface ProblemFormInitial {
     title: string
     slug: string
     difficulty: Difficulty
+    status: ProblemStatus
     description: string
     schemaDescription: string
     ordered: boolean
@@ -46,6 +48,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
     const [slug, setSlug] = useState(initial.slug)
     const [slugTouched, setSlugTouched] = useState(initial.mode === "edit")
     const [difficulty, setDifficulty] = useState<Difficulty>(initial.difficulty)
+    const [status, setStatus] = useState<ProblemStatus>(initial.status)
     const [description, setDescription] = useState(initial.description)
     const [schemaDescription, setSchemaDescription] = useState(
         initial.schemaDescription
@@ -55,6 +58,12 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
     const [tagSlugs, setTagSlugs] = useState(initial.tagSlugs)
     const [solutionSql, setSolutionSql] = useState(initial.solutionSql)
     const [expectedOutput, setExpectedOutput] = useState(initial.expectedOutput)
+    /**
+     * Industry practice (Codeforces, HackerRank, Codewars, etc.): expected
+     * output is captured from running a reference solution, never hand-typed.
+     * We lock the textarea by default and require an explicit opt-in to edit.
+     */
+    const [overrideExpected, setOverrideExpected] = useState(false)
 
     const [schemaMode, setSchemaMode] = useState<"existing" | "inline">(
         initial.schemaId ? "existing" : "inline"
@@ -143,6 +152,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                 title,
                 slug,
                 difficulty,
+                status,
                 description,
                 schemaDescription,
                 ordered,
@@ -236,7 +246,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                             />
                         </Field>
                     </div>
-                    <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="grid sm:grid-cols-3 gap-4">
                         <Field label="Difficulty" htmlFor="difficulty" required>
                             <select
                                 id="difficulty"
@@ -251,6 +261,26 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                                 <option value="HARD">Hard</option>
                             </select>
                         </Field>
+                        <Field
+                            label="Status"
+                            htmlFor="status"
+                            description="DRAFT/BETA hide from users. PUBLISHED is live."
+                            required
+                        >
+                            <select
+                                id="status"
+                                value={status}
+                                onChange={(e) =>
+                                    setStatus(e.target.value as ProblemStatus)
+                                }
+                                className="block w-full h-10 px-3 text-sm rounded-md border border-border bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                                <option value="DRAFT">Draft</option>
+                                <option value="BETA">Beta (admin-only)</option>
+                                <option value="PUBLISHED">Published</option>
+                                <option value="ARCHIVED">Archived</option>
+                            </select>
+                        </Field>
                         <Field label="Ordered comparison" htmlFor="ordered" description="If checked, row order matters during validation.">
                             <label className="inline-flex items-center gap-2 h-10">
                                 <input
@@ -261,7 +291,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                                     className="h-4 w-4"
                                 />
                                 <span className="text-sm">
-                                    Order matters (use for ORDER BY problems)
+                                    Order matters (ORDER BY)
                                 </span>
                             </label>
                         </Field>
@@ -426,17 +456,34 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                     <Field
                         label="Expected output (JSON array of rows)"
                         htmlFor="expectedOutput"
-                        description="Auto-filled by Run & capture. You can also paste/edit manually."
+                        description="Captured automatically from Run & capture. Locked by default — manual edits are an escape hatch only."
                         required
                     >
-                        <Textarea
-                            id="expectedOutput"
-                            value={expectedOutput}
-                            onChange={(e) => setExpectedOutput(e.target.value)}
-                            rows={10}
-                            placeholder='[{"name":"Alice","total":1234.5}]'
-                            required
-                        />
+                        <div className="space-y-2">
+                            <Textarea
+                                id="expectedOutput"
+                                value={expectedOutput}
+                                onChange={(e) => setExpectedOutput(e.target.value)}
+                                rows={10}
+                                placeholder='[{"name":"Alice","total":1234.5}]'
+                                readOnly={!overrideExpected}
+                                required
+                                className={
+                                    !overrideExpected
+                                        ? "bg-surface-muted/40 cursor-not-allowed"
+                                        : ""
+                                }
+                            />
+                            <label className="inline-flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={overrideExpected}
+                                    onChange={(e) => setOverrideExpected(e.target.checked)}
+                                    className="h-3.5 w-3.5"
+                                />
+                                Override manually (advanced — prefer Run & capture)
+                            </label>
+                        </div>
                     </Field>
                 </CardContent>
             </Card>
