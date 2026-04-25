@@ -8,6 +8,7 @@ import {
 } from "@/actions/submissions"
 import { notFound } from "next/navigation"
 import { ProblemClient } from "@/components/practice/ProblemClient"
+import { ReportDialog } from "@/components/practice/ReportDialog"
 
 type Props = {
     params: Promise<{ slug: string }>
@@ -69,7 +70,7 @@ export default async function ProblemPage({ params }: Props) {
 
     return (
         <div className="flex flex-col h-[calc(100vh-4rem)] bg-background">
-            <div className="border-b border-border bg-surface px-4 sm:px-6 py-2.5">
+            <div className="border-b border-border bg-surface px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3">
                 <Link
                     href="/practice"
                     className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -77,6 +78,7 @@ export default async function ProblemPage({ params }: Props) {
                     <ChevronLeft className="h-3.5 w-3.5" />
                     All problems
                 </Link>
+                <ReportDialog problemSlug={problem.slug} />
             </div>
             <ProblemClient
                 title={problem.title}

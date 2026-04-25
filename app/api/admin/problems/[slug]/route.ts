@@ -62,6 +62,7 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                 ...(input.title !== undefined && { title: input.title }),
                 ...(input.slug !== undefined && { slug: input.slug }),
                 ...(input.difficulty !== undefined && { difficulty: input.difficulty }),
+                ...(input.status !== undefined && { status: input.status }),
                 ...(input.description !== undefined && { description: input.description }),
                 ...(input.schemaDescription !== undefined && {
                     schemaDescription: input.schemaDescription,

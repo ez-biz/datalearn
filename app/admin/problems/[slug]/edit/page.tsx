@@ -47,6 +47,7 @@ export default async function EditProblemPage({ params }: Props) {
                     title: problem.title,
                     slug: problem.slug,
                     difficulty: problem.difficulty,
+                    status: problem.status,
                     description: problem.description,
                     schemaDescription: problem.schemaDescription,
                     ordered: problem.ordered,

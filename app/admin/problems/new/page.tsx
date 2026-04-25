@@ -31,6 +31,7 @@ export default function NewProblemPage() {
                     title: "",
                     slug: "",
                     difficulty: "EASY",
+                    status: "DRAFT",
                     description: "",
                     schemaDescription: "",
                     ordered: false,

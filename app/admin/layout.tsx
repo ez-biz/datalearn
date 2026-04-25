@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
 import { AdminNav } from "@/components/admin/AdminNav"
 
 export const metadata = {
@@ -17,9 +18,13 @@ export default async function AdminLayout({
         redirect("/")
     }
 
+    const openReportCount = await prisma.problemReport.count({
+        where: { resolvedAt: null },
+    })
+
     return (
         <div className="flex flex-col flex-1">
-            <AdminNav />
+            <AdminNav openReportCount={openReportCount} />
             {children}
         </div>
     )

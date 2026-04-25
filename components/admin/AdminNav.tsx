@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Database, FileCode, Key, LayoutDashboard, Tag } from "lucide-react"
+import { Database, Flag, FileCode, Key, LayoutDashboard, Tag } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const items = [
@@ -10,10 +10,11 @@ const items = [
     { href: "/admin/problems", label: "Problems", icon: Database },
     { href: "/admin/schemas", label: "Schemas", icon: FileCode },
     { href: "/admin/tags", label: "Tags", icon: Tag },
+    { href: "/admin/reports", label: "Reports", icon: Flag, badgeKey: "openReports" as const },
     { href: "/admin/api-keys", label: "API keys", icon: Key },
 ]
 
-export function AdminNav() {
+export function AdminNav({ openReportCount = 0 }: { openReportCount?: number }) {
     const pathname = usePathname()
     return (
         <nav className="flex items-center gap-1 overflow-x-auto scrollbar-thin border-b border-border bg-surface px-4 sm:px-6">
@@ -35,6 +36,11 @@ export function AdminNav() {
                     >
                         <Icon className="h-3.5 w-3.5" />
                         {item.label}
+                        {item.badgeKey === "openReports" && openReportCount > 0 && (
+                            <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-accent/15 text-accent text-[10px] font-semibold tabular-nums px-1">
+                                {openReportCount}
+                            </span>
+                        )}
                         {active && (
                             <span
                                 aria-hidden
