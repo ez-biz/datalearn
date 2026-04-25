@@ -26,7 +26,7 @@ export function SqlPlayground({
     const defaultQuery =
         initialQuery ||
         (initialSchema
-            ? "-- Write your SQL query here\nSELECT * FROM customers LIMIT 10;"
+            ? "-- Write your SQL query here.\n-- Inspect the schema panel on the left for available tables."
             : DEFAULT_QUERY)
     const [query, setQuery] = useState(defaultQuery)
     const [results, setResults] = useState<any[]>([])

@@ -236,16 +236,19 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
         update: {
             schemaId: ecommerceSchema.id,
             ordered: false,
+            description: 'Return every customer whose `country` is `USA`. Return columns `customer_id`, `name`, `email`, `country`.',
+            schemaDescription: 'Table `customers` with columns: customer_id, name, email, country',
+            expectedOutput: '[{"customer_id":1,"name":"John Doe","email":"john@example.com","country":"USA"},{"customer_id":4,"name":"Bob Brown","email":"bob@example.com","country":"USA"}]'
         },
         create: {
             title: 'Customers by Country',
             slug: 'customers-by-country',
             difficulty: 'EASY',
-            description: 'Return every customer whose `country` is `USA`. Return columns `id`, `name`, `email`, `country`.',
-            schemaDescription: 'Table `customers` with columns: id, name, email, country',
+            description: 'Return every customer whose `country` is `USA`. Return columns `customer_id`, `name`, `email`, `country`.',
+            schemaDescription: 'Table `customers` with columns: customer_id, name, email, country',
             schemaId: ecommerceSchema.id,
             ordered: false,
-            expectedOutput: '[{"id":1,"name":"John Doe","email":"john@example.com","country":"USA"},{"id":4,"name":"Bob Brown","email":"bob@example.com","country":"USA"}]'
+            expectedOutput: '[{"customer_id":1,"name":"John Doe","email":"john@example.com","country":"USA"},{"customer_id":4,"name":"Bob Brown","email":"bob@example.com","country":"USA"}]'
         }
     })
 
