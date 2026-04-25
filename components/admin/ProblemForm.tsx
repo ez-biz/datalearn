@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, Play, Save } from "lucide-react"
+import { Check, Loader2, Play, Save } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Field, Input, Textarea } from "@/components/ui/Input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
@@ -75,6 +75,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
     const [schemas, setSchemas] = useState<SchemaOption[]>([])
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [savedAt, setSavedAt] = useState<number | null>(null)
 
     // Auto-derive slug from title until the user manually edits the slug field
     useEffect(() => {
@@ -200,14 +201,32 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                 return
             }
             const newSlug = json?.data?.slug ?? slug
-            router.push(`/admin/problems/${newSlug}/edit`)
-            router.refresh()
+            // On create: redirect to the edit page so refreshes don't re-POST.
+            // On edit: stay put, show an inline "Saved" indicator that auto-clears.
+            if (initial.mode === "create") {
+                router.push(`/admin/problems/${newSlug}/edit`)
+                router.refresh()
+            } else {
+                if (newSlug !== originalSlug) {
+                    // slug changed — URL must update
+                    router.push(`/admin/problems/${newSlug}/edit`)
+                }
+                setSavedAt(Date.now())
+                router.refresh()
+            }
         } catch (e: any) {
             setError(e?.message ?? "Failed to save.")
         } finally {
             setSubmitting(false)
         }
     }
+
+    // Auto-clear the "Saved" indicator after 3s
+    useEffect(() => {
+        if (savedAt == null) return
+        const t = setTimeout(() => setSavedAt(null), 3000)
+        return () => clearTimeout(t)
+    }, [savedAt])
 
     return (
         <form onSubmit={onSubmit} className="space-y-6">
@@ -528,6 +547,16 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                 >
                     Cancel
                 </Button>
+                {savedAt && (
+                    <span
+                        role="status"
+                        aria-live="polite"
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-easy"
+                    >
+                        <Check className="h-3.5 w-3.5" />
+                        Saved
+                    </span>
+                )}
             </div>
         </form>
     )
