@@ -5,8 +5,6 @@ import { CheckCircle2, Loader2, Play, RotateCcw, Send } from "lucide-react"
 import { SqlEditor } from "./SqlEditor"
 import { ResultTable } from "./ResultTable"
 import { ValidationResult as ValidationResultView } from "./ValidationResult"
-import { initDuckDB } from "@/lib/duckdb"
-import { AsyncDuckDB } from "@duckdb/duckdb-wasm"
 import type { ValidationResult } from "@/lib/sql-validator"
 import { Button } from "@/components/ui/Button"
 import { cn } from "@/lib/utils"
@@ -14,6 +12,15 @@ import { cn } from "@/lib/utils"
 const DEFAULT_QUERY = "-- Write your SQL query here.\n\nSELECT 1 AS hello;"
 
 interface SqlPlaygroundProps {
+    /**
+     * Whether the shared in-browser DB has finished initializing the schema.
+     * When false, the playground shows a loading state.
+     */
+    dbReady: boolean
+    /** Init error from the shared DB, if any. */
+    dbError: string | null
+    /** Run a SQL string against the shared connection and return rows. */
+    runQuery: (sql: string) => Promise<any[]>
     initialSchema?: string
     problemSlug?: string
     query?: string
@@ -25,6 +32,9 @@ interface SqlPlaygroundProps {
 type Tab = "results" | "verdict"
 
 export function SqlPlayground({
+    dbReady,
+    dbError,
+    runQuery,
     initialSchema,
     problemSlug,
     query: queryProp,
@@ -50,64 +60,16 @@ export function SqlPlayground({
     const [error, setError] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
     const [submitting, setSubmitting] = useState(false)
-    const [initializing, setInitializing] = useState(true)
     const [hasRunOnce, setHasRunOnce] = useState(false)
     const [validation, setValidation] = useState<ValidationResult | null>(null)
     const [tab, setTab] = useState<Tab>("results")
     const [elapsedMs, setElapsedMs] = useState<number | null>(null)
 
-    const dbRef = useRef<AsyncDuckDB | null>(null)
-    const connRef = useRef<any>(null)
     const queryRef = useRef(query)
     queryRef.current = query
 
-    useEffect(() => {
-        async function loadDB() {
-            try {
-                const db = await initDuckDB()
-                dbRef.current = db
-                const conn = await db.connect()
-                connRef.current = conn
-
-                const schema =
-                    initialSchema ||
-                    `
-                    CREATE TABLE users (id INTEGER, name VARCHAR, role VARCHAR);
-                    INSERT INTO users VALUES (1, 'Alice', 'Engineer');
-                    INSERT INTO users VALUES (2, 'Bob', 'Data Scientist');
-                    INSERT INTO users VALUES (3, 'Charlie', 'Manager');
-                `
-                const statements = schema
-                    .split(/;\s*\n|;\s*$/)
-                    .map((s) => s.trim())
-                    .filter((s) => s.length > 0)
-
-                for (const stmt of statements) {
-                    try {
-                        await conn.query(stmt)
-                    } catch (stmtError: any) {
-                        console.error("Statement failed:", stmt.substring(0, 80), stmtError.message)
-                        throw stmtError
-                    }
-                }
-                setInitializing(false)
-            } catch (e) {
-                console.error("Failed to init DuckDB", e)
-                setError("Failed to initialize the SQL engine. Try refreshing the page.")
-                setInitializing(false)
-            }
-        }
-        loadDB()
-    }, [initialSchema])
-
-    async function runQuery(): Promise<any[] | null> {
-        if (!connRef.current) return null
-        const arrowTable = await connRef.current.query(queryRef.current)
-        return arrowTable.toArray().map((row: any) => row.toJSON())
-    }
-
     const handleRun = async () => {
-        if (loading || submitting || initializing) return
+        if (!dbReady || loading || submitting) return
         setLoading(true)
         setError(null)
         setResults([])
@@ -115,11 +77,9 @@ export function SqlPlayground({
         setTab("results")
         const t0 = performance.now()
         try {
-            const resultJson = await runQuery()
-            if (resultJson) {
-                setResults(resultJson)
-                setHasRunOnce(true)
-            }
+            const resultJson = await runQuery(queryRef.current)
+            setResults(resultJson)
+            setHasRunOnce(true)
         } catch (e: any) {
             setError(e.message || "An error occurred executing the query")
         } finally {
@@ -130,17 +90,13 @@ export function SqlPlayground({
 
     const handleSubmit = async () => {
         if (!onSubmit || !problemSlug) return
-        if (loading || submitting) return
+        if (!dbReady || loading || submitting) return
         setSubmitting(true)
         setValidation(null)
         setError(null)
         const t0 = performance.now()
         try {
-            const resultJson = await runQuery()
-            if (!resultJson) {
-                setError("Could not get query result for submission.")
-                return
-            }
+            const resultJson = await runQuery(queryRef.current)
             setResults(resultJson)
             setHasRunOnce(true)
             const outcome = await onSubmit(resultJson)
@@ -175,9 +131,17 @@ export function SqlPlayground({
         window.addEventListener("keydown", onKey)
         return () => window.removeEventListener("keydown", onKey)
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [onSubmit, problemSlug, loading, submitting, initializing])
+    }, [onSubmit, problemSlug, loading, submitting, dbReady])
 
-    if (initializing) {
+    if (dbError) {
+        return (
+            <div className="flex h-full items-center justify-center text-sm text-destructive p-4 text-center">
+                {dbError}
+            </div>
+        )
+    }
+
+    if (!dbReady) {
         return (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -188,7 +152,8 @@ export function SqlPlayground({
 
     const showSubmit = Boolean(onSubmit && problemSlug)
     const submitDisabled = submitting || loading || !hasRunOnce
-    const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
+    const isMac =
+        typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
     const modKey = isMac ? "⌘" : "Ctrl"
 
     return (

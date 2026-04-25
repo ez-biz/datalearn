@@ -23,23 +23,31 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     }
 }
 
+const EXPECTED_PREVIEW_LIMIT = 8
+
 function parseExpectedOutput(raw: string | null | undefined): {
     columns: string[] | null
-    sampleRow: Record<string, unknown> | null
+    rows: Record<string, unknown>[] | null
 } {
-    if (!raw) return { columns: null, sampleRow: null }
+    if (!raw) return { columns: null, rows: null }
     try {
         const parsed = JSON.parse(raw)
         if (!Array.isArray(parsed) || parsed.length === 0) {
-            return { columns: null, sampleRow: null }
+            return { columns: null, rows: null }
         }
         const first = parsed[0]
         if (first === null || typeof first !== "object" || Array.isArray(first)) {
-            return { columns: null, sampleRow: null }
+            return { columns: null, rows: null }
         }
-        return { columns: Object.keys(first), sampleRow: first as Record<string, unknown> }
+        const rows = parsed
+            .slice(0, EXPECTED_PREVIEW_LIMIT)
+            .filter(
+                (r: unknown) =>
+                    r !== null && typeof r === "object" && !Array.isArray(r)
+            ) as Record<string, unknown>[]
+        return { columns: Object.keys(first), rows }
     } catch {
-        return { columns: null, sampleRow: null }
+        return { columns: null, rows: null }
     }
 }
 
@@ -56,7 +64,7 @@ export default async function ProblemPage({ params }: Props) {
         getSolvedSlugs(),
     ])
     const isSolved = solvedSlugs.includes(slug)
-    const { columns: expectedColumns, sampleRow: expectedSampleRow } =
+    const { columns: expectedColumns, rows: expectedRows } =
         parseExpectedOutput((problem as any).expectedOutput)
 
     return (
@@ -79,7 +87,7 @@ export default async function ProblemPage({ params }: Props) {
                 schemaSql={problem.schema?.sql ?? null}
                 hints={(problem as any).hints ?? []}
                 expectedColumns={expectedColumns}
-                expectedSampleRow={expectedSampleRow}
+                expectedRows={expectedRows}
                 initialHistory={history}
                 isSolved={isSolved}
             />

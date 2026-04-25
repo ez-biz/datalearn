@@ -5,7 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { validateSubmission } from "@/actions/submissions"
 import type { ValidationResult } from "@/lib/sql-validator"
 import type { ProblemHistoryEntry } from "@/actions/submissions"
-import { ProblemPanel } from "./ProblemPanel"
+import { ProblemPanel, type TableInfo } from "./ProblemPanel"
+import { extractTableNames, useProblemDB } from "@/lib/use-problem-db"
 
 const SqlPlayground = dynamic(
     () =>
@@ -21,13 +22,14 @@ interface ProblemClientProps {
     schemaDescription: string | null
     schemaSql: string | null
     hints: string[]
+    expectedRows: Record<string, unknown>[] | null
     expectedColumns: string[] | null
-    expectedSampleRow: Record<string, unknown> | null
     initialHistory: ProblemHistoryEntry[]
     isSolved: boolean
 }
 
 const DRAFT_PREFIX = "dl:draft:"
+const SAMPLE_LIMIT = 5
 
 export function ProblemClient({
     title,
@@ -37,8 +39,8 @@ export function ProblemClient({
     schemaDescription,
     schemaSql,
     hints,
+    expectedRows,
     expectedColumns,
-    expectedSampleRow,
     initialHistory,
     isSolved,
 }: ProblemClientProps) {
@@ -46,9 +48,13 @@ export function ProblemClient({
     const [hydrated, setHydrated] = useState(false)
     const [history, setHistory] = useState(initialHistory)
     const [solved, setSolved] = useState(isSolved)
+    const [tableInfos, setTableInfos] = useState<TableInfo[] | null>(null)
     const draftKey = `${DRAFT_PREFIX}${slug}`
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+    const { ready: dbReady, error: dbError, runQuery } = useProblemDB(schemaSql)
+
+    // Hydrate draft from localStorage
     useEffect(() => {
         try {
             const saved = localStorage.getItem(draftKey)
@@ -57,6 +63,7 @@ export function ProblemClient({
         setHydrated(true)
     }, [draftKey])
 
+    // Debounced autosave
     useEffect(() => {
         if (!hydrated) return
         if (saveTimer.current) clearTimeout(saveTimer.current)
@@ -73,6 +80,42 @@ export function ProblemClient({
             if (saveTimer.current) clearTimeout(saveTimer.current)
         }
     }, [query, hydrated, draftKey])
+
+    // Once the DB is ready, fetch table schemas + samples for the description tab
+    useEffect(() => {
+        if (!dbReady) return
+        let cancelled = false
+
+        async function loadTables() {
+            const names = extractTableNames(schemaSql)
+            if (names.length === 0) {
+                if (!cancelled) setTableInfos([])
+                return
+            }
+            const infos: TableInfo[] = []
+            for (const name of names) {
+                try {
+                    const desc = await runQuery(`DESCRIBE "${name}"`)
+                    const columns = desc.map((row) => ({
+                        name: String(row.column_name ?? ""),
+                        type: String(row.column_type ?? ""),
+                    }))
+                    const sample = await runQuery(
+                        `SELECT * FROM "${name}" LIMIT ${SAMPLE_LIMIT}`
+                    )
+                    infos.push({ name, columns, sampleRows: sample })
+                } catch (e: any) {
+                    console.error(`Sample fetch failed for ${name}:`, e?.message)
+                    infos.push({ name, columns: [], sampleRows: [] })
+                }
+            }
+            if (!cancelled) setTableInfos(infos)
+        }
+        loadTables()
+        return () => {
+            cancelled = true
+        }
+    }, [dbReady, schemaSql, runQuery])
 
     const resetDraft = useCallback(() => {
         setQuery("")
@@ -118,8 +161,10 @@ export function ProblemClient({
                     schemaDescription={schemaDescription}
                     schemaSql={schemaSql}
                     hints={hints}
+                    tableInfos={tableInfos}
+                    tablesLoading={dbReady && tableInfos === null}
+                    expectedRows={expectedRows}
                     expectedColumns={expectedColumns}
-                    expectedSampleRow={expectedSampleRow}
                     history={history}
                     isSolved={solved}
                     onLoadCode={loadCode}
@@ -127,6 +172,9 @@ export function ProblemClient({
             </aside>
             <section className="flex-1 min-h-0 p-3 sm:p-4 bg-background">
                 <SqlPlayground
+                    dbReady={dbReady}
+                    dbError={dbError}
+                    runQuery={runQuery}
                     initialSchema={schemaSql ?? undefined}
                     problemSlug={slug}
                     query={query}
