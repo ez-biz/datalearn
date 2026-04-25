@@ -1,19 +1,29 @@
+import { Container } from "@/components/ui/Container"
+import { Card, CardContent } from "@/components/ui/Card"
+import { Skeleton } from "@/components/ui/Skeleton"
+
 export default function LearnLoading() {
     return (
-        <div className="container mx-auto p-8">
-            <div className="h-10 w-48 bg-gray-200 rounded animate-pulse mb-8" />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <Container width="lg" className="py-10 sm:py-14">
+            <div className="mb-8 space-y-3">
+                <Skeleton className="h-9 w-56" />
+                <Skeleton className="h-4 w-96 max-w-full" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {Array.from({ length: 6 }).map((_, i) => (
-                    <div
-                        key={i}
-                        className="p-6 bg-white rounded-lg border space-y-3"
-                    >
-                        <div className="h-6 w-3/4 bg-gray-200 rounded animate-pulse" />
-                        <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
-                        <div className="h-4 w-1/3 bg-gray-100 rounded animate-pulse" />
-                    </div>
+                    <Card key={i}>
+                        <CardContent className="p-6 space-y-3">
+                            <div className="flex items-start justify-between">
+                                <Skeleton className="h-10 w-10 rounded-lg" />
+                                <Skeleton className="h-5 w-16 rounded-full" />
+                            </div>
+                            <Skeleton className="h-5 w-2/3" />
+                            <Skeleton className="h-4 w-full" />
+                            <Skeleton className="h-4 w-4/5" />
+                        </CardContent>
+                    </Card>
                 ))}
             </div>
-        </div>
+        </Container>
     )
 }

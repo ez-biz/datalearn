@@ -1,24 +1,34 @@
+import { Container } from "@/components/ui/Container"
+import { Card } from "@/components/ui/Card"
+import { Skeleton } from "@/components/ui/Skeleton"
+
 export default function PracticeLoading() {
     return (
-        <div className="container mx-auto p-8 max-w-5xl">
-            <div className="h-8 w-64 bg-gray-200 rounded animate-pulse mb-6" />
-            <div className="h-5 w-96 bg-gray-100 rounded animate-pulse mb-8" />
-            <div className="grid gap-4">
-                {Array.from({ length: 5 }).map((_, i) => (
+        <Container width="lg" className="py-10 sm:py-14">
+            <div className="mb-8 space-y-3">
+                <Skeleton className="h-9 w-40" />
+                <Skeleton className="h-4 w-96 max-w-full" />
+            </div>
+            <div className="flex gap-3 mb-5">
+                <Skeleton className="h-10 flex-1" />
+                <Skeleton className="h-10 w-72 hidden sm:block" />
+            </div>
+            <Card className="overflow-hidden divide-y divide-border">
+                {Array.from({ length: 6 }).map((_, i) => (
                     <div
                         key={i}
-                        className="bg-white p-6 rounded-lg border shadow-sm space-y-3"
+                        className="grid grid-cols-[3rem_1fr_8rem_3rem] items-center gap-4 px-6 py-4"
                     >
-                        <div className="flex justify-between items-start">
-                            <div className="space-y-2 flex-1">
-                                <div className="h-6 w-2/3 bg-gray-200 rounded animate-pulse" />
-                                <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
-                            </div>
-                            <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse ml-4" />
+                        <Skeleton className="h-3 w-6" />
+                        <div className="space-y-2">
+                            <Skeleton className="h-4 w-1/2" />
+                            <Skeleton className="h-3 w-3/4" />
                         </div>
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                        <Skeleton className="h-4 w-4 ml-auto" />
                     </div>
                 ))}
-            </div>
-        </div>
+            </Card>
+        </Container>
     )
 }

@@ -1,69 +1,76 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
+import { Footer } from "@/components/layout/Footer";
+import { ThemeProvider } from "@/components/layout/ThemeProvider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+const inter = Inter({
+    variable: "--font-inter",
+    subsets: ["latin"],
+    display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const jetbrainsMono = JetBrains_Mono({
+    variable: "--font-jetbrains",
+    subsets: ["latin"],
+    display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: {
-    default: "Antigravity — Master Data Engineering",
-    template: "%s | Antigravity",
-  },
-  description:
-    "Learn SQL, Python, ETL Pipelines, and System Design through interactive coding challenges and real-world projects. Free, browser-based SQL engine.",
-  keywords: [
-    "data engineering",
-    "SQL practice",
-    "ETL",
-    "data warehousing",
-    "SQL playground",
-    "learn SQL",
-    "data engineering interview",
-  ],
-  openGraph: {
-    title: "Antigravity — Master Data Engineering",
+    title: {
+        default: "Data Learn — Master SQL & Data Engineering",
+        template: "%s · Data Learn",
+    },
     description:
-      "Interactive SQL challenges, curated learning content, and data engineering education. No setup required.",
-    type: "website",
-    locale: "en_US",
-    siteName: "Antigravity",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Antigravity — Master Data Engineering",
-    description:
-      "Interactive SQL challenges, curated learning content, and data engineering education.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
+        "Practice SQL the way LeetCode does code. Run queries in your browser, get instant validation, and learn data engineering through real problems.",
+    keywords: [
+        "data engineering",
+        "SQL practice",
+        "SQL playground",
+        "learn SQL",
+        "data engineering interview",
+        "DuckDB",
+        "ETL",
+    ],
+    openGraph: {
+        title: "Data Learn — Master SQL & Data Engineering",
+        description:
+            "Practice SQL in your browser. Real problems, instant validation, no setup.",
+        type: "website",
+        locale: "en_US",
+        siteName: "Data Learn",
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: "Data Learn — Master SQL & Data Engineering",
+        description:
+            "Practice SQL in your browser. Real problems, instant validation, no setup.",
+    },
+    robots: {
+        index: true,
+        follow: true,
+    },
 };
 
 export default function RootLayout({
-  children,
+    children,
 }: Readonly<{
-  children: React.ReactNode;
+    children: React.ReactNode;
 }>) {
-  return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <Navbar />
-        {children}
-        <Analytics />
-      </body>
-    </html>
-  );
+    return (
+        <html lang="en" suppressHydrationWarning>
+            <body
+                className={`${inter.variable} ${jetbrainsMono.variable} antialiased min-h-screen flex flex-col bg-background text-foreground`}
+            >
+                <ThemeProvider>
+                    <Navbar />
+                    <div className="flex-1 flex flex-col">{children}</div>
+                    <Footer />
+                </ThemeProvider>
+                <Analytics />
+            </body>
+        </html>
+    );
 }
