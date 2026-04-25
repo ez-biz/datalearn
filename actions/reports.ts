@@ -9,9 +9,15 @@ export type ReportSubmitResult =
     | { ok: true }
     | { ok: false; error: string }
 
+const REPORTS_PER_HOUR = 5
+
 /**
- * Submit a problem report. Auth optional — anonymous reports are allowed
- * (userId will be null) but the rate limiter would live here in the future.
+ * Submit a problem report.
+ *
+ * SECURITY: previously anonymous-friendly with no rate limit, which
+ * meant a 30-line script could fill the table and DoS the admin
+ * inbox. We now require an authenticated user and cap to
+ * REPORTS_PER_HOUR per user.
  */
 export async function submitProblemReport(
     input: unknown
@@ -21,9 +27,25 @@ export async function submitProblemReport(
         return { ok: false, error: "Please fill in all fields." }
     }
     const { problemSlug, kind, message } = parsed.data
+
     const session = await auth()
+    if (!session?.user?.id) {
+        return { ok: false, error: "Sign in to report a problem." }
+    }
+    const userId = session.user.id
 
     try {
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+        const recent = await prisma.problemReport.count({
+            where: { userId, createdAt: { gte: oneHourAgo } },
+        })
+        if (recent >= REPORTS_PER_HOUR) {
+            return {
+                ok: false,
+                error: `Too many reports — please wait an hour. (Limit: ${REPORTS_PER_HOUR}/hour.)`,
+            }
+        }
+
         const problem = await prisma.sQLProblem.findUnique({
             where: { slug: problemSlug },
             select: { id: true },
@@ -34,7 +56,7 @@ export async function submitProblemReport(
         await prisma.problemReport.create({
             data: {
                 problemId: problem.id,
-                userId: session?.user?.id ?? null,
+                userId,
                 kind,
                 message,
             },

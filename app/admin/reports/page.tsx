@@ -21,17 +21,33 @@ const KIND_LABEL: Record<string, string> = {
     OTHER: "Other",
 }
 
-export default async function AdminReportsPage() {
-    const reports = await prisma.problemReport.findMany({
-        orderBy: [{ resolvedAt: "asc" }, { createdAt: "desc" }],
-        include: {
-            problem: { select: { slug: true, title: true } },
-            user: { select: { id: true, name: true, email: true } },
-        },
-    })
+// Cap how many rows we render. The DB can hold more — query directly if you
+// need to triage past this. Two separate queries so a flood of resolved rows
+// can't push open ones off the page.
+const OPEN_LIMIT = 200
+const RESOLVED_LIMIT = 100
 
-    const open = reports.filter((r) => !r.resolvedAt)
-    const resolved = reports.filter((r) => r.resolvedAt)
+export default async function AdminReportsPage() {
+    const [open, resolved] = await Promise.all([
+        prisma.problemReport.findMany({
+            where: { resolvedAt: null },
+            orderBy: { createdAt: "desc" },
+            take: OPEN_LIMIT,
+            include: {
+                problem: { select: { slug: true, title: true } },
+                user: { select: { id: true, name: true, email: true } },
+            },
+        }),
+        prisma.problemReport.findMany({
+            where: { resolvedAt: { not: null } },
+            orderBy: { resolvedAt: "desc" },
+            take: RESOLVED_LIMIT,
+            include: {
+                problem: { select: { slug: true, title: true } },
+                user: { select: { id: true, name: true, email: true } },
+            },
+        }),
+    ])
 
     return (
         <Container width="lg" className="py-10">
@@ -85,7 +101,7 @@ export default async function AdminReportsPage() {
                     </h2>
                     <Card>
                         <CardContent className="p-0 divide-y divide-border">
-                            {resolved.slice(0, 25).map((r) => (
+                            {resolved.map((r) => (
                                 <ReportRow
                                     key={r.id}
                                     id={r.id}

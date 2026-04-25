@@ -66,7 +66,7 @@ export default async function ProblemPage({ params }: Props) {
     ])
     const isSolved = solvedSlugs.includes(slug)
     const { columns: expectedColumns, rows: expectedRows } =
-        parseExpectedOutput((problem as any).expectedOutput)
+        parseExpectedOutput(problem.expectedOutput)
 
     return (
         <div className="flex flex-col h-[calc(100vh-4rem)] bg-background">
@@ -87,7 +87,7 @@ export default async function ProblemPage({ params }: Props) {
                 description={problem.description}
                 schemaDescription={problem.schemaDescription}
                 schemaSql={problem.schema?.sql ?? null}
-                hints={(problem as any).hints ?? []}
+                hints={problem.hints ?? []}
                 expectedColumns={expectedColumns}
                 expectedRows={expectedRows}
                 initialHistory={history}
