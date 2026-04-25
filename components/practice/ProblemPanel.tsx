@@ -3,6 +3,7 @@
 import { useState } from "react"
 import {
     CheckCircle2,
+    ChevronRight,
     Database,
     FileText,
     History as HistoryIcon,
@@ -159,29 +160,7 @@ function DescriptionTab({
 
     return (
         <div className="p-5 space-y-7">
-            {/* Schema overview — column-name/type tables, LeetCode-style */}
-            {tablesLoading ? (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Loading schema…
-                </div>
-            ) : hasInputTables ? (
-                <section className="space-y-4">
-                    {tableInfos!.map((t) => (
-                        <div key={t.name}>
-                            <div className="flex items-center gap-2 mb-2">
-                                <span className="text-sm font-medium">Table:</span>
-                                <code className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px] font-mono">
-                                    {t.name}
-                                </code>
-                            </div>
-                            <ColumnSchemaTable columns={t.columns} />
-                        </div>
-                    ))}
-                </section>
-            ) : null}
-
-            {/* Problem prose */}
+            {/* Problem prose — first, so the user sees the task immediately */}
             {description && (
                 <section className="prose prose-sm dark:prose-invert max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-p:leading-relaxed prose-code:font-mono prose-code:text-[0.85em] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:bg-surface-muted prose-code:before:content-none prose-code:after:content-none">
                     <p className="whitespace-pre-wrap">{description}</p>
@@ -193,6 +172,16 @@ function DescriptionTab({
                     {schemaDescription}
                 </p>
             )}
+
+            {/* Schema overview — collapsed by default when there are many tables */}
+            {tablesLoading ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Loading schema…
+                </div>
+            ) : hasInputTables ? (
+                <SchemaOverview tables={tableInfos!} />
+            ) : null}
 
             {/* Example: input rows + expected output, both as proper tables */}
             {(hasInputTables || hasOutput) && (
@@ -244,6 +233,43 @@ function DescriptionTab({
     )
 }
 
+function SchemaOverview({ tables }: { tables: TableInfo[] }) {
+    const collapseByDefault = tables.length > 2
+    return (
+        <section>
+            <div className="flex items-center justify-between gap-2 mb-3">
+                <h3 className="text-sm font-semibold">Schema</h3>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                    {tables.length} {tables.length === 1 ? "table" : "tables"}
+                </span>
+            </div>
+            <div className="space-y-2">
+                {tables.map((t) => (
+                    <details
+                        key={t.name}
+                        open={!collapseByDefault}
+                        className="group rounded-md border border-border bg-surface-muted/30 overflow-hidden"
+                    >
+                        <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer select-none hover:bg-surface-muted/60 list-none [&::-webkit-details-marker]:hidden">
+                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90" />
+                            <span className="text-sm font-medium">Table:</span>
+                            <code className="rounded bg-surface px-1.5 py-0.5 text-[12px] font-mono border border-border">
+                                {t.name}
+                            </code>
+                            <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
+                                {t.columns.length} cols
+                            </span>
+                        </summary>
+                        <div className="border-t border-border bg-surface">
+                            <ColumnSchemaTable columns={t.columns} />
+                        </div>
+                    </details>
+                ))}
+            </div>
+        </section>
+    )
+}
+
 function ColumnSchemaTable({
     columns,
 }: {
@@ -251,36 +277,34 @@ function ColumnSchemaTable({
 }) {
     if (columns.length === 0) {
         return (
-            <p className="text-xs text-muted-foreground italic">
+            <p className="px-3 py-2 text-xs text-muted-foreground italic">
                 Schema unavailable.
             </p>
         )
     }
     return (
-        <div className="rounded-md border border-border overflow-hidden">
-            <table className="w-full text-[12px]">
-                <thead className="bg-surface-muted">
-                    <tr>
-                        <th className="px-3 py-1.5 text-left text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                            Column Name
-                        </th>
-                        <th className="px-3 py-1.5 text-left text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                            Type
-                        </th>
+        <table className="w-full text-[12px]">
+            <thead className="bg-surface-muted/50">
+                <tr>
+                    <th className="px-3 py-1.5 text-left text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                        Column Name
+                    </th>
+                    <th className="px-3 py-1.5 text-left text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                        Type
+                    </th>
+                </tr>
+            </thead>
+            <tbody className="font-mono">
+                {columns.map((c) => (
+                    <tr key={c.name} className="border-t border-border">
+                        <td className="px-3 py-1.5 text-foreground">{c.name}</td>
+                        <td className="px-3 py-1.5 text-muted-foreground">
+                            {c.type.toLowerCase()}
+                        </td>
                     </tr>
-                </thead>
-                <tbody className="font-mono">
-                    {columns.map((c) => (
-                        <tr key={c.name} className="border-t border-border">
-                            <td className="px-3 py-1.5 text-foreground">{c.name}</td>
-                            <td className="px-3 py-1.5 text-muted-foreground">
-                                {c.type.toLowerCase()}
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
+                ))}
+            </tbody>
+        </table>
     )
 }
 
