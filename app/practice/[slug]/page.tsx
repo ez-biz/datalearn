@@ -45,7 +45,7 @@ export default async function ProblemPage({ params }: Props) {
                     <ProblemWorkspace
                         initialSql=""
                         schemaSql={problem.schema.sql}
-                        expectedOutput={problem.expectedOutput}
+                        problemSlug={problem.slug}
                     />
                 </div>
             </div>
