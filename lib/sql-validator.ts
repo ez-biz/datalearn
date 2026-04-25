@@ -82,9 +82,21 @@ function rowEqual(a: Row, b: Row): boolean {
     return true
 }
 
+function canonicalCell(v: unknown): unknown {
+    const n = normalizeCell(v)
+    // Numbers get rounded to a stable precision so that values within
+    // EPSILON canonicalize to the same string (otherwise unordered
+    // comparison via JSON.stringify would treat 0.3 and 0.30000000000000004
+    // as different rows even though cellEqual considers them equal).
+    if (typeof n === 'number' && Number.isFinite(n)) {
+        return Math.round(n * 1e9) / 1e9
+    }
+    return n
+}
+
 function canonicalRowString(r: Row): string {
     const keys = Object.keys(r).sort()
-    return JSON.stringify(keys.map((k) => [k, normalizeCell(r[k])]))
+    return JSON.stringify(keys.map((k) => [k, canonicalCell(r[k])]))
 }
 
 export function compareResults(
