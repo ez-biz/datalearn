@@ -4,6 +4,7 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 
 import { ECOMMERCE_SCHEMA } from '../lib/seed-data'
+import { HR_SCHEMA } from '../lib/seed-data-hr'
 
 const connectionString = process.env.DATABASE_URL
 
@@ -80,6 +81,12 @@ def etl_process():
         create: { name: 'ecommerce', sql: ECOMMERCE_SCHEMA },
     })
 
+    const hrSchema = await prisma.sqlSchema.upsert({
+        where: { name: 'hr' },
+        update: { sql: HR_SCHEMA },
+        create: { name: 'hr', sql: HR_SCHEMA },
+    })
+
     await prisma.sQLProblem.upsert({
         where: { slug: 'simple-select' },
         update: {
@@ -129,6 +136,150 @@ def etl_process():
             schemaDescription: 'Tables: products, order_items',
             ordered: true,
             expectedOutput: '[{"name":"Desk Chair","total_sold":2},{"name":"Laptop","total_sold":2},{"name":"Headphones","total_sold":1}]'
+        }
+    })
+
+    await prisma.sQLProblem.upsert({
+        where: { slug: 'customers-by-country' },
+        update: {
+            schemaId: ecommerceSchema.id,
+            ordered: false,
+        },
+        create: {
+            title: 'Customers by Country',
+            slug: 'customers-by-country',
+            difficulty: 'EASY',
+            description: 'Return every customer whose `country` is `USA`. Return columns `id`, `name`, `email`, `country`.',
+            schemaDescription: 'Table `customers` with columns: id, name, email, country',
+            schemaId: ecommerceSchema.id,
+            ordered: false,
+            expectedOutput: '[{"id":1,"name":"John Doe","email":"john@example.com","country":"USA"},{"id":4,"name":"Bob Brown","email":"bob@example.com","country":"USA"}]'
+        }
+    })
+
+    await prisma.sQLProblem.upsert({
+        where: { slug: 'orders-in-january-2023' },
+        update: {
+            schemaId: ecommerceSchema.id,
+            ordered: false,
+        },
+        create: {
+            title: 'Orders in January 2023',
+            slug: 'orders-in-january-2023',
+            difficulty: 'EASY',
+            description: 'Count the number of orders placed between 2023-01-01 and 2023-01-31 (inclusive). Return a single column `order_count`.',
+            schemaDescription: 'Table `orders` with columns: order_id, customer_id, order_date, total_amount',
+            schemaId: ecommerceSchema.id,
+            ordered: false,
+            expectedOutput: '[{"order_count":2}]'
+        }
+    })
+
+    await prisma.sQLProblem.upsert({
+        where: { slug: 'average-order-value' },
+        update: {
+            schemaId: ecommerceSchema.id,
+            ordered: false,
+        },
+        create: {
+            title: 'Average Order Value',
+            slug: 'average-order-value',
+            difficulty: 'EASY',
+            description: 'Compute the average of `total_amount` across all orders. Return a single column `avg_amount`.',
+            schemaDescription: 'Table `orders` with columns: order_id, customer_id, order_date, total_amount',
+            schemaId: ecommerceSchema.id,
+            ordered: false,
+            expectedOutput: '[{"avg_amount":900}]'
+        }
+    })
+
+    await prisma.sQLProblem.upsert({
+        where: { slug: 'customers-with-multiple-orders' },
+        update: {
+            schemaId: ecommerceSchema.id,
+            ordered: false,
+        },
+        create: {
+            title: 'Customers with Multiple Orders',
+            slug: 'customers-with-multiple-orders',
+            difficulty: 'MEDIUM',
+            description: 'Find each customer who has placed more than one order. Return `customer_id` and `order_count`.',
+            schemaDescription: 'Tables: customers, orders',
+            schemaId: ecommerceSchema.id,
+            ordered: false,
+            expectedOutput: '[{"customer_id":1,"order_count":2}]'
+        }
+    })
+
+    await prisma.sQLProblem.upsert({
+        where: { slug: 'products-never-ordered' },
+        update: {
+            schemaId: ecommerceSchema.id,
+            ordered: false,
+        },
+        create: {
+            title: 'Products Never Ordered',
+            slug: 'products-never-ordered',
+            difficulty: 'MEDIUM',
+            description: 'Find products that have never appeared in any order. Return `product_id` and `name`.',
+            schemaDescription: 'Tables: products, order_items',
+            schemaId: ecommerceSchema.id,
+            ordered: false,
+            expectedOutput: '[{"product_id":104,"name":"Coffee Table"}]'
+        }
+    })
+
+    await prisma.sQLProblem.upsert({
+        where: { slug: 'employees-hired-in-2025' },
+        update: {
+            schemaId: hrSchema.id,
+            ordered: false,
+        },
+        create: {
+            title: 'Employees Hired in 2025',
+            slug: 'employees-hired-in-2025',
+            difficulty: 'EASY',
+            description: 'Find employees whose `hire_date` falls in the 2025 calendar year. Return `id` and `name`.',
+            schemaDescription: 'Table `employees` with columns: id, name, department_id, hire_date',
+            schemaId: hrSchema.id,
+            ordered: false,
+            expectedOutput: '[{"id":1,"name":"Alice"},{"id":3,"name":"Charlie"},{"id":5,"name":"Eve"}]'
+        }
+    })
+
+    await prisma.sQLProblem.upsert({
+        where: { slug: 'highest-paid-per-department' },
+        update: {
+            schemaId: hrSchema.id,
+            ordered: false,
+        },
+        create: {
+            title: 'Highest-Paid Employee per Department',
+            slug: 'highest-paid-per-department',
+            difficulty: 'MEDIUM',
+            description: 'For each department, find the employee with the highest salary. Return `department_name`, `employee_name`, and `salary`.',
+            schemaDescription: 'Tables: departments, employees, salaries',
+            schemaId: hrSchema.id,
+            ordered: false,
+            expectedOutput: '[{"department_name":"Engineering","employee_name":"Bob","salary":120000},{"department_name":"Sales","employee_name":"Diana","salary":110000},{"department_name":"Marketing","employee_name":"Eve","salary":70000}]'
+        }
+    })
+
+    await prisma.sQLProblem.upsert({
+        where: { slug: 'largest-department' },
+        update: {
+            schemaId: hrSchema.id,
+            ordered: true,
+        },
+        create: {
+            title: 'Largest Department by Headcount',
+            slug: 'largest-department',
+            difficulty: 'MEDIUM',
+            description: 'Find the single department with the most employees. Return `department_name` and `employee_count`. Use `LIMIT 1` after ordering by headcount descending.',
+            schemaDescription: 'Tables: departments, employees',
+            schemaId: hrSchema.id,
+            ordered: true,
+            expectedOutput: '[{"department_name":"Engineering","employee_count":4}]'
         }
     })
 
