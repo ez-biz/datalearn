@@ -1,37 +1,62 @@
+import type { Metadata } from "next"
+import Image from "next/image"
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
+import { Container } from "@/components/ui/Container"
+import { Card, CardContent } from "@/components/ui/Card"
+import { Badge } from "@/components/ui/Badge"
+
+export const metadata: Metadata = {
+    title: "Profile",
+}
 
 export default async function ProfilePage() {
     const session = await auth()
-
     if (!session?.user) {
         redirect("/api/auth/signin?callbackUrl=/profile")
     }
 
+    const initials = (session.user.name ?? session.user.email ?? "?")
+        .charAt(0)
+        .toUpperCase()
+
     return (
-        <div className="container mx-auto p-8">
-            <h1 className="text-3xl font-bold mb-6">User Profile</h1>
-            <div className="bg-white shadow rounded-lg p-6 border">
-                <div className="flex items-center space-x-4">
-                    {session.user.image && (
-                        <img
-                            src={session.user.image}
-                            alt={session.user.name || "User"}
-                            className="w-16 h-16 rounded-full"
-                        />
-                    )}
-                    <div>
-                        <h2 className="text-xl font-semibold">{session.user.name}</h2>
-                        <p className="text-gray-600">{session.user.email}</p>
+        <Container width="md" className="py-10 sm:py-14">
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-8">
+                Profile
+            </h1>
+            <Card>
+                <CardContent className="p-6 sm:p-8">
+                    <div className="flex items-center gap-5">
+                        {session.user.image ? (
+                            <Image
+                                src={session.user.image}
+                                alt={session.user.name ?? "User"}
+                                width={72}
+                                height={72}
+                                className="h-18 w-18 rounded-full object-cover ring-2 ring-border"
+                            />
+                        ) : (
+                            <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-primary/15 text-2xl font-semibold text-primary">
+                                {initials}
+                            </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h2 className="text-lg font-semibold truncate">
+                                    {session.user.name ?? "Unnamed user"}
+                                </h2>
+                                {session.user.role === "ADMIN" && (
+                                    <Badge variant="accent">Admin</Badge>
+                                )}
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-0.5 truncate">
+                                {session.user.email}
+                            </p>
+                        </div>
                     </div>
-                </div>
-                <div className="mt-6">
-                    <h3 className="text-lg font-medium">Session Data</h3>
-                    <pre className="mt-2 bg-gray-100 p-4 rounded overflow-auto text-sm">
-                        {JSON.stringify(session, null, 2)}
-                    </pre>
-                </div>
-            </div>
-        </div>
+                </CardContent>
+            </Card>
+        </Container>
     )
 }
