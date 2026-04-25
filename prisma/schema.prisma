@@ -17,6 +17,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   submissions   Submission[]
+  apiKeys       ApiKey[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -105,11 +106,21 @@ model SQLProblem {
   schemaId          String
   schema            SqlSchema  @relation(fields: [schemaId], references: [id])
   expectedOutput    String     @db.Text
+  solutionSql       String?    @db.Text
   ordered           Boolean    @default(false)
   hints             String[]   @default([])
+  tags              Tag[]      @relation("ProblemTags")
   submissions       Submission[]
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
+}
+
+model Tag {
+  id        String       @id @default(cuid())
+  name      String       @unique
+  slug      String       @unique
+  problems  SQLProblem[] @relation("ProblemTags")
+  createdAt DateTime     @default(now())
 }
 
 enum Difficulty {
@@ -149,4 +160,19 @@ model Page {
   contentType String   @default("markdown") // 'markdown', 'custom'
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  keyHash    String    @unique
+  prefix     String    // first 8 chars of plaintext, for display
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  createdById String
+  createdBy  User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+
+  @@index([createdById])
 }
