@@ -7,6 +7,7 @@ import {
     getSolvedSlugs,
 } from "@/actions/submissions"
 import { notFound } from "next/navigation"
+import { auth } from "@/lib/auth"
 import { ProblemClient } from "@/components/practice/ProblemClient"
 import { ReportDialog } from "@/components/practice/ReportDialog"
 
@@ -60,11 +61,13 @@ export default async function ProblemPage({ params }: Props) {
         notFound()
     }
 
-    const [history, solvedSlugs] = await Promise.all([
+    const [history, solvedSlugs, session] = await Promise.all([
         getProblemHistory(slug),
         getSolvedSlugs(),
+        auth(),
     ])
     const isSolved = solvedSlugs.includes(slug)
+    const isSignedIn = Boolean(session?.user?.id)
     const { columns: expectedColumns, rows: expectedRows } =
         parseExpectedOutput(problem.expectedOutput)
 
@@ -78,7 +81,7 @@ export default async function ProblemPage({ params }: Props) {
                     <ChevronLeft className="h-3.5 w-3.5" />
                     All problems
                 </Link>
-                <ReportDialog problemSlug={problem.slug} />
+                <ReportDialog problemSlug={problem.slug} isSignedIn={isSignedIn} />
             </div>
             <ProblemClient
                 title={problem.title}

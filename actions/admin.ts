@@ -6,9 +6,35 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { z } from "zod"
 
+// Slugs that would shadow first-class app routes. The dynamic [slug]
+// catch-all matches anything not matched by a static route, but creating
+// a Page named "admin" would still be confusing operationally — so we
+// reject these explicitly. Keep this list in sync with app/* directories.
+const RESERVED_SLUGS = new Set([
+    "admin",
+    "api",
+    "learn",
+    "practice",
+    "profile",
+    "_next",
+    "auth",
+    "static",
+    "public",
+    "favicon",
+    "sitemap",
+    "robots",
+])
+
 const createPageSchema = z.object({
     title: z.string().min(1, "Title is required").max(200),
-    slug: z.string().min(1, "Slug is required").max(200).regex(/^[a-z0-9-]+$/, "Slug must be lowercase with hyphens only"),
+    slug: z
+        .string()
+        .min(1, "Slug is required")
+        .max(200)
+        .regex(/^[a-z0-9-]+$/, "Slug must be lowercase with hyphens only")
+        .refine((s) => !RESERVED_SLUGS.has(s), {
+            message: "This slug is reserved by the app.",
+        }),
     content: z.string().min(1, "Content is required"),
 })
 
