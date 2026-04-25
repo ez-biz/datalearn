@@ -40,13 +40,18 @@ export async function getTopic(slug: string) {
     }
 }
 
+/**
+ * Public article fetch — only PUBLISHED articles are exposed by slug.
+ * Drafts return null so user-facing pages 404.
+ *
+ * SECURITY: previously did findUnique without a published check, which
+ * meant any draft article was readable by URL guess.
+ */
 export async function getArticle(slug: string) {
     try {
-        const article = await prisma.article.findUnique({
-            where: { slug },
-            include: {
-                topic: true
-            }
+        const article = await prisma.article.findFirst({
+            where: { slug, published: true },
+            include: { topic: true }
         })
         return { success: true, data: article }
     } catch (error) {
