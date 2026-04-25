@@ -69,6 +69,98 @@ def etl_process():
         },
     })
 
+    await prisma.article.upsert({
+        where: { slug: 'batch-vs-stream-processing' },
+        update: {},
+        create: {
+            title: 'Batch vs Stream Processing',
+            slug: 'batch-vs-stream-processing',
+            content: `
+# Batch vs Stream Processing
+
+Data engineering pipelines generally fall into two camps: **batch** and **stream**.
+
+## Batch processing
+
+Batch jobs run on a schedule (hourly, daily, weekly). They read a bounded slice of data, transform it, and write the result somewhere. Think: the nightly ETL that rebuilds yesterday's sales dashboard.
+
+- **Latency**: minutes to hours
+- **Volume per job**: large (GB to TB)
+- **Failure handling**: re-run the batch
+- **Typical tools**: Airflow, dbt, Spark, Snowflake tasks
+
+## Stream processing
+
+Stream jobs run continuously. They process each record (or small windows of records) as it arrives.
+
+- **Latency**: milliseconds to seconds
+- **Volume per event**: tiny, but the stream is unbounded
+- **Failure handling**: checkpointing, replay from an offset
+- **Typical tools**: Kafka + Flink, Kinesis + Lambda, Pulsar, Materialize
+
+## Which do you pick?
+
+Start with batch. It is cheaper, simpler to reason about, and easier to test. Move to streaming only when the business genuinely cannot tolerate batch latency — fraud detection, live pricing, real-time personalization.
+
+A common pitfall is building a streaming pipeline because it sounds modern, then paying the operational tax for a use case that would have been happy with hourly batches.
+
+## The middle ground
+
+**Micro-batching** (Spark Structured Streaming, hourly dbt) splits the difference: small batches, near-real-time feel, batch simplicity. Most "real-time" dashboards are actually micro-batched on a short cadence.
+            `,
+            published: true,
+            topicId: topic.id,
+            authorId: 'system',
+        },
+    })
+
+    await prisma.article.upsert({
+        where: { slug: 'oltp-vs-olap' },
+        update: {},
+        create: {
+            title: 'OLTP vs OLAP',
+            slug: 'oltp-vs-olap',
+            content: `
+# OLTP vs OLAP
+
+Two database worlds, two different jobs.
+
+## OLTP — Online Transaction Processing
+
+OLTP databases run the app. Every user action — checkout, like, signup — is a tiny transaction that reads or writes a handful of rows.
+
+- **Workload**: many small, fast queries per second
+- **Access pattern**: row-oriented — fetch or update a specific record
+- **Schema**: highly normalized (3NF)
+- **Indexes**: B-tree on primary keys, foreign keys, frequently-filtered columns
+- **Examples**: PostgreSQL, MySQL, SQL Server
+
+## OLAP — Online Analytical Processing
+
+OLAP databases answer questions. They are read-heavy, scan huge ranges of rows, and aggregate.
+
+- **Workload**: few large queries, lots of rows scanned per query
+- **Access pattern**: column-oriented — read only the columns you aggregate
+- **Schema**: denormalized (star schemas, fact + dimension tables)
+- **Indexes**: compressed columnar storage, zone maps, bloom filters
+- **Examples**: Snowflake, BigQuery, Redshift, ClickHouse, DuckDB
+
+## Why the split?
+
+An OLTP row-store is bad at scanning 100M rows to answer "total revenue by country last quarter" — it reads whole rows just to pull two columns. An OLAP column-store is bad at "update user 42's email" — it has to rewrite an entire column segment.
+
+Most data architectures keep both. App writes go to OLTP (Postgres). A pipeline ships those writes into OLAP (Snowflake / BigQuery) where analysts and dashboards live.
+
+## The modern twist
+
+Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur the line for smaller workloads. At TB+ scale the split still matters.
+            `,
+            published: true,
+            topicId: topic.id,
+            authorId: 'system',
+        },
+    })
+
     const usersSchema = await prisma.sqlSchema.upsert({
         where: { name: 'users' },
         update: { sql: USERS_SCHEMA },
