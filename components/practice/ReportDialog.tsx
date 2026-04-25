@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { Flag, Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Field, Textarea } from "@/components/ui/Input"
@@ -16,7 +18,14 @@ const KINDS = [
 
 type Kind = (typeof KINDS)[number]["value"]
 
-export function ReportDialog({ problemSlug }: { problemSlug: string }) {
+interface ReportDialogProps {
+    problemSlug: string
+    /** Whether the viewer is signed in. Anonymous users see a sign-in CTA instead of the dialog. */
+    isSignedIn: boolean
+}
+
+export function ReportDialog({ problemSlug, isSignedIn }: ReportDialogProps) {
+    const pathname = usePathname()
     const [open, setOpen] = useState(false)
     const [kind, setKind] = useState<Kind>("WRONG_ANSWER")
     const [message, setMessage] = useState("")
@@ -60,6 +69,18 @@ export function ReportDialog({ problemSlug }: { problemSlug: string }) {
         } finally {
             setSubmitting(false)
         }
+    }
+
+    if (!isSignedIn) {
+        return (
+            <Link
+                href={`/api/auth/signin?callbackUrl=${encodeURIComponent(pathname ?? "/practice")}`}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+                <Flag className="h-3 w-3" />
+                Sign in to report
+            </Link>
+        )
     }
 
     return (

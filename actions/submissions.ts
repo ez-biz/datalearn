@@ -41,9 +41,35 @@ export async function validateSubmission(input: unknown): Promise<ValidationResu
         }
     }
 
+    const session = await auth()
+
+    if (session?.user?.id) {
+        // Per-user rate limit. Cheap query (uses existing
+        // (userId, createdAt) index) and returns immediately.
+        const RATE_LIMIT_PER_MINUTE = 30
+        const oneMinuteAgo = new Date(Date.now() - 60 * 1000)
+        try {
+            const recent = await prisma.submission.count({
+                where: {
+                    userId: session.user.id,
+                    createdAt: { gte: oneMinuteAgo },
+                },
+            })
+            if (recent >= RATE_LIMIT_PER_MINUTE) {
+                return {
+                    ok: false,
+                    reason: `Too many submissions — slow down. (Limit: ${RATE_LIMIT_PER_MINUTE}/minute.)`,
+                }
+            }
+        } catch (e) {
+            console.error("Submission rate-limit check failed:", e)
+            // Fail open on the limit itself — better to allow a submission
+            // than to hard-deny on a transient DB blip.
+        }
+    }
+
     const result = compareResults(userResult, expected, { ordered: problem.ordered })
 
-    const session = await auth()
     if (session?.user?.id) {
         try {
             await prisma.submission.create({
