@@ -114,10 +114,38 @@ model SQLProblem {
   tags              Tag[]      @relation("ProblemTags")
   submissions       Submission[]
   reports           ProblemReport[]
+  versions          ProblemVersion[]
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 
   @@index([status])
+}
+
+/**
+ * Immutable snapshot of a problem at the moment it was published.
+ * Created automatically when a problem's status transitions to PUBLISHED.
+ * Useful for debugging "this used to be accepted" disputes and for
+ * rolling back a problem if a published edit breaks it.
+ */
+model ProblemVersion {
+  id                String     @id @default(cuid())
+  problemId         String
+  problem           SQLProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  versionNumber     Int
+  title             String
+  description       String     @db.Text
+  schemaDescription String     @db.Text
+  schemaSql         String     @db.Text
+  expectedOutput    String     @db.Text
+  solutionSql       String?    @db.Text
+  ordered           Boolean
+  hints             String[]
+  tagSlugs          String[]
+  publishedById     String?
+  capturedAt        DateTime   @default(now())
+
+  @@unique([problemId, versionNumber])
+  @@index([problemId, capturedAt])
 }
 
 enum ProblemStatus {

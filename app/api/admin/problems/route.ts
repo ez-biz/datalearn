@@ -6,6 +6,7 @@ import {
     ProblemCreateInput,
     SqlSchemaCreateInput,
 } from "@/lib/admin-validation"
+import { snapshotProblemVersion } from "@/lib/problem-versions"
 
 export const GET = withAdmin(async () => {
     const problems = await prisma.sQLProblem.findMany({
@@ -19,7 +20,7 @@ export const GET = withAdmin(async () => {
     return NextResponse.json({ data: problems })
 })
 
-export const POST = withAdmin(async (req) => {
+export const POST = withAdmin(async (req, principal) => {
     let body: unknown
     try {
         body = await req.json()
@@ -93,6 +94,10 @@ export const POST = withAdmin(async (req) => {
                     tags: { select: { id: true, name: true, slug: true } },
                 },
             })
+            // Snapshot if the problem is created already PUBLISHED
+            if (problem.status === "PUBLISHED") {
+                await snapshotProblemVersion(tx, problem.id, principal.userId)
+            }
             return problem
         })
 

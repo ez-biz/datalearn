@@ -14,6 +14,10 @@ import { slugify } from "@/lib/admin-validation"
 type Difficulty = "EASY" | "MEDIUM" | "HARD"
 type ProblemStatus = "DRAFT" | "BETA" | "PUBLISHED" | "ARCHIVED"
 
+function makeSignature(solutionSql: string, schemaSql: string): string {
+    return `${solutionSql.trim()}::${schemaSql.trim()}`
+}
+
 interface SchemaOption {
     id: string
     name: string
@@ -64,6 +68,17 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
      * We lock the textarea by default and require an explicit opt-in to edit.
      */
     const [overrideExpected, setOverrideExpected] = useState(false)
+    /**
+     * The (solution, schema) pair captured into the current expectedOutput.
+     * If either changes after capture, the captured output may be stale and
+     * we block save unless the user explicitly overrides.
+     * In edit mode we trust the stored value as having been captured before.
+     */
+    const [capturedSignature, setCapturedSignature] = useState<string | null>(
+        initial.mode === "edit" && initial.expectedOutput
+            ? `EDIT:${initial.solutionSql}`
+            : null
+    )
 
     const [schemaMode, setSchemaMode] = useState<"existing" | "inline">(
         initial.schemaId ? "existing" : "inline"
@@ -135,6 +150,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
             )
             const json = JSON.stringify(safe, null, 2)
             setExpectedOutput(json)
+            setCapturedSignature(makeSignature(solutionSql, activeSchemaSql))
             setRunStatus(`Captured ${rows.length} row${rows.length === 1 ? "" : "s"}.`)
         } catch (e: any) {
             setRunStatus(`Error: ${e?.message ?? "query failed"}`)
@@ -143,9 +159,30 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
         }
     }
 
+    // Capture is "valid" if either:
+    //   (a) override is on (user took explicit responsibility for the JSON)
+    //   (b) we have a captured signature that still matches the current solution + schema
+    const currentSignature = makeSignature(solutionSql, activeSchemaSql)
+    const captureFresh =
+        capturedSignature === currentSignature ||
+        capturedSignature === `EDIT:${solutionSql}` // edit mode trust until edited
+    const captureValid = overrideExpected || captureFresh
+    const expectedNonEmpty = expectedOutput.trim().length > 0
+    const canSave = captureValid && expectedNonEmpty
+
     async function onSubmit(e: React.FormEvent) {
         e.preventDefault()
         setError(null)
+        if (!canSave) {
+            if (!expectedNonEmpty) {
+                setError("Expected output is empty. Run & capture, or paste JSON with Override.")
+            } else if (!captureFresh) {
+                setError(
+                    "Solution or schema has changed since the last capture. Run & capture again, or tick Override to keep the existing JSON."
+                )
+            }
+            return
+        }
         setSubmitting(true)
         try {
             const payload: Record<string, unknown> = {
@@ -506,8 +543,18 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                 </CardContent>
             </Card>
 
-            <div className="flex items-center gap-3 sticky bottom-0 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-background/80 backdrop-blur border-t border-border">
-                <Button type="submit" disabled={submitting}>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sticky bottom-0 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-background/80 backdrop-blur border-t border-border">
+                <Button
+                    type="submit"
+                    disabled={submitting || !canSave}
+                    title={
+                        canSave
+                            ? undefined
+                            : !expectedNonEmpty
+                                ? "Run & capture, or paste JSON with Override."
+                                : "Solution or schema changed — re-capture or use Override."
+                    }
+                >
                     {submitting ? (
                         <>
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -528,6 +575,13 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                 >
                     Cancel
                 </Button>
+                {!canSave && (
+                    <span className="text-xs text-muted-foreground">
+                        {!expectedNonEmpty
+                            ? "Run & capture before saving."
+                            : "Solution or schema changed — re-capture, or tick Override below the JSON."}
+                    </span>
+                )}
             </div>
         </form>
     )

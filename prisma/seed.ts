@@ -378,7 +378,225 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
         }
     })
 
-    console.log('Seed data created.')
+    // ----------------------------------------------------------------
+    // New problem drafts (PR #8). Each ships with solution SQL but no
+    // expectedOutput — author opens each in the admin UI, hits
+    // "Run & capture" to populate expectedOutput from the solution,
+    // then flips status to PUBLISHED. The publish transition snapshots
+    // a ProblemVersion automatically.
+    // ----------------------------------------------------------------
+    type Draft = {
+        slug: string
+        title: string
+        difficulty: 'EASY' | 'MEDIUM' | 'HARD'
+        ordered: boolean
+        description: string
+        schemaDescription: string
+        schemaId: string
+        solutionSql: string
+        tagSlugs: string[]
+    }
+
+    const drafts: Draft[] = [
+        // Joins
+        {
+            slug: 'customers-with-orders',
+            title: 'Customers Who Have Ordered',
+            difficulty: 'EASY',
+            ordered: true,
+            description:
+                'Return customers who have placed at least one order. Return columns customer_id, name, ordered ascending by customer_id.',
+            schemaDescription: '',
+            schemaId: ecommerceSchema.id,
+            solutionSql:
+                'SELECT DISTINCT c.customer_id, c.name FROM customers c JOIN orders o ON o.customer_id = c.customer_id ORDER BY c.customer_id',
+            tagSlugs: ['joins'],
+        },
+        {
+            slug: 'customers-with-no-orders',
+            title: 'Customers Who Have Never Ordered',
+            difficulty: 'MEDIUM',
+            ordered: true,
+            description:
+                'Return customers who have not placed any order. Return columns customer_id, name, country, ordered by customer_id ascending.',
+            schemaDescription: '',
+            schemaId: ecommerceSchema.id,
+            solutionSql:
+                'SELECT customer_id, name, country FROM customers WHERE customer_id NOT IN (SELECT DISTINCT customer_id FROM orders) ORDER BY customer_id',
+            tagSlugs: ['joins', 'anti-join'],
+        },
+        {
+            slug: 'employees-with-department',
+            title: 'Employees and Their Departments',
+            difficulty: 'EASY',
+            ordered: true,
+            description:
+                'Return every employee with their department name. Return columns name, department, ordered alphabetically by name.',
+            schemaDescription: '',
+            schemaId: hrSchema.id,
+            solutionSql:
+                'SELECT e.name, d.name AS department FROM employees e JOIN departments d ON d.id = e.department_id ORDER BY e.name',
+            tagSlugs: ['joins', 'hr'],
+        },
+
+        // Aggregates
+        {
+            slug: 'orders-per-country',
+            title: 'Orders per Country',
+            difficulty: 'EASY',
+            ordered: true,
+            description:
+                'Count orders by the customer country. Return columns country, order_count. Order by order_count desc, then country asc.',
+            schemaDescription: '',
+            schemaId: ecommerceSchema.id,
+            solutionSql:
+                'SELECT c.country, COUNT(*) AS order_count FROM orders o JOIN customers c ON c.customer_id = o.customer_id GROUP BY c.country ORDER BY order_count DESC, c.country ASC',
+            tagSlugs: ['aggregation', 'group-by'],
+        },
+        {
+            slug: 'avg-salary-per-department',
+            title: 'Average Salary per Department',
+            difficulty: 'MEDIUM',
+            ordered: true,
+            description:
+                'Compute the average salary for each department. Return columns department, avg_salary, ordered by avg_salary descending.',
+            schemaDescription: '',
+            schemaId: hrSchema.id,
+            solutionSql:
+                'SELECT d.name AS department, AVG(s.amount) AS avg_salary FROM employees e JOIN departments d ON d.id = e.department_id JOIN salaries s ON s.employee_id = e.id GROUP BY d.name ORDER BY avg_salary DESC',
+            tagSlugs: ['aggregation', 'hr'],
+        },
+        {
+            slug: 'highest-spending-customer',
+            title: 'Highest-Spending Customer',
+            difficulty: 'MEDIUM',
+            ordered: false,
+            description:
+                'Return the single customer who has spent the most across all orders. Return columns name, total_spent.',
+            schemaDescription: '',
+            schemaId: ecommerceSchema.id,
+            solutionSql:
+                'SELECT c.name, SUM(o.total_amount) AS total_spent FROM customers c JOIN orders o ON o.customer_id = c.customer_id GROUP BY c.name ORDER BY total_spent DESC LIMIT 1',
+            tagSlugs: ['aggregation'],
+        },
+
+        // Window functions
+        {
+            slug: 'employee-salary-rank',
+            title: 'Employee Salary Rank by Department',
+            difficulty: 'MEDIUM',
+            ordered: true,
+            description:
+                'Rank each employee by salary within their department, highest first. Return columns name, department, salary, rank. Order by department asc, then rank asc.',
+            schemaDescription: '',
+            schemaId: hrSchema.id,
+            solutionSql:
+                'SELECT e.name, d.name AS department, s.amount AS salary, RANK() OVER (PARTITION BY d.id ORDER BY s.amount DESC) AS rank FROM employees e JOIN departments d ON d.id = e.department_id JOIN salaries s ON s.employee_id = e.id ORDER BY department ASC, rank ASC',
+            tagSlugs: ['window-functions', 'hr'],
+        },
+        {
+            slug: 'running-revenue',
+            title: 'Running Revenue by Order Date',
+            difficulty: 'MEDIUM',
+            ordered: true,
+            description:
+                'Show each order with a running total of total_amount across orders, ordered by order_date. Return columns order_id, order_date, total_amount, running_total.',
+            schemaDescription: '',
+            schemaId: ecommerceSchema.id,
+            solutionSql:
+                'SELECT order_id, order_date, total_amount, SUM(total_amount) OVER (ORDER BY order_date, order_id) AS running_total FROM orders ORDER BY order_date, order_id',
+            tagSlugs: ['window-functions'],
+        },
+        {
+            slug: 'salary-vs-department-avg',
+            title: 'Salary vs Department Average',
+            difficulty: 'HARD',
+            ordered: true,
+            description:
+                'For each employee, return their salary and the difference vs their department average. Return columns name, department, salary, dept_avg, diff. Order by department, then diff descending.',
+            schemaDescription: '',
+            schemaId: hrSchema.id,
+            solutionSql:
+                'SELECT e.name, d.name AS department, s.amount AS salary, AVG(s.amount) OVER (PARTITION BY d.id) AS dept_avg, s.amount - AVG(s.amount) OVER (PARTITION BY d.id) AS diff FROM employees e JOIN departments d ON d.id = e.department_id JOIN salaries s ON s.employee_id = e.id ORDER BY department ASC, diff DESC',
+            tagSlugs: ['window-functions', 'hr'],
+        },
+
+        // CTEs
+        {
+            slug: 'top-2-products-per-category',
+            title: 'Top 2 Priced Products per Category',
+            difficulty: 'MEDIUM',
+            ordered: true,
+            description:
+                'Return the two highest-priced products in each category. Return columns category, name, price. Order by category asc, then price desc.',
+            schemaDescription: '',
+            schemaId: ecommerceSchema.id,
+            solutionSql:
+                'WITH ranked AS (SELECT category, name, price, ROW_NUMBER() OVER (PARTITION BY category ORDER BY price DESC) AS rn FROM products) SELECT category, name, price FROM ranked WHERE rn <= 2 ORDER BY category, price DESC',
+            tagSlugs: ['cte', 'window-functions'],
+        },
+        {
+            slug: 'employees-above-dept-avg',
+            title: 'Employees Earning Above Department Average',
+            difficulty: 'MEDIUM',
+            ordered: true,
+            description:
+                'Return employees whose salary is strictly greater than their department average. Return columns name, department, salary. Order alphabetically by name.',
+            schemaDescription: '',
+            schemaId: hrSchema.id,
+            solutionSql:
+                'WITH dept_avg AS (SELECT e.department_id, AVG(s.amount) AS avg_amount FROM employees e JOIN salaries s ON s.employee_id = e.id GROUP BY e.department_id) SELECT e.name, d.name AS department, s.amount AS salary FROM employees e JOIN departments d ON d.id = e.department_id JOIN salaries s ON s.employee_id = e.id JOIN dept_avg da ON da.department_id = e.department_id WHERE s.amount > da.avg_amount ORDER BY e.name',
+            tagSlugs: ['cte', 'hr'],
+        },
+
+        // Subqueries
+        {
+            slug: 'most-recent-hire-per-dept',
+            title: 'Most Recent Hire per Department',
+            difficulty: 'HARD',
+            ordered: true,
+            description:
+                'Return the most recently hired employee in each department. Return columns department, name, hire_date. Order alphabetically by department.',
+            schemaDescription: '',
+            schemaId: hrSchema.id,
+            solutionSql:
+                'SELECT d.name AS department, e.name, e.hire_date FROM employees e JOIN departments d ON d.id = e.department_id WHERE e.hire_date = (SELECT MAX(e2.hire_date) FROM employees e2 WHERE e2.department_id = e.department_id) ORDER BY department',
+            tagSlugs: ['subqueries', 'hr'],
+        },
+    ]
+
+    for (const d of drafts) {
+        // Upsert tags first
+        const tagConnects = []
+        for (const slug of d.tagSlugs) {
+            const tag = await prisma.tag.upsert({
+                where: { slug },
+                update: {},
+                create: { slug, name: slug.replace(/-/g, ' ') },
+            })
+            tagConnects.push({ id: tag.id })
+        }
+
+        await prisma.sQLProblem.upsert({
+            where: { slug: d.slug },
+            update: {},
+            create: {
+                title: d.title,
+                slug: d.slug,
+                difficulty: d.difficulty,
+                status: 'DRAFT',
+                description: d.description,
+                schemaDescription: d.schemaDescription,
+                schemaId: d.schemaId,
+                expectedOutput: '[]',
+                solutionSql: d.solutionSql,
+                ordered: d.ordered,
+                tags: { connect: tagConnects },
+            },
+        })
+    }
+
+    console.log(`Seed data created. (${drafts.length} new drafts pending capture.)`)
 }
 
 main()

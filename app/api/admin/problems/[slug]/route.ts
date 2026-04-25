@@ -3,6 +3,7 @@ import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { withAdmin } from "@/lib/api-auth"
 import { ProblemUpdateInput } from "@/lib/admin-validation"
+import { snapshotProblemVersion } from "@/lib/problem-versions"
 
 type Ctx = { params: Promise<{ slug: string }> }
 
@@ -22,7 +23,7 @@ export const GET = withAdmin(async (_req, _principal, ctx: Ctx) => {
     return NextResponse.json({ data: problem })
 })
 
-export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
+export const PATCH = withAdmin(async (req, principal, ctx: Ctx) => {
     const { slug } = await ctx.params
     let body: unknown
     try {
@@ -42,11 +43,13 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
 
     const existing = await prisma.sQLProblem.findUnique({
         where: { slug },
-        select: { id: true },
+        select: { id: true, status: true },
     })
     if (!existing) {
         return NextResponse.json({ error: "Not found." }, { status: 404 })
     }
+    const becomingPublished =
+        input.status === "PUBLISHED" && existing.status !== "PUBLISHED"
 
     try {
         const updated = await prisma.$transaction(async (tx) => {
@@ -102,6 +105,9 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                     tags: { select: { id: true, name: true, slug: true } },
                 },
             })
+            if (becomingPublished) {
+                await snapshotProblemVersion(tx, existing.id, principal.userId)
+            }
             return result
         })
         return NextResponse.json({ data: updated })
