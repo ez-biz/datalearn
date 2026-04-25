@@ -18,10 +18,12 @@ How to author SQL problems on Data Learn from end to end.
 Navigate to `/admin` for the overview, or use the nav strip at the top of every admin page:
 
 ```
-Overview · Problems · Schemas · Tags · API keys
+Overview · Problems · Schemas · Tags · Reports · API keys
 ```
 
-Everything you do here is plumbed through the REST API at `/api/admin/*`. See [`docs/API.md`](./API.md) for the full reference.
+The Reports tab shows a small badge with the count of unresolved reports.
+
+Most CRUD goes through the REST API at `/api/admin/*` (see [`docs/API.md`](./API.md) for the full reference). Reports use server actions instead — same auth gating.
 
 ---
 
@@ -36,6 +38,7 @@ The editor is one long form, broken into cards. Top to bottom:
 - **Title** — what users see in the problem list. The **slug** auto-derives until you manually type into the slug field.
 - **Slug** — URL identifier. Lowercase letters, digits, hyphens. Used in `/practice/<slug>` and `/admin/problems/<slug>/edit`.
 - **Difficulty** — Easy / Medium / Hard. Drives the badge color and the by-difficulty stats on profile.
+- **Status** — `DRAFT` / `BETA` / `PUBLISHED` / `ARCHIVED`. Only `PUBLISHED` shows on the public `/practice` list and at `/practice/<slug>`. Defaults to `DRAFT` for new problems. Promoting a problem to `PUBLISHED` snapshots an immutable `ProblemVersion` automatically (see [Version snapshots](#version-snapshots)).
 - **Ordered comparison** — check this for problems where row order matters (any `ORDER BY` problem). When unchecked, the validator compares as a multiset.
 - **Description** — the problem prose users read in the Description tab. Plain text, supports `\n` newlines. Don't paste schema here; the schema panel renders separately.
 - **Schema description** *(optional)* — short prose, only shown when no input tables are detected (rare for normal SQL problems).
@@ -74,9 +77,24 @@ This is where authoring gets fast.
    - Serializes the rows to JSON (BigInt-safe)
    - Auto-fills the **Expected output** field below
    - Reports `Captured N rows.` next to the button
-3. Inspect the JSON. Edit if needed. The validator compares user submissions against this JSON exactly (with float epsilon tolerance, and ordered/unordered modes).
+3. Inspect the JSON. The validator compares user submissions against this JSON exactly (with float epsilon tolerance, and ordered/unordered modes).
 
-If the schema engine isn't ready yet, the button waits. If your solution errors, the message shows next to the button. Either way, you can also paste raw JSON if you'd rather.
+If the schema engine isn't ready yet, the button waits. If your solution errors, the message shows next to the button.
+
+#### The expected-output field is locked by default
+
+The big textarea is **read-only** unless you tick **Override manually (advanced — prefer Run & capture)**. This is intentional: we want the captured-from-solution path to be the obvious one, since hand-typing JSON is the most common authoring mistake (column-name drift, off-by-one rows, wrong float precision).
+
+#### Capture-fresh gate
+
+Save is **disabled** when:
+- Override is off, **and**
+- Either no capture has happened yet, **or**
+- The current solution / schema differs from what was captured
+
+The Save button shows a tooltip and there's an inline status next to it: *"Solution or schema changed — re-capture, or tick Override below the JSON."* Click **Run & capture** again to refresh.
+
+In edit mode the existing `expectedOutput` is trusted on first load, so you can re-save a problem you didn't touch the solution on.
 
 ### 4. Hints
 
@@ -106,12 +124,43 @@ If the request fails, an error banner appears at the top with the server-reporte
 
 ---
 
+## Recommended workflow
+
+The full lifecycle most authors use:
+
+1. **Create as DRAFT.** Type basics, pick a schema (or inline-create), write the description, paste your solution.
+2. **Run & capture.** Verify the output looks right.
+3. **Smoke-test as a user.** Open `/practice/<slug>` in a private window — wait, you can't, drafts 404 for non-admins. Instead, in the editor click `View as user` (TODO — for now, just visit the URL while signed in as admin and submit your own solution to confirm validation passes).
+4. **Promote to PUBLISHED.** Change `Status` → `Published` → Save. A `ProblemVersion` snapshot is captured automatically (see below). Problem now visible to users.
+5. **Edits later.** When you change description / hints / tags on a published problem, re-save — the captured `expectedOutput` is preserved as long as you didn't change the solution. If you do change the solution, re-capture before save.
+6. **Re-publish.** Status doesn't change on subsequent saves to a PUBLISHED problem. To force a new version snapshot, demote to DRAFT/BETA, then back to PUBLISHED.
+
+---
+
+## Version snapshots
+
+Every time a problem transitions **to** `PUBLISHED` (from any other status), an immutable `ProblemVersion` row is created in the same DB transaction as the status update. The snapshot captures:
+
+- Title, description, schema description
+- The full `schemaSql` (DDL + seeds — not just a foreign key, so even if the schema mutates later, this version stays intact)
+- Expected output JSON
+- Solution SQL
+- Hints, tags, ordered flag
+- The admin who published, and when
+
+This is what you'll reach for the first time someone reports *"this used to be accepted, now it isn't."*
+
+There's no UI viewer in this PR — the data lives in the `ProblemVersion` table and is exposed via `GET /api/admin/problems/<slug>/versions`. Query the DB directly when you need the full history. A viewer page is on the roadmap.
+
+---
+
 ## Editing or deleting a problem
 
 From `/admin/problems`:
 
 - Click the row title (or the pencil icon) → edit page
-- Click the trash icon → confirm dialog → DELETE. Cascades to all submissions for that problem. **Not undoable.**
+- Click the trash icon → confirm dialog → DELETE. Cascades to all submissions and reports for that problem. **Not undoable.**
+- Status badges (`draft`, `beta`, `archived`) appear next to the title for non-PUBLISHED rows. PUBLISHED has no badge.
 
 ---
 
@@ -133,6 +182,42 @@ curl -X POST http://localhost:3000/api/admin/schemas \
 ## Tags page
 
 `/admin/tags` shows every tag with its usage count. Tags are created via the problem editor or `POST /api/admin/tags`. There's no rename / merge UI yet — to clean up, edit problems that use a stale tag and write the canonical slug.
+
+---
+
+## Reports inbox
+
+`/admin/reports` is where user-submitted problem reports land. The admin nav badge shows the open count.
+
+### How users submit reports
+
+Every problem page has a **Report a problem** link in the breadcrumb bar (next to "All problems"). Clicking it opens a dialog with:
+
+- A **kind** dropdown: Wrong answer / Unclear description / Broken schema / Typo / Other
+- A **details** textarea (max 4000 chars)
+
+Auth is **optional** — anonymous users can report too (`userId` is null in those rows).
+
+### Triaging
+
+Each row shows the kind, a link to the problem page, a quick **edit →** link to the admin editor for that problem, the reporter, and the message.
+
+- **Resolve** — sets `resolvedAt` + `resolvedBy`. The row moves to the **Resolved** section at the bottom.
+- **Reopen** — clears `resolvedAt`, moves the row back to **Open**.
+
+The list shows the 25 most recent resolved rows; older ones still exist in the DB (`ProblemReport` table), they just aren't surfaced in the UI yet.
+
+### Common signal-to-action
+
+| Report kind | Typical fix |
+|---|---|
+| Wrong answer | Re-capture expected output. Often the schema's `INSERT`s changed, or floating-point precision drifted. |
+| Unclear description | Edit the description. State column-name requirements explicitly. |
+| Broken schema | DDL doesn't run cleanly in DuckDB-WASM, or seeds don't satisfy a sample query. |
+| Typo | Quick edit. |
+| Other | Read the message; figure it out. |
+
+After fixing, hit Resolve. If the fix was substantial enough to warrant a snapshot, demote → republish (the publish transition snapshots a `ProblemVersion`).
 
 ---
 
@@ -186,6 +271,9 @@ Revoked keys remain in the list for audit. If you need to fully remove, do it di
 | `0 rows captured` from a correct-looking solution | Seed data doesn't satisfy the predicate; fix the schema's `INSERT` rows |
 | Numeric columns show garbage like `1450000` | Schema uses `DECIMAL`; switch to `DOUBLE` |
 | `expectedOutput must be a JSON array` on save | The expected output field isn't a JSON-array. Re-capture or paste a valid array |
+| Save button is disabled with "Solution or schema changed" | You edited solution SQL after capturing. Click Run & capture again, or tick **Override** to keep the existing JSON. |
 | `schemaId does not match any SqlSchema` on save | The selected schema was deleted between load and save; pick another or refresh |
+| New problem doesn't show up at `/practice` | Status is still `DRAFT`. Open the editor, change Status to `Published`, save. |
+| User reported a problem but it's not in `/admin/reports` | Reports require a non-empty message; check the `ProblemReport` table directly if you suspect a bug. |
 
 If you hit something not in this list, open an issue with the request payload and the response.

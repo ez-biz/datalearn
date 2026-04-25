@@ -17,6 +17,8 @@ Repo: <https://github.com/ez-biz/datalearn>
 - **Per-user progress** — solved checkmarks on the problem list, "Solved" badge on the workspace, submission history with code recall, profile stats with by-difficulty breakdown.
 - **Workspace polish** — `⌘↵` run, `⌘⇧↵` submit, draft autosave to localStorage, run timer, NULL-styled cells, tabular numerics.
 - **Admin content portal** — `/admin/*` UI to author problems end-to-end. Type the solution, hit "Run & capture", and we run it against the schema in your browser and store the JSON. No more hand-writing expected output.
+- **Authoring discipline** — DRAFT / BETA / PUBLISHED / ARCHIVED state machine, capture-fresh gate that blocks save when the solution drifts from the captured output, and an immutable `ProblemVersion` snapshot on every publish.
+- **Report inbox** — every problem page has a "Report a problem" link that lands in `/admin/reports`; the admin nav shows an open-count badge.
 - **REST API for automation** — every admin operation is an HTTP endpoint under `/api/admin/*`, accepting either a session cookie or a bearer API key.
 - **Dark mode** — full token-based theming, light is default, manual toggle in the nav.
 
@@ -100,29 +102,35 @@ DuckDB-WASM downloads a ~30 MB WASM binary on first visit. Expect a slow first l
 ```
 app/
   api/admin/             REST endpoints (auth via session OR bearer key)
-  admin/                 Admin UI — gated layout, problems CRUD, schemas, tags, API keys
+  admin/                 Admin UI — gated layout, problems CRUD, schemas, tags,
+                         reports inbox, API keys
   practice/              /practice list + /practice/[slug] workspace
   learn/                 Topic + article pages
   ...                    profile, dynamic [slug], 404, error
-actions/                 Server actions (validateSubmission, getProblems, ...)
+actions/                 Server actions (validateSubmission, getProblems,
+                         submitProblemReport, ...)
 components/
   ui/                    Hand-rolled primitives (Button, Card, Badge, Input, ...)
   layout/                Navbar, Footer, ThemeProvider, MobileNav
-  practice/              ProblemClient, ProblemPanel, PracticeList, HistoryPanel
+  practice/              ProblemClient, ProblemPanel, PracticeList, HistoryPanel,
+                         ReportDialog
   sql/                   SqlPlayground, SqlEditor, ResultTable, ValidationResult
-  admin/                 AdminNav, ProblemForm, HintsEditor, TagPicker, ApiKeysClient
+  admin/                 AdminNav, ProblemForm, HintsEditor, TagPicker,
+                         ApiKeysClient, ReportRowActions, ProblemRowActions
 lib/
   prisma.ts              Prisma client singleton
   auth.ts                NextAuth setup (GitHub + Google + Prisma adapter)
   api-auth.ts            requireAdmin() — session OR bearer; withAdmin() route wrapper
   admin-validation.ts    Zod schemas for /api/admin/* payloads
+  problem-versions.ts    snapshotProblemVersion() — runs on PUBLISHED transitions
   duckdb.ts              DuckDB-WASM bootstrap
   use-problem-db.ts      Shared DB hook (one connection per problem page)
   sql-validator.ts       Pure validator with epsilon + ordered/unordered modes
   utils.ts               cn()
 prisma/
-  schema.prisma          Models: User / Submission / SQLProblem / SqlSchema /
-                         Tag / ApiKey / Topic / Article / Page / Account / Session
+  schema.prisma          Models: User / Submission / SQLProblem / ProblemVersion /
+                         ProblemReport / SqlSchema / Tag / ApiKey / Topic /
+                         Article / Page / Account / Session
   migrations/
   seed.ts                Demo content
 ```

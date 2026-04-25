@@ -107,6 +107,7 @@ Create a problem. Either provide an existing `schemaId` **or** an inline `schema
   "title": "Top customers by revenue",
   "slug": "top-customers-by-revenue",          // lowercase, hyphenated
   "difficulty": "MEDIUM",                      // EASY | MEDIUM | HARD
+  "status": "DRAFT",                           // DRAFT | BETA | PUBLISHED | ARCHIVED — defaults to DRAFT
   "description": "Return the 3 customers with the highest total revenue…",
   "schemaDescription": "",                     // optional prose; defaults to ""
   "ordered": true,                             // does row order matter?
@@ -129,6 +130,7 @@ Create a problem. Either provide an existing `schemaId` **or** an inline `schema
 - `tagSlugs` are upserted by slug; unknown slugs are created with `name = slug.replace(/-/g, " ")`.
 - `solutionSql` is optional and stored on the problem for reference / future re-capture.
 - The admin UI captures `expectedOutput` automatically by running `solutionSql` against the schema in the browser via DuckDB-WASM. External callers can do the same client-side or compute it however they want.
+- **`status`** controls visibility. Only `PUBLISHED` problems show up on the public `/practice` list and `/practice/<slug>` pages; `DRAFT`, `BETA`, and `ARCHIVED` are admin-only. Creating with `status: "PUBLISHED"` triggers a `ProblemVersion` snapshot automatically (see [Versions](#versions)).
 
 **Response 201**
 
@@ -157,6 +159,7 @@ Partial update. All fields optional. Tag updates **replace** (not append) — se
   "title": "…",
   "slug": "…",
   "difficulty": "EASY",
+  "status": "PUBLISHED",     // DRAFT | BETA | PUBLISHED | ARCHIVED
   "description": "…",
   "schemaDescription": "…",
   "ordered": false,
@@ -169,10 +172,12 @@ Partial update. All fields optional. Tag updates **replace** (not append) — se
 ```
 
 > **Note:** Inline schema creation is only supported on `POST`. To swap a problem's schema, create the schema first via `POST /api/admin/schemas`, then `PATCH` the problem with the new `schemaId`.
+>
+> **Snapshot side-effect:** When `status` transitions from non-`PUBLISHED` to `PUBLISHED` (the typical "promote a draft" flow), a `ProblemVersion` row is created in the same transaction. Edits to an already-published problem do *not* bump version — only re-publishes do.
 
 ### `DELETE /api/admin/problems/{slug}`
 
-Hard delete. Cascades to all `Submission` rows for the problem.
+Hard delete. Cascades to all `Submission` rows and `ProblemReport` rows for the problem.
 
 ```bash
 curl -X DELETE http://localhost:3000/api/admin/problems/top-customers-by-revenue \
@@ -180,6 +185,30 @@ curl -X DELETE http://localhost:3000/api/admin/problems/top-customers-by-revenue
 ```
 
 **Response 200** `{"ok":true}`
+
+### `GET /api/admin/problems/{slug}/versions`
+
+Returns the immutable snapshot history for a problem, newest first. A new row is created every time `status` transitions to `PUBLISHED`.
+
+```json
+{
+  "data": [
+    {
+      "id": "cuid…",
+      "versionNumber": 3,
+      "title": "Top customers by revenue",
+      "ordered": true,
+      "tagSlugs": ["joins", "aggregation"],
+      "publishedById": "user_cuid",
+      "capturedAt": "2026-04-25T11:30:00.000Z"
+    },
+    { "versionNumber": 2, "…": "…" },
+    { "versionNumber": 1, "…": "…" }
+  ]
+}
+```
+
+The full snapshot (including `description`, `schemaSql`, `expectedOutput`, `solutionSql`, `hints`, `schemaDescription`) lives in the `ProblemVersion` table — the list endpoint trims to a header view; query the DB directly if you need the full body.
 
 ---
 
@@ -234,6 +263,52 @@ Upsert by slug. If `slug` is omitted, it's derived from `name`.
 ```
 
 Returns the upserted record. Tag creation also happens implicitly when you submit a problem with new `tagSlugs`.
+
+---
+
+## Reports
+
+User-submitted reports about problems (wrong answer, unclear description, broken schema, typo, other). Currently routed through **server actions**, not REST endpoints — they're called from the client directly via React Server Components. If you need to script report submission externally, ping us and we'll add a REST endpoint.
+
+### Submitting a report (from the UI)
+
+The "Report a problem" link on `/practice/<slug>` opens a dialog backed by `actions/reports.ts::submitProblemReport`:
+
+```ts
+await submitProblemReport({
+  problemSlug: "top-customers-by-revenue",
+  kind: "WRONG_ANSWER",   // | UNCLEAR_DESCRIPTION | BROKEN_SCHEMA | TYPO | OTHER
+  message: "The expected output has 'amount' as a string but my correct query returns a number…",
+})
+```
+
+Auth is **optional** — anonymous reports are allowed (`userId` will be null in the DB).
+
+### Resolving / reopening (admin only)
+
+`actions/reports.ts::resolveProblemReport(reportId)` and `reopenProblemReport(reportId)`. Both gated by admin session. Used by the resolve / reopen buttons on `/admin/reports`.
+
+### Where they show up
+
+- `/admin/reports` — open + resolved sections, with the kind, problem link, reporter, and timestamps.
+- AdminNav shows an open-count badge.
+
+The DB shape:
+
+```prisma
+model ProblemReport {
+  id         String              @id @default(cuid())
+  problemId  String
+  problem    SQLProblem          @relation(...)
+  userId     String?
+  user       User?               @relation(...)
+  kind       ProblemReportKind   // WRONG_ANSWER | UNCLEAR_DESCRIPTION | BROKEN_SCHEMA | TYPO | OTHER
+  message    String              @db.Text
+  resolvedAt DateTime?
+  resolvedBy String?
+  createdAt  DateTime            @default(now())
+}
+```
 
 ---
 
@@ -307,6 +382,7 @@ curl -X POST http://localhost:3000/api/admin/problems \
   "title": "Customers by country",
   "slug": "customers-by-country",
   "difficulty": "EASY",
+  "status": "PUBLISHED",
   "description": "Return every customer whose country is USA. Return columns customer_id, name, email, country.",
   "ordered": false,
   "hints": [],
@@ -323,6 +399,25 @@ EOF
 
 That's everything you need to script content onboarding from CSV / spreadsheets / wherever your problem bank lives today.
 
+### Two-phase publishing pattern (recommended for bulk imports)
+
+For larger imports, prefer creating problems as `DRAFT` first, reviewing them in `/admin/problems`, then promoting to `PUBLISHED`:
+
+```bash
+# 1. Create as DRAFT (no snapshot yet, not visible to users)
+curl -X POST $BASE/problems -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"slug":"…", "status":"DRAFT", …}'
+
+# 2. After reviewing in the admin UI, promote to PUBLISHED. This
+#    transition triggers a ProblemVersion snapshot automatically.
+curl -X PATCH $BASE/problems/<slug> -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"PUBLISHED"}'
+```
+
+This matches the seed script's pattern in `prisma/seed.ts` for the 12 starter problems and the workflow recommended in [`ADMIN.md`](./ADMIN.md).
+
 ---
 
 ## Things this API doesn't do (yet)
@@ -332,5 +427,7 @@ That's everything you need to script content onboarding from CSV / spreadsheets 
 - Webhooks for content changes
 - Rate limiting on bearer auth
 - API key scopes (every key is full-admin)
+- A REST endpoint for submitting reports externally (currently only via server action; ping us if you need this)
+- A "rollback to version N" endpoint (the snapshot data is there in `ProblemVersion`; rolling back is a manual `PATCH` for now)
 
 If you need any of these for production automation, open an issue describing the use case.
