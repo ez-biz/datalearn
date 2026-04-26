@@ -1,3 +1,7 @@
+// Validators here are imported by the MCP server (mcp-server/) via a
+// relative path. Keep this module Prisma-free and server-runtime-free —
+// pure Zod only. Anything else will break the MCP bundle.
+
 import { z } from "zod"
 
 const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -29,6 +33,16 @@ export const TagCreateInput = z.object({
     slug: SlugSchema.optional(),
 })
 
+/**
+ * Base shape for creating a SQL problem. Cross-field invariants
+ * (mutually-exclusive schemaId/schemaInline, expectedOutput required,
+ * expectedOutput is a JSON array) are layered on via `.refine()` in
+ * `ProblemCreateInput` below.
+ *
+ * Exported as a bare `ZodObject` so consumers can `.omit()` / read `.shape`
+ * without losing typing — `.refine()` produces a `ZodEffects`, which
+ * doesn't expose those.
+ */
 export const ProblemCreateInputBase = z.object({
     title: z.string().min(1).max(200),
     slug: SlugSchema,
