@@ -7,7 +7,7 @@ type Variant = "primary" | "secondary" | "ghost" | "outline" | "destructive" | "
 type Size = "sm" | "md" | "lg" | "icon"
 
 const base =
-    "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 select-none active:scale-[0.98] cursor-pointer"
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-[background-color,border-color,color,box-shadow,scale,opacity] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 select-none active:scale-[0.96] cursor-pointer"
 
 const variants: Record<Variant, string> = {
     primary:

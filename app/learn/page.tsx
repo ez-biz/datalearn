@@ -38,7 +38,7 @@ export default async function LearnPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {list.map((topic: any) => (
                         <Link key={topic.id} href={`/learn/${topic.slug}`} className="group">
-                            <Card className="h-full transition-all hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5">
+                            <Card className="h-full transition-[border-color,box-shadow,translate] duration-200 ease-out hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5">
                                 <CardContent className="p-6">
                                     <div className="flex items-start justify-between gap-3 mb-3">
                                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">

@@ -64,7 +64,7 @@ export async function Navbar() {
                             )}
                             <Link
                                 href="/profile"
-                                className="ml-1 rounded-full ring-2 ring-transparent hover:ring-primary/30 transition-all"
+                                className="ml-1 rounded-full ring-2 ring-transparent hover:ring-primary/30 transition-shadow duration-150"
                                 aria-label="Profile"
                             >
                                 {session.user.image ? (

@@ -43,7 +43,7 @@ export function RelatedProblemsPanel({
                             )}
                         </div>
                         <DifficultyBadge difficulty={p.difficulty} />
-                        <ArrowRight className="hidden sm:block h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                        <ArrowRight className="hidden sm:block h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-[color,translate] duration-150" />
                     </Link>
                 ))}
             </Card>

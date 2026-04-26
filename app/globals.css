@@ -149,6 +149,15 @@
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
+  /* Headings: balance wrap so the last line isn't a single short word.
+     Body paragraphs: pretty wrap to avoid orphans. Cheap typographic win
+     across the whole site. */
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
   code, pre, kbd {
     font-family: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
     font-variant-ligatures: none;

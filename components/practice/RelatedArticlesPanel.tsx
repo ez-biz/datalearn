@@ -46,7 +46,7 @@ export function RelatedArticlesPanel({
                                     </span>
                                 )}
                             </div>
-                            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground self-center shrink-0 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground self-center shrink-0 group-hover:text-primary group-hover:translate-x-0.5 transition-[color,translate] duration-150" />
                         </Link>
                     </li>
                 ))}
