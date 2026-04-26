@@ -7,6 +7,8 @@ All admin operations on Data Learn are HTTP endpoints under `/api/admin/*`. The 
 - **Content type:** `application/json` for all requests with a body
 - **Auth:** session cookie (UI) **or** `Authorization: Bearer <api-key>` (automation)
 
+> **Tip — for AI-driven authoring** of SQL problems: the [`mcp-server/`](../mcp-server/) package wraps the relevant subset of these endpoints as MCP tools (`list_topics`, `create_topic`, `list_tags`, `create_tag`, `list_schemas`, `create_schema`, `list_problems`, `get_problem`, `create_problem`). Use it from Claude Desktop / Cursor / any MCP-aware client instead of hand-writing curl scripts. See [`mcp-server/README.md`](../mcp-server/README.md) for install + per-tool data formats. The MCP server uses the same Bearer-key auth path documented below; it forces `status: DRAFT` on every `create_problem` so AI-authored content lands in the admin review queue rather than going live.
+
 ## Authentication
 
 `lib/api-auth.ts::requireAdmin()` accepts either:
