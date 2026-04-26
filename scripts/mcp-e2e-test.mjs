@@ -123,9 +123,10 @@ function logResult(label, result) {
 async function main() {
     console.log("[harness] seeding API key...")
     const { plaintext, keyId } = await seedKey()
-    // Don't log any portion of the plaintext (CodeQL: clear-text logging
-    // of sensitive information). Even the prefix has shape information.
-    console.log(`[harness] API key seeded (id=${keyId})`)
+    // Don't log any field returned by seedKey — CodeQL's taint analysis
+    // marks the whole tuple sensitive because plaintext flows out of it.
+    // keyId is still used internally for the revoke step at the end.
+    console.log("[harness] API key seeded")
 
     let mcp
     let exitCode = 0
