@@ -19,14 +19,24 @@ const USERS_SCHEMA = [
 ].join(';\n') + ';'
 
 async function main() {
+    // SECURITY: do not seed the admin row at role=ADMIN.
+    //
+    // The auth-time signIn callback refuses to auto-link OAuth identities
+    // onto pre-seeded elevated-role users (Google account-takeover guard).
+    // To keep the seed idempotent and the operator workflow safe:
+    //   1. Seed the row at role=USER if it doesn't exist.
+    //   2. Don't touch role on subsequent runs (`update: {}`) — operator
+    //      promotes via psql or /admin/contributors after first sign-in.
+    //   3. The admin row only acts as the legal `authorId` FK for seeded
+    //      articles; it doesn't need ADMIN rights to satisfy the FK.
     const adminEmail = 'anchitgupt2012@gmail.com'
     const admin = await prisma.user.upsert({
         where: { email: adminEmail },
-        update: { role: 'ADMIN' },
+        update: {},
         create: {
             email: adminEmail,
             name: 'Anchit Gupta',
-            role: 'ADMIN',
+            role: 'USER',
         },
     })
     const adminId = admin.id
