@@ -114,6 +114,12 @@ export const ProblemReportCreateInput = z.object({
     message: z.string().min(1).max(4_000),
 })
 
+export const UserRoleSchema = z.enum(["USER", "CONTRIBUTOR", "ADMIN"])
+
+export const UserRoleUpdateInput = z.object({
+    role: UserRoleSchema,
+})
+
 // ----- Learn (topics + articles) -----
 
 export const ArticleStatus = z.enum([

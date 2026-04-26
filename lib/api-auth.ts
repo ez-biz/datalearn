@@ -127,6 +127,84 @@ export function withAdmin<Args extends unknown[]>(
     }
 }
 
+export type ContributorPrincipal = {
+    kind: "session"
+    userId: string
+    role: "CONTRIBUTOR" | "ADMIN"
+}
+
+/**
+ * Resolve a session principal whose role is at least CONTRIBUTOR.
+ * Session-only — bearer keys are admin-only and don't apply here.
+ * Same Origin/CSRF gate as requireAdmin for cookie-auth writes.
+ */
+export async function requireContributor(req: Request): Promise<ContributorPrincipal> {
+    // Same CSRF gate as requireAdmin's session path. Browsers send
+    // Origin on writes; missing-Origin writes are rejected.
+    const origin = req.headers.get("origin")
+    const reqHost = req.headers.get("host")
+    const allowedHosts = new Set<string>()
+    if (reqHost) allowedHosts.add(reqHost)
+    for (const env of [process.env.NEXTAUTH_URL, process.env.AUTH_URL]) {
+        if (!env) continue
+        try {
+            allowedHosts.add(new URL(env).host)
+        } catch {
+            /* ignore malformed env */
+        }
+    }
+    if (origin) {
+        let originHost: string
+        try {
+            originHost = new URL(origin).host
+        } catch {
+            throw new AuthFailure(403, { error: "Malformed Origin header." })
+        }
+        if (!allowedHosts.has(originHost)) {
+            throw new AuthFailure(403, {
+                error: "Cross-origin request rejected.",
+            })
+        }
+    } else if (req.method !== "GET" && req.method !== "HEAD") {
+        throw new AuthFailure(403, {
+            error: "Missing Origin header on a write request.",
+        })
+    }
+
+    const session = await auth()
+    if (!session?.user?.id) {
+        throw new AuthFailure(401, { error: "Authentication required." })
+    }
+    if (session.user.role !== "CONTRIBUTOR" && session.user.role !== "ADMIN") {
+        throw new AuthFailure(403, { error: "Contributor access required." })
+    }
+    return {
+        kind: "session",
+        userId: session.user.id,
+        role: session.user.role,
+    }
+}
+
+export function withContributor<Args extends unknown[]>(
+    handler: (req: Request, principal: ContributorPrincipal, ...rest: Args) => Promise<Response>
+) {
+    return async (req: Request, ...rest: Args): Promise<Response> => {
+        try {
+            const principal = await requireContributor(req)
+            return await handler(req, principal, ...rest)
+        } catch (e) {
+            if (e instanceof AuthFailure) {
+                return NextResponse.json(e.body, { status: e.status })
+            }
+            console.error("Contributor route error:", e)
+            return NextResponse.json(
+                { error: "Internal server error." },
+                { status: 500 }
+            )
+        }
+    }
+}
+
 export function generateApiKey(): { plaintext: string; prefix: string } {
     // 32 random bytes as base64url, prefixed for visual identification
     const bytes = new Uint8Array(32)

@@ -1,6 +1,6 @@
 import Link from "next/link"
 import Image from "next/image"
-import { Shield } from "lucide-react"
+import { PenSquare, Shield } from "lucide-react"
 import { getNavLinks } from "@/actions/nav"
 import { auth } from "@/lib/auth"
 import { Logo } from "@/components/ui/Logo"
@@ -13,6 +13,7 @@ export async function Navbar() {
     const { data: pages } = await getNavLinks()
     const session = await auth()
     const isAdmin = session?.user?.role === "ADMIN"
+    const isContributor = session?.user?.role === "CONTRIBUTOR"
 
     const navItems = [
         { href: "/learn", label: "Learn" },
@@ -43,6 +44,15 @@ export async function Navbar() {
                     <ThemeToggle />
                     {session?.user ? (
                         <>
+                            {(isContributor || isAdmin) && (
+                                <Link
+                                    href="/me/articles"
+                                    className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+                                >
+                                    <PenSquare className="h-3.5 w-3.5" />
+                                    My articles
+                                </Link>
+                            )}
                             {isAdmin && (
                                 <Link
                                     href="/admin"
@@ -90,6 +100,15 @@ export async function Navbar() {
                                     >
                                         Profile
                                     </Link>
+                                    {(isContributor || isAdmin) && (
+                                        <Link
+                                            href="/me/articles"
+                                            className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10"
+                                        >
+                                            <PenSquare className="h-4 w-4" />
+                                            My articles
+                                        </Link>
+                                    )}
                                     {isAdmin && (
                                         <Link
                                             href="/admin"
