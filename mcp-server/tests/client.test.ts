@@ -92,4 +92,35 @@ describe("DataLearnClient", () => {
             status: 500,
         })
     })
+
+    it("normalizes trailing slash on baseUrl", async () => {
+        const fetch = vi.fn().mockResolvedValue(ok({ data: [] }))
+        const c = new DataLearnClient("k", "http://localhost:3000/", fetch)
+        await c.request("GET", "/api/admin/topics")
+        expect(fetch).toHaveBeenCalledWith(
+            "http://localhost:3000/api/admin/topics",
+            expect.anything()
+        )
+    })
+
+    it("preserves ApiError.details on non-2xx", async () => {
+        const fetch = vi
+            .fn()
+            .mockResolvedValue(ok({ error: "Validation failed", details: { fieldErrors: { slug: ["required"] } } }, 400))
+        const c = new DataLearnClient("k", "http://localhost:3000", fetch)
+        await expect(
+            c.request("POST", "/api/admin/topics", {})
+        ).rejects.toMatchObject({
+            status: 400,
+            details: { fieldErrors: { slug: ["required"] } },
+        })
+    })
+
+    it("does not stringify undefined body on GET", async () => {
+        const fetch = vi.fn().mockResolvedValue(ok({ data: [] }))
+        const c = new DataLearnClient("k", "http://localhost:3000", fetch)
+        await c.request("GET", "/api/admin/topics")
+        const init = fetch.mock.calls[0][1] as RequestInit
+        expect(init.body).toBeUndefined()
+    })
 })

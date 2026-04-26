@@ -1,8 +1,8 @@
 export class ApiError extends Error {
     constructor(
-        public status: number,
+        public readonly status: number,
         message: string,
-        public details?: unknown
+        public readonly details?: unknown
     ) {
         super(message)
         this.name = "ApiError"
@@ -22,7 +22,7 @@ export class DataLearnClient {
         if (url.protocol === "http:" && !localhostHosts.has(url.hostname)) {
             throw new Error(
                 `http:// only allowed for localhost; got ${baseUrl}. ` +
-                    `Use https:// for production hosts.`
+                    `Set DATALEARN_BASE_URL to https:// for production hosts.`
             )
         }
         // Strip trailing slash so URL joins are predictable.
@@ -30,7 +30,7 @@ export class DataLearnClient {
     }
 
     async request<T>(
-        method: string,
+        method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
         path: string,
         body?: unknown
     ): Promise<T> {
@@ -61,6 +61,8 @@ export class DataLearnClient {
                 errBody?.details
             )
         }
+        // The Next admin API consistently wraps success bodies as { data: ... };
+        // void endpoints (e.g. DELETE) may return {} → callers get undefined as T.
         const okBody = parsed as { data?: T }
         return okBody.data as T
     }
