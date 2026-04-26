@@ -22,8 +22,10 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor, querie
 - `components/layout/` — Navbar, Footer, ThemeProvider, MobileNav
 - `components/practice/` — workspace pieces (ProblemClient, ProblemPanel, PracticeList, HistoryPanel)
 - `components/sql/` — SQL UI (SqlPlayground, SqlEditor, ResultTable, ValidationResult)
-- `lib/` — shared modules (`auth.ts`, `prisma.ts`, `sql-validator.ts`, `duckdb.ts`, `use-problem-db.ts`, `utils.ts`)
+- `lib/` — shared modules (`auth.ts`, `prisma.ts`, `sql-validator.ts`, `duckdb.ts`, `use-problem-db.ts`, `utils.ts`, `admin-validation.ts` — kept Prisma-free; imported by `mcp-server/`)
 - `prisma/` — `schema.prisma`, migrations, `seed.ts`
+- `mcp-server/` — standalone stdio MCP server (own `package.json`, tsup-bundled). Lets MCP-aware assistants author SQL problems via the `/api/admin/*` REST surface using a Bearer key. Imports `lib/admin-validation.ts` directly; the bundler inlines it.
+- `scripts/mcp-e2e-test.mjs` — end-to-end harness that spawns the built MCP server with a freshly-seeded admin API key and exercises all 9 tools against the live API. Run with the dev server up.
 
 ## Conventions
 
@@ -42,6 +44,8 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor, querie
 - **Don't filter Prisma queries with `select` and forget new fields.** When adding a column to `SQLProblem` or similar, audit `actions/problems.ts` etc.
 - **`session.user.id` and `session.user.role`** are available; the augmentation lives in `types/next-auth.d.ts` and the values are populated in `lib/auth.ts` `session` callback. Don't cast around them.
 - **Don't seed the local DB with the wrong Postgres user.** Local trust auth uses `anchitgupta`, not `postgres`.
+- **Don't add Prisma or Next/server imports to `lib/admin-validation.ts`.** The MCP server bundles this file via tsup; pulling in Prisma would balloon the bundle and break the stdio runtime. Comment at the top of the file states this contract.
+- **Don't bypass the MCP `create_problem` DRAFT guard.** The tool input schema deliberately omits `status`; the handler hardcodes `status: "DRAFT"` after spreading user input. If you add a new write tool, follow the same omit-then-inject pattern for any field that must be controlled by humans.
 
 ## Running locally
 

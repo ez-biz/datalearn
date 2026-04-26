@@ -1,3 +1,7 @@
+// Validators here are imported by the MCP server (mcp-server/) via a
+// relative path. Keep this module Prisma-free and server-runtime-free —
+// pure Zod only. Anything else will break the MCP bundle.
+
 import { z } from "zod"
 
 const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -29,24 +33,33 @@ export const TagCreateInput = z.object({
     slug: SlugSchema.optional(),
 })
 
-export const ProblemCreateInput = z
-    .object({
-        title: z.string().min(1).max(200),
-        slug: SlugSchema,
-        difficulty: Difficulty,
-        status: ProblemStatus.default("DRAFT"),
-        description: z.string().min(1).max(20_000),
-        schemaDescription: z.string().max(2_000).default(""),
-        ordered: z.boolean().default(false),
-        hints: z.array(z.string().min(1).max(2_000)).max(10).default([]),
-        tagSlugs: z.array(SlugSchema).max(10).default([]),
-        // schema: either pick existing by id, or inline-create
-        schemaId: z.string().min(1).optional(),
-        schemaInline: SqlSchemaCreateInput.optional(),
-        // expectedOutput: either provide JSON directly, or provide solutionSql to be run client-side
-        expectedOutput: z.string().min(2).max(2_000_000).optional(),
-        solutionSql: z.string().max(20_000).optional(),
-    })
+/**
+ * Base shape for creating a SQL problem. Cross-field invariants
+ * (mutually-exclusive schemaId/schemaInline, expectedOutput required,
+ * expectedOutput is a JSON array) are layered on via `.refine()` in
+ * `ProblemCreateInput` below.
+ *
+ * Exported as a bare `ZodObject` so consumers can `.omit()` / read `.shape`
+ * without losing typing — `.refine()` produces a `ZodEffects`, which
+ * doesn't expose those.
+ */
+export const ProblemCreateInputBase = z.object({
+    title: z.string().min(1).max(200),
+    slug: SlugSchema,
+    difficulty: Difficulty,
+    status: ProblemStatus.default("DRAFT"),
+    description: z.string().min(1).max(20_000),
+    schemaDescription: z.string().max(2_000).default(""),
+    ordered: z.boolean().default(false),
+    hints: z.array(z.string().min(1).max(2_000)).max(10).default([]),
+    tagSlugs: z.array(SlugSchema).max(10).default([]),
+    schemaId: z.string().min(1).optional(),
+    schemaInline: SqlSchemaCreateInput.optional(),
+    expectedOutput: z.string().min(2).max(2_000_000).optional(),
+    solutionSql: z.string().max(20_000).optional(),
+})
+
+export const ProblemCreateInput = ProblemCreateInputBase
     .refine(
         (v) => Boolean(v.schemaId) !== Boolean(v.schemaInline),
         {

@@ -18,6 +18,7 @@ Repo: <https://github.com/ez-biz/datalearn>
 - **Workspace polish** — `⌘↵` run, `⌘⇧↵` submit, draft autosave to localStorage, run timer, NULL-styled cells, tabular numerics.
 - **Admin content portal** — `/admin/*` UI to author problems end-to-end. Type the solution, hit "Run & capture", and we run it against the schema in your browser and store the JSON. No more hand-writing expected output.
 - **REST API for automation** — every admin operation is an HTTP endpoint under `/api/admin/*`, accepting either a session cookie or a bearer API key.
+- **MCP server for AI authoring** — a stdio [Model Context Protocol](https://modelcontextprotocol.io) server in [`mcp-server/`](./mcp-server/) lets Claude Desktop / Cursor / any MCP-aware assistant author SQL problems through tool calls. Forced DRAFT on writes; full admin scope on reads. See [`mcp-server/README.md`](./mcp-server/README.md).
 - **Dark mode** — full token-based theming, light is default, manual toggle in the nav.
 
 ## Stack
@@ -125,12 +126,17 @@ prisma/
                          Tag / ApiKey / Topic / Article / Page / Account / Session
   migrations/
   seed.ts                Demo content
+mcp-server/              Standalone stdio MCP server for AI-driven problem authoring
+  src/                   index.ts (entry), client.ts, errors.ts, tools/
+  tests/                 vitest unit tests (40 tests)
+  README.md              Install + Claude Desktop config + authoring guide
 ```
 
 ## Documentation
 
 - [`docs/ADMIN.md`](./docs/ADMIN.md) — how to author problems via the admin portal (workflow + tips)
 - [`docs/API.md`](./docs/API.md) — REST API reference for `/api/admin/*` (auth, payloads, examples)
+- [`mcp-server/README.md`](./mcp-server/README.md) — MCP server install + Claude Desktop config + per-tool data formats
 - [`CLAUDE.md`](./CLAUDE.md) — project guide for AI-assisted contributors
 
 ## Contributing

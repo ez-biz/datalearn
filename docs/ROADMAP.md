@@ -1,8 +1,15 @@
 # 🚀 Antigravity Data Learning Platform — Long-Term Roadmap
 
-> **Last updated:** 2026-02-16  
-> **Status:** Active Development  
+> **Last updated:** 2026-04-26
+> **Status:** Active Development
 > **Version:** 0.1.0 (Beta)
+
+## Recently shipped (April 2026)
+
+- **Learn CMS v1** — admin/contributor article authoring with approval queue, cross-linking from `/learn` and `/practice`, reading-time recompute on save, TOC and prev/next.
+- **CONTRIBUTOR role** — role-grant UI in `/admin/contributors`, `/me/articles` authoring surface for contributors gated by admin approval.
+- **Admin security hardening** — edge middleware gating `/admin/*` and `/api/admin/*`, NextAuth signIn guard against pre-seeded-admin auto-link takeover, malformed-Authorization-header rejection, full E2E coverage.
+- **MCP server v1** — stdio Model Context Protocol server in `mcp-server/`. 9 tools (`list_topics`, `create_topic`, `list_tags`, `create_tag`, `list_schemas`, `create_schema`, `list_problems`, `get_problem`, `create_problem`) for Claude Desktop / Cursor / any MCP-aware client. Forced DRAFT on `create_problem` so AI-authored content always passes through human review.
 
 ---
 
@@ -104,6 +111,19 @@ Build the **go-to open platform** for data engineering education — combining i
 | **Performance monitoring (Sentry/Vercel Analytics)** | ⬜ Todo | P2 |
 | **Accessibility audit (WCAG 2.1 AA)** | ⬜ Todo | P2 |
 | **Mobile responsiveness audit** | ⬜ Todo | P1 |
+
+---
+
+### 🟪 MCP server roadmap
+
+| Task | Status | Notes |
+|------|--------|-------|
+| **MCP v1: problem authoring tools** | ✅ Done | 9 tools, stdio transport, forced DRAFT on writes. |
+| **MCP v2: article authoring tools** | ⬜ Todo | `create_article`, `submit_article`, plus update flows. |
+| **MCP v2: problem update / archive / publish** | ⬜ Todo | Currently editable only via admin UI after the AI lands a DRAFT. |
+| **MCP v2: `validate_problem` pre-flight** | ⬜ Todo | Run `solutionSql` against `schemaInline` and surface mismatches before persistence. |
+| **MCP: HTTP / remote transport** | ⬜ Todo | Today's stdio transport requires local install. Hosted SSE/HTTP MCP would let it run as a Vercel route. |
+| **MCP: extract to npm package** | ⬜ Todo | When external collaborators need it. Currently a sibling project in this repo. |
 
 ---
 
