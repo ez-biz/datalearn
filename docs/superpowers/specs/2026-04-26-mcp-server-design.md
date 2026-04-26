@@ -157,6 +157,45 @@ User flow:
 3. Add the config block above to Claude Desktop's `claude_desktop_config.json`.
 4. Restart Claude Desktop. Ask: "Create a SQL problem about window functions on the orders schema, MEDIUM difficulty."
 
+### Local development workflow
+
+During development the MCP server points at the local Next dev server, not production. Two patterns are supported (pick one or run both side-by-side):
+
+**Pattern A — separate "datalearn-local" entry** (recommended; lets you keep prod and local installed simultaneously):
+
+```json
+{
+  "mcpServers": {
+    "datalearn-local": {
+      "command": "node",
+      "args": ["/abs/path/datalearn/mcp-server/dist/index.js"],
+      "env": {
+        "DATALEARN_API_KEY": "dl_live_local_dev_key_...",
+        "DATALEARN_BASE_URL": "http://localhost:3000"
+      }
+    },
+    "datalearn": {
+      "command": "node",
+      "args": ["/abs/path/datalearn/mcp-server/dist/index.js"],
+      "env": {
+        "DATALEARN_API_KEY": "dl_live_prod_...",
+        "DATALEARN_BASE_URL": "https://datalearn.app"
+      }
+    }
+  }
+}
+```
+
+The AI sees both servers as distinct namespaces; you ask it to use whichever you intend.
+
+**Pattern B — single entry, swap env between dev and prod sessions.** Simpler config but you have to restart Claude Desktop when switching environments.
+
+**Dev key generation.** Run `npm run dev` against the local Postgres, sign in as ADMIN, generate a key at `http://localhost:3000/admin/api-keys`. Use that key in `DATALEARN_API_KEY` for the local entry. The same `withAdmin` Bearer path works identically against the local server.
+
+**Hot-reload the MCP server itself.** The MCP server is bundled, so iterating on its tool definitions requires `npm run build` (or `npm run dev` in the `mcp-server/` directory if we add a watch script — to be decided in the implementation plan). The Next dev server doesn't need restarting when the MCP server code changes — they're independent processes.
+
+**Local URL safety.** The MCP client wrapper allows `http://` only when the host is `localhost` or `127.0.0.1`; production-style hosts are required to use HTTPS. This prevents an accidentally misconfigured prod entry from leaking the API key over plaintext.
+
 Extraction to a published npm package (`@datalearn/mcp`) is deferred until external collaborators need it — at that point the directory either gets `npm publish`-ed as-is or extracted to its own repo.
 
 ## Open questions
