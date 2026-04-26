@@ -18,7 +18,14 @@ export class DataLearnClient {
         private readonly fetchImpl: typeof globalThis.fetch = globalThis.fetch
     ) {
         const url = new URL(baseUrl)
-        const localhostHosts = new Set(["localhost", "127.0.0.1", "::1"])
+        // `new URL("http://[::1]/").hostname` returns the literal `[::1]`
+        // (with brackets), so we accept both forms.
+        const localhostHosts = new Set([
+            "localhost",
+            "127.0.0.1",
+            "::1",
+            "[::1]",
+        ])
         if (url.protocol === "http:" && !localhostHosts.has(url.hostname)) {
             throw new Error(
                 `http:// only allowed for localhost; got ${baseUrl}. ` +

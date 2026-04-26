@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { z } from "zod"
 import {
     Difficulty,
     ProblemCreateInputBase,
+    SlugSchema,
 } from "../../../lib/admin-validation"
 import { ApiError, DataLearnClient } from "../client.js"
 import { toMcpError } from "../errors.js"
@@ -78,7 +78,10 @@ export function registerProblemTools(
     server.tool(
         "get_problem",
         "Fetch a single SQL problem's full record by slug, including expectedOutput JSON and solutionSql. Returns {found:false} if no problem with that slug exists. Use this to learn the JSON shape of expectedOutput before authoring new problems.",
-        { slug: z.string().min(1) },
+        // SlugSchema enforces kebab-case + length; rejects `.`/`..` which
+        // would otherwise URL-normalize away the path segment and hit a
+        // sibling endpoint (e.g. `/api/admin/problems/.` → `/api/admin/problems/`).
+        { slug: SlugSchema },
         async ({ slug }) => {
             try {
                 const problem = await client.request<FullProblem>(

@@ -262,6 +262,8 @@ npm run typecheck
 ## Safety notes
 
 - All `create_problem` calls land as DRAFT. The `status` field is not exposed at the tool layer; it cannot be set to PUBLISHED via this server.
-- Bearer keys have full admin power. Keep them out of source control. Rotate via `/admin/api-keys` if leaked.
+- **The Bearer key authenticates with full admin scope.** The v1 tool surface restricts itself to topics/tags/schemas/problems, but the *key itself* can call any `/api/admin/*` route directly (users, role grants, API key management, article approval, etc.). Treat it as a full admin credential. If leaked, rotate immediately via `/admin/api-keys`.
+- Anyone holding the key can also read every problem's `expectedOutput` (answer key) and `solutionSql` (reference solution) via `get_problem` — they're returned in full. The `list_problems` projection deliberately excludes them.
+- Periodically check `/admin/api-keys` for unusual `lastUsedAt` activity — abnormal call volume can indicate a leaked or misused key.
 - 5xx error messages from the API are not surfaced raw to the MCP client (they're logged to stderr); a generic `upstream error (HTTP <status>)` is returned instead, so paths/stack traces in API error fields don't leak.
 - This server is local-only (stdio transport). HTTP/remote MCP transport is not part of v1.

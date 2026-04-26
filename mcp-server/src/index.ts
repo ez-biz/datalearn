@@ -20,7 +20,17 @@ async function main(): Promise<void> {
 
     const transport = new StdioServerTransport()
     await server.connect(transport)
-    console.error(`[datalearn-mcp] connected, base=${baseUrl}`)
+    // Use .origin so any basic-auth credentials accidentally embedded in
+    // DATALEARN_BASE_URL (e.g. http://user:pass@host) are stripped from
+    // the log — MCP clients persist stderr.
+    const safeBase = (() => {
+        try {
+            return new URL(baseUrl).origin
+        } catch {
+            return baseUrl
+        }
+    })()
+    console.error(`[datalearn-mcp] connected, base=${safeBase}`)
 }
 
 main().catch((err) => {
