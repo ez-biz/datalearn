@@ -95,6 +95,7 @@ export default async function ProblemPage({ params }: Props) {
                 expectedRows={expectedRows}
                 initialHistory={history}
                 isSolved={isSolved}
+                relatedArticles={problem.relatedArticles ?? []}
             />
         </div>
     )

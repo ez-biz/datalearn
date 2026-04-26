@@ -114,6 +114,61 @@ export const ProblemReportCreateInput = z.object({
     message: z.string().min(1).max(4_000),
 })
 
+// ----- Learn (topics + articles) -----
+
+export const ArticleStatus = z.enum([
+    "DRAFT",
+    "SUBMITTED",
+    "PUBLISHED",
+    "ARCHIVED",
+])
+
+export const TopicCreateInput = z.object({
+    name: z.string().min(1).max(100),
+    slug: SlugSchema,
+    description: z.string().max(2_000).optional().nullable(),
+})
+export const TopicUpdateInput = TopicCreateInput.partial()
+
+export const ArticleCreateInput = z.object({
+    title: z.string().min(1).max(200),
+    slug: SlugSchema,
+    topicSlug: SlugSchema,
+    content: z.string().min(1).max(200_000),
+    summary: z.string().max(2_000).optional().nullable(),
+    status: ArticleStatus.default("DRAFT"),
+    tagSlugs: z.array(SlugSchema).max(10).default([]),
+    relatedProblemSlugs: z.array(SlugSchema).max(20).default([]),
+})
+
+export const ArticleUpdateInput = z.object({
+    title: z.string().min(1).max(200).optional(),
+    slug: SlugSchema.optional(),
+    topicSlug: SlugSchema.optional(),
+    content: z.string().min(1).max(200_000).optional(),
+    summary: z.string().max(2_000).optional().nullable(),
+    status: ArticleStatus.optional(),
+    tagSlugs: z.array(SlugSchema).max(10).optional(),
+    relatedProblemSlugs: z.array(SlugSchema).max(20).optional(),
+})
+
+export const ArticleRejectInput = z.object({
+    reviewNotes: z.string().min(1).max(4_000),
+})
+
+/**
+ * words / 200 wpm, rounded up. Strips markdown punctuation crudely
+ * — perfect-is-the-enemy-of-good for a reading-time pill.
+ */
+export function computeReadingMinutes(content: string): number {
+    const words = content
+        .replace(/```[\s\S]*?```/g, " ") // strip fenced code
+        .replace(/[#>*_~`\[\]\(\)\-]/g, " ")
+        .split(/\s+/)
+        .filter(Boolean).length
+    return Math.max(1, Math.ceil(words / 200))
+}
+
 export function slugify(input: string): string {
     return input
         .toLowerCase()

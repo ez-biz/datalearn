@@ -59,6 +59,18 @@ export async function getProblem(slug: string) {
                 hints: true,
                 createdAt: true,
                 updatedAt: true,
+                relatedArticles: {
+                    where: { status: "PUBLISHED" },
+                    select: {
+                        id: true,
+                        slug: true,
+                        title: true,
+                        summary: true,
+                        readingMinutes: true,
+                        topic: { select: { slug: true } },
+                    },
+                    take: 4,
+                },
             },
         })
         if (!problem || problem.status !== "PUBLISHED") {

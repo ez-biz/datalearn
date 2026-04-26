@@ -18,13 +18,17 @@ export default async function AdminLayout({
         redirect("/")
     }
 
-    const openReportCount = await prisma.problemReport.count({
-        where: { resolvedAt: null },
-    })
+    const [openReportCount, articleQueueCount] = await Promise.all([
+        prisma.problemReport.count({ where: { resolvedAt: null } }),
+        prisma.article.count({ where: { status: "SUBMITTED" } }),
+    ])
 
     return (
         <div className="flex flex-col flex-1">
-            <AdminNav openReportCount={openReportCount} />
+            <AdminNav
+                openReportCount={openReportCount}
+                articleQueueCount={articleQueueCount}
+            />
             {children}
         </div>
     )

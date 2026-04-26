@@ -20,7 +20,7 @@ const USERS_SCHEMA = [
 
 async function main() {
     const adminEmail = 'anchitgupt2012@gmail.com'
-    await prisma.user.upsert({
+    const admin = await prisma.user.upsert({
         where: { email: adminEmail },
         update: { role: 'ADMIN' },
         create: {
@@ -29,6 +29,7 @@ async function main() {
             role: 'ADMIN',
         },
     })
+    const adminId = admin.id
 
     const topic = await prisma.topic.upsert({
         where: { slug: 'data-engineering-101' },
@@ -63,9 +64,9 @@ def etl_process():
     load(clean_data)
 \`\`\`
       `,
-            published: true,
+            status: 'PUBLISHED',
             topicId: topic.id,
-            authorId: 'system',
+            authorId: adminId,
         },
     })
 
@@ -108,9 +109,9 @@ A common pitfall is building a streaming pipeline because it sounds modern, then
 
 **Micro-batching** (Spark Structured Streaming, hourly dbt) splits the difference: small batches, near-real-time feel, batch simplicity. Most "real-time" dashboards are actually micro-batched on a short cadence.
             `,
-            published: true,
+            status: 'PUBLISHED',
             topicId: topic.id,
-            authorId: 'system',
+            authorId: adminId,
         },
     })
 
@@ -155,9 +156,9 @@ Most data architectures keep both. App writes go to OLTP (Postgres). A pipeline 
 
 Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur the line for smaller workloads. At TB+ scale the split still matters.
             `,
-            published: true,
+            status: 'PUBLISHED',
             topicId: topic.id,
-            authorId: 'system',
+            authorId: adminId,
         },
     })
 
