@@ -634,7 +634,7 @@ describe("topics tools", () => {
         )
         registerTopicTools(server, client)
         const tool = (server as any)._registeredTools.list_topics
-        const result = await tool.callback({}, {})
+        const result = await tool.handler({}, {})
         expect(fetch).toHaveBeenCalledWith(
             "http://localhost:3000/api/admin/topics",
             expect.objectContaining({ method: "GET" })
@@ -659,7 +659,7 @@ describe("topics tools", () => {
         )
         registerTopicTools(server, client)
         const tool = (server as any)._registeredTools.create_topic
-        const result = await tool.callback(
+        const result = await tool.handler(
             { slug: "joins", title: "Joins", description: "desc" },
             {}
         )
@@ -819,7 +819,7 @@ describe("tags tools", () => {
         const client = new DataLearnClient("k", "http://localhost:3000", fetch)
         registerTagTools(server, client)
         const tool = (server as any)._registeredTools.list_tags
-        const result = await tool.callback({}, {})
+        const result = await tool.handler({}, {})
         expect(fetch).toHaveBeenCalledWith(
             "http://localhost:3000/api/admin/tags",
             expect.objectContaining({ method: "GET" })
@@ -837,7 +837,7 @@ describe("tags tools", () => {
         const client = new DataLearnClient("k", "http://localhost:3000", fetch)
         registerTagTools(server, client)
         const tool = (server as any)._registeredTools.create_tag
-        await tool.callback({ slug: "join", name: "Join" }, {})
+        await tool.handler({ slug: "join", name: "Join" }, {})
         expect(fetch).toHaveBeenCalledWith(
             "http://localhost:3000/api/admin/tags",
             expect.objectContaining({
@@ -978,7 +978,7 @@ describe("schemas tools", () => {
         const client = new DataLearnClient("k", "http://localhost:3000", fetch)
         registerSchemaTools(server, client)
         const tool = (server as any)._registeredTools.list_schemas
-        const result = await tool.callback({}, {})
+        const result = await tool.handler({}, {})
         expect(fetch).toHaveBeenCalledWith(
             "http://localhost:3000/api/admin/schemas",
             expect.objectContaining({ method: "GET" })
@@ -994,7 +994,7 @@ describe("schemas tools", () => {
         const client = new DataLearnClient("k", "http://localhost:3000", fetch)
         registerSchemaTools(server, client)
         const tool = (server as any)._registeredTools.create_schema
-        await tool.callback(
+        await tool.handler(
             {
                 slug: "orders",
                 name: "Orders",
@@ -1173,7 +1173,7 @@ describe("problems tools", () => {
         )
         registerProblemTools(server, client)
         const tool = (server as any)._registeredTools.list_problems
-        const result = await tool.callback({}, {})
+        const result = await tool.handler({}, {})
         const text = result.content[0].text
         expect(text).toContain("simple-select")
         expect(text).not.toContain("expectedOutput")
@@ -1198,7 +1198,7 @@ describe("problems tools", () => {
         )
         registerProblemTools(server, client)
         const tool = (server as any)._registeredTools.list_problems
-        const result = await tool.callback({ difficulty: "MEDIUM" }, {})
+        const result = await tool.handler({ difficulty: "MEDIUM" }, {})
         const parsed = JSON.parse(result.content[0].text)
         expect(parsed).toHaveLength(1)
         expect(parsed[0].slug).toBe("med")
@@ -1214,7 +1214,7 @@ describe("problems tools", () => {
         )
         registerProblemTools(server, client)
         const tool = (server as any)._registeredTools.get_problem
-        const result = await tool.callback({ slug: "simple-select" }, {})
+        const result = await tool.handler({ slug: "simple-select" }, {})
         expect(fetch).toHaveBeenCalledWith(
             "http://localhost:3000/api/admin/problems/simple-select",
             expect.objectContaining({ method: "GET" })
@@ -1232,7 +1232,7 @@ describe("problems tools", () => {
         )
         registerProblemTools(server, client)
         const tool = (server as any)._registeredTools.get_problem
-        const result = await tool.callback({ slug: "nope" }, {})
+        const result = await tool.handler({ slug: "nope" }, {})
         expect(JSON.parse(result.content[0].text)).toEqual({ found: false })
     })
 
@@ -1253,7 +1253,7 @@ describe("problems tools", () => {
         // input shape doesn't declare status, so it's stripped at parse;
         // and even if passthrough were ever enabled, the handler's
         // explicit `status: "DRAFT"` override would win during the spread.
-        await tool.callback(
+        await tool.handler(
             {
                 title: "T",
                 slug: "t",
