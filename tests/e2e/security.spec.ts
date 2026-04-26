@@ -40,8 +40,15 @@ test.describe("PR #11 — critical / high security fixes", () => {
     test("CSRF: cross-origin POST to /api/admin/* → 403", async ({
         request,
     }) => {
+        // Send an ADMIN session cookie so the request clears the new
+        // edge middleware (which otherwise 401s anonymous /api/admin/*
+        // before requireAdmin's CSRF check runs). This faithfully
+        // models the actual CSRF threat: a logged-in admin tricked
+        // into making a cross-origin write.
+        const a = await seedUser({ email: ADMIN_EMAIL, role: "ADMIN" })
         const res = await request.post("/api/admin/problems", {
             headers: {
+                Cookie: cookie(a.sessionToken),
                 Origin: "https://evil.example",
                 "Content-Type": "application/json",
             },
@@ -53,8 +60,12 @@ test.describe("PR #11 — critical / high security fixes", () => {
     })
 
     test("CSRF: missing Origin on a write → 403", async ({ request }) => {
+        const a = await seedUser({ email: ADMIN_EMAIL, role: "ADMIN" })
         const res = await request.post("/api/admin/problems", {
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                Cookie: cookie(a.sessionToken),
+                "Content-Type": "application/json",
+            },
             data: {},
             failOnStatusCode: false,
         })
@@ -118,14 +129,18 @@ test.describe("PR #11 — critical / high security fixes", () => {
         expect(html).toContain("Sign in to report")
     })
 
-    test("admin pages are gated — not signed in → redirect/render homepage", async ({
+    test("admin pages are gated — not signed in → redirect to sign-in", async ({
         request,
     }) => {
-        // /admin layout calls redirect("/") for non-admins. Next renders
-        // the homepage body in the response — assert by content.
-        const html = await (await request.get("/admin/problems")).text()
-        // Homepage hero text is a stable signal
-        expect(html).toMatch(/(Master SQL|Practice SQL the way)/)
+        // Edge middleware now redirects anonymous /admin/* to
+        // /api/auth/signin?callbackUrl=... before the layout runs.
+        const res = await request.get("/admin/problems", {
+            maxRedirects: 0,
+            failOnStatusCode: false,
+        })
+        expect(res.status()).toBeGreaterThanOrEqual(300)
+        expect(res.status()).toBeLessThan(400)
+        expect(res.headers()["location"]).toContain("/api/auth/signin")
     })
 })
 

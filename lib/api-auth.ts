@@ -24,6 +24,17 @@ export function hashApiKey(plaintext: string): string {
 export async function requireAdmin(req: Request): Promise<AdminPrincipal> {
     // Bearer key path
     const header = req.headers.get("authorization") ?? req.headers.get("Authorization")
+
+    // Reject Authorization headers that don't use the Bearer scheme rather
+    // than silently falling through to the session path. Operationally this
+    // surfaces misconfigured proxies/clients quickly; security-wise it
+    // closes a footgun if the session path is ever loosened.
+    if (header && header.length > 0 && !header.startsWith("Bearer ")) {
+        throw new AuthFailure(401, {
+            error: "Malformed Authorization header — use the Bearer scheme.",
+        })
+    }
+
     if (header?.startsWith("Bearer ")) {
         const plaintext = header.slice("Bearer ".length).trim()
         if (!plaintext) {
@@ -139,6 +150,17 @@ export type ContributorPrincipal = {
  * Same Origin/CSRF gate as requireAdmin for cookie-auth writes.
  */
 export async function requireContributor(req: Request): Promise<ContributorPrincipal> {
+    // Bearer auth is admin-only — reject any Authorization header here so
+    // a leaked admin key cannot be used to impersonate a contributor's
+    // authorship via /api/me/*.
+    const authz =
+        req.headers.get("authorization") ?? req.headers.get("Authorization")
+    if (authz && authz.length > 0) {
+        throw new AuthFailure(401, {
+            error: "Authorization headers are not accepted on /api/me/* — sign in instead.",
+        })
+    }
+
     // Same CSRF gate as requireAdmin's session path. Browsers send
     // Origin on writes; missing-Origin writes are rejected.
     const origin = req.headers.get("origin")
