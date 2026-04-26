@@ -11,6 +11,7 @@ import {
     Key,
     LayoutDashboard,
     Tag,
+    Users,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -40,6 +41,7 @@ const items: {
         icon: Flag,
         badgeKey: "openReports",
     },
+    { href: "/admin/contributors", label: "Contributors", icon: Users },
     { href: "/admin/api-keys", label: "API keys", icon: Key },
 ]
 
