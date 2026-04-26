@@ -180,7 +180,7 @@ export function PracticeList({ problems, solvedSlugs }: PracticeListProps) {
                                     <div className="hidden md:flex">
                                         <DifficultyBadge difficulty={p.difficulty} />
                                     </div>
-                                    <ArrowRight className="hidden md:block h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                                    <ArrowRight className="hidden md:block h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-[color,translate] duration-150" />
                                     <ArrowRight className="md:hidden h-4 w-4 text-muted-foreground" />
                                 </Link>
                             </li>

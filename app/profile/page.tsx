@@ -220,7 +220,7 @@ function DifficultyBar({
             </div>
             <div className="h-2 rounded-full bg-surface-muted overflow-hidden">
                 <div
-                    className={`h-full ${color} transition-all`}
+                    className={`h-full ${color} transition-[width] duration-500 ease-out`}
                     style={{ width: `${Math.min(100, (count / max) * 100)}%` }}
                 />
             </div>
