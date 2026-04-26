@@ -141,20 +141,23 @@ export function SqlPlayground({
         )
     }
 
-    if (!dbReady) {
-        return (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Initializing in-browser SQL engine…
-            </div>
-        )
-    }
-
+    // The editor is always rendered — Monaco doesn't need DuckDB. Run /
+    // Submit are gated below until `dbReady`, so the user can read the
+    // problem and start typing immediately while the WASM downloads.
     const showSubmit = Boolean(onSubmit && problemSlug)
-    const submitDisabled = submitting || loading || !hasRunOnce
+    const runDisabled = !dbReady || loading || submitting
+    const submitDisabled = !dbReady || submitting || loading || !hasRunOnce
     const isMac =
         typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
     const modKey = isMac ? "⌘" : "Ctrl"
+    const runTitle = !dbReady
+        ? "Engine loading… (you can keep typing)"
+        : `Run (${modKey} ↵)`
+    const submitTitle = !dbReady
+        ? "Engine loading… (you can keep typing)"
+        : !hasRunOnce
+            ? "Run your query at least once before submitting."
+            : `Submit (${modKey} ⇧ ↵)`
 
     return (
         <div className="flex flex-col h-full gap-3">
@@ -213,22 +216,27 @@ export function SqlPlayground({
                         variant="outline"
                         size="sm"
                         onClick={handleRun}
-                        disabled={loading || submitting}
-                        title={`Run (${modKey} ↵)`}
+                        disabled={runDisabled}
+                        title={runTitle}
                     >
-                        <Play className="h-3.5 w-3.5" />
-                        Run
+                        {!dbReady ? (
+                            <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <span className="hidden sm:inline">Engine loading…</span>
+                            </>
+                        ) : (
+                            <>
+                                <Play className="h-3.5 w-3.5" />
+                                Run
+                            </>
+                        )}
                     </Button>
                     {showSubmit && (
                         <Button
                             size="sm"
                             onClick={handleSubmit}
                             disabled={submitDisabled}
-                            title={
-                                !hasRunOnce
-                                    ? "Run your query at least once before submitting."
-                                    : `Submit (${modKey} ⇧ ↵)`
-                            }
+                            title={submitTitle}
                         >
                             {submitting ? (
                                 <>

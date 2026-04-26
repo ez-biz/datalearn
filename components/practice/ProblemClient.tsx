@@ -7,11 +7,12 @@ import type { ValidationResult } from "@/lib/sql-validator"
 import type { ProblemHistoryEntry } from "@/actions/submissions"
 import { ProblemPanel, type TableInfo } from "./ProblemPanel"
 import { extractTableNames, useProblemDB } from "@/lib/use-problem-db"
+import { SqlPlaygroundSkeleton } from "@/components/sql/SqlPlaygroundSkeleton"
 
 const SqlPlayground = dynamic(
     () =>
         import("@/components/sql/SqlPlayground").then((mod) => mod.SqlPlayground),
-    { ssr: false }
+    { ssr: false, loading: () => <SqlPlaygroundSkeleton /> }
 )
 
 interface ProblemClientProps {
