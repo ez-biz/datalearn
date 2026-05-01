@@ -29,6 +29,7 @@ export interface ProblemFormInitial {
     description: string
     schemaDescription: string
     ordered: boolean
+    dialects: ("DUCKDB" | "POSTGRES")[]
     hints: string[]
     tagSlugs: string[]
     schemaId?: string
@@ -54,6 +55,9 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
         initial.schemaDescription
     )
     const [ordered, setOrdered] = useState(initial.ordered)
+    const [dialects, setDialects] = useState<("DUCKDB" | "POSTGRES")[]>(
+        initial.dialects.length > 0 ? initial.dialects : ["DUCKDB", "POSTGRES"]
+    )
     const [hints, setHints] = useState(initial.hints)
     const [tagSlugs, setTagSlugs] = useState(initial.tagSlugs)
     const [solutionSql, setSolutionSql] = useState(initial.solutionSql)
@@ -157,6 +161,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                 description,
                 schemaDescription,
                 ordered,
+                dialects,
                 hints: hints.filter((h) => h.trim().length > 0),
                 tagSlugs,
                 expectedOutput,
@@ -315,6 +320,50 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                             </label>
                         </Field>
                     </div>
+                    <Field
+                        label="SQL engines"
+                        htmlFor="dialect-duckdb"
+                        description="Engines this problem can be solved in. Most are portable — narrow only when the canonical solution uses dialect-specific syntax (JSONB, STRING_AGG, LIST_AGG, etc.)."
+                    >
+                        <div className="flex flex-wrap gap-3">
+                            {(["DUCKDB", "POSTGRES"] as const).map((d) => {
+                                const checked = dialects.includes(d)
+                                const isOnly = checked && dialects.length === 1
+                                return (
+                                    <label
+                                        key={d}
+                                        className="inline-flex items-center gap-2 h-10"
+                                    >
+                                        <input
+                                            id={`dialect-${d.toLowerCase()}`}
+                                            type="checkbox"
+                                            checked={checked}
+                                            disabled={isOnly}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setDialects((prev) =>
+                                                        prev.includes(d)
+                                                            ? prev
+                                                            : [...prev, d]
+                                                    )
+                                                } else {
+                                                    setDialects((prev) =>
+                                                        prev.filter((p) => p !== d)
+                                                    )
+                                                }
+                                            }}
+                                            className="h-4 w-4"
+                                        />
+                                        <span className="text-sm">
+                                            {d === "DUCKDB"
+                                                ? "DuckDB"
+                                                : "Postgres"}
+                                        </span>
+                                    </label>
+                                )
+                            })}
+                        </div>
+                    </Field>
                     <Field label="Description" htmlFor="description" description="What the user has to do. Plain text." required>
                         <Textarea
                             id="description"

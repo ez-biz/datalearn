@@ -14,6 +14,7 @@ export const SlugSchema = z
 
 export const Difficulty = z.enum(["EASY", "MEDIUM", "HARD"])
 export const ProblemStatus = z.enum(["DRAFT", "BETA", "PUBLISHED", "ARCHIVED"])
+export const Dialect = z.enum(["DUCKDB", "POSTGRES"])
 export const ProblemReportKind = z.enum([
     "WRONG_ANSWER",
     "UNCLEAR_DESCRIPTION",
@@ -51,6 +52,13 @@ export const ProblemCreateInputBase = z.object({
     description: z.string().min(1).max(20_000),
     schemaDescription: z.string().max(2_000).default(""),
     ordered: z.boolean().default(false),
+    /**
+     * Engines this problem can be solved in. At least one is required.
+     * Default `[DUCKDB, POSTGRES]` — most problems are portable. Authors
+     * should narrow only when the canonical solution uses dialect-specific
+     * syntax.
+     */
+    dialects: z.array(Dialect).min(1).max(2).default(["DUCKDB", "POSTGRES"]),
     hints: z.array(z.string().min(1).max(2_000)).max(10).default([]),
     tagSlugs: z.array(SlugSchema).max(10).default([]),
     schemaId: z.string().min(1).optional(),
@@ -95,6 +103,7 @@ export const ProblemUpdateInput = z.object({
     description: z.string().min(1).max(20_000).optional(),
     schemaDescription: z.string().max(2_000).optional(),
     ordered: z.boolean().optional(),
+    dialects: z.array(Dialect).min(1).max(2).optional(),
     hints: z.array(z.string().min(1).max(2_000)).max(10).optional(),
     tagSlugs: z.array(SlugSchema).max(10).optional(),
     schemaId: z.string().min(1).optional(),

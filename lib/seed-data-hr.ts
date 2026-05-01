@@ -13,7 +13,7 @@ CREATE TABLE employees (
 
 CREATE TABLE salaries (
     employee_id INTEGER,
-    amount DOUBLE
+    amount DOUBLE PRECISION
 );
 
 INSERT INTO departments VALUES (1, 'Engineering');

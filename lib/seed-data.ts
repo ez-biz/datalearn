@@ -11,14 +11,14 @@ CREATE TABLE products (
     product_id INTEGER PRIMARY KEY,
     name VARCHAR,
     category VARCHAR,
-    price DOUBLE
+    price DOUBLE PRECISION
 );
 
 CREATE TABLE orders (
     order_id INTEGER PRIMARY KEY,
     customer_id INTEGER,
     order_date DATE,
-    total_amount DOUBLE
+    total_amount DOUBLE PRECISION
 );
 
 CREATE TABLE order_items (
@@ -26,7 +26,7 @@ CREATE TABLE order_items (
     order_id INTEGER,
     product_id INTEGER,
     quantity INTEGER,
-    unit_price DOUBLE
+    unit_price DOUBLE PRECISION
 );
 
 INSERT INTO customers VALUES (1, 'John Doe', 'john@example.com', 'USA');

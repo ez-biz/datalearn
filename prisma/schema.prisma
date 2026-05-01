@@ -159,6 +159,12 @@ model SQLProblem {
   expectedOutput    String     @db.Text
   solutionSql       String?    @db.Text
   ordered           Boolean    @default(false)
+  /// Allowed engines for solving this problem. Most problems are
+  /// portable (`[DUCKDB, POSTGRES]`); narrow only when the canonical
+  /// solution uses dialect-specific syntax (e.g. JSONB, STRING_AGG,
+  /// LIST_AGG). Learners pick which engine to use in the workspace
+  /// when more than one is allowed.
+  dialects          Dialect[]  @default([DUCKDB, POSTGRES])
   hints             String[]   @default([])
   tags              Tag[]      @relation("ProblemTags")
   submissions       Submission[]
@@ -192,6 +198,14 @@ enum Difficulty {
   EASY
   MEDIUM
   HARD
+}
+
+/// SQL execution engines available in the workspace. Both run as
+/// WASM in the learner's browser — no server-side execution.
+/// DUCKDB is the original engine; POSTGRES is PGlite.
+enum Dialect {
+  DUCKDB
+  POSTGRES
 }
 
 model Submission {

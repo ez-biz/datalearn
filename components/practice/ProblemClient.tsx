@@ -6,7 +6,11 @@ import { validateSubmission } from "@/actions/submissions"
 import type { ValidationResult } from "@/lib/sql-validator"
 import type { ProblemHistoryEntry } from "@/actions/submissions"
 import { ProblemPanel, type TableInfo } from "./ProblemPanel"
-import { extractTableNames, useProblemDB } from "@/lib/use-problem-db"
+import {
+    extractTableNames,
+    useProblemDB,
+    type Dialect,
+} from "@/lib/use-problem-db"
 import { SqlPlaygroundSkeleton } from "@/components/sql/SqlPlaygroundSkeleton"
 
 const SqlPlayground = dynamic(
@@ -24,6 +28,8 @@ interface ProblemClientProps {
     schemaDescription: string | null
     schemaSql: string | null
     hints: string[]
+    /** Engines this problem can be solved in. Order doesn't matter. */
+    dialects: Dialect[]
     expectedRows: Record<string, unknown>[] | null
     expectedColumns: string[] | null
     initialHistory: ProblemHistoryEntry[]
@@ -58,6 +64,7 @@ export function ProblemClient({
     schemaDescription,
     schemaSql,
     hints,
+    dialects,
     expectedRows,
     expectedColumns,
     initialHistory,
@@ -73,9 +80,40 @@ export function ProblemClient({
         initialTableInfos
     )
     const draftKey = `${DRAFT_PREFIX}${slug}`
+    const dialectKey = `dl:dialect:${slug}`
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-    const { ready: dbReady, error: dbError, runQuery } = useProblemDB(schemaSql)
+    // Pick a starting dialect: localStorage choice if it's still
+    // allowed for this problem; otherwise the first allowed one.
+    const allowedDialects: Dialect[] =
+        dialects.length > 0 ? dialects : ["DUCKDB"]
+    const [dialect, setDialect] = useState<Dialect>(allowedDialects[0])
+
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem(dialectKey) as Dialect | null
+            if (saved && allowedDialects.includes(saved)) {
+                setDialect(saved)
+            }
+        } catch {}
+        // allowedDialects is derived from a stable prop; safe to omit.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dialectKey])
+
+    const handleDialectChange = useCallback(
+        (d: Dialect) => {
+            setDialect(d)
+            try {
+                localStorage.setItem(dialectKey, d)
+            } catch {}
+        },
+        [dialectKey]
+    )
+
+    const { ready: dbReady, error: dbError, runQuery } = useProblemDB(
+        schemaSql,
+        dialect
+    )
 
     // Hydrate draft from localStorage
     useEffect(() => {
@@ -122,11 +160,26 @@ export function ProblemClient({
             const infos: TableInfo[] = []
             for (const name of names) {
                 try {
-                    const desc = await runQuery(`DESCRIBE "${name}"`)
-                    const columns = desc.map((row) => ({
-                        name: String(row.column_name ?? ""),
-                        type: String(row.column_type ?? ""),
-                    }))
+                    let columns: TableInfo["columns"]
+                    if (dialect === "POSTGRES") {
+                        const desc = await runQuery(
+                            `SELECT column_name, data_type
+                             FROM information_schema.columns
+                             WHERE table_name = '${name}'
+                               AND table_schema = current_schema()
+                             ORDER BY ordinal_position`
+                        )
+                        columns = desc.map((row) => ({
+                            name: String(row.column_name ?? ""),
+                            type: String(row.data_type ?? ""),
+                        }))
+                    } else {
+                        const desc = await runQuery(`DESCRIBE "${name}"`)
+                        columns = desc.map((row) => ({
+                            name: String(row.column_name ?? ""),
+                            type: String(row.column_type ?? ""),
+                        }))
+                    }
                     const sample = await runQuery(
                         `SELECT * FROM "${name}" LIMIT ${SAMPLE_LIMIT}`
                     )
@@ -142,7 +195,7 @@ export function ProblemClient({
         return () => {
             cancelled = true
         }
-    }, [dbReady, schemaSql, runQuery, tableInfos])
+    }, [dbReady, schemaSql, runQuery, tableInfos, dialect])
 
     const resetDraft = useCallback(() => {
         setQuery("")
@@ -210,6 +263,9 @@ export function ProblemClient({
                     onQueryChange={setQuery}
                     onSubmit={handleSubmit}
                     onReset={resetDraft}
+                    dialect={dialect}
+                    allowedDialects={allowedDialects}
+                    onDialectChange={handleDialectChange}
                 />
             </section>
         </div>
