@@ -2,14 +2,15 @@
 
 > **Last updated:** 2026-05-01
 > **Status:** Active Development
-> **Version:** 0.1.0 (Beta) → 0.2.0 in progress
+> **Version:** 0.1.0 (Beta) → 0.1.2 pending release tag
 
 ## Recently shipped
 
-### May 2026 — v0.2.0 in flight
+### May 2026 — merged for v0.1.2, release tag pending
 
 - **V7 — Stable problem numbers** (PR #43). `SQLProblem.number Int @unique`, minted as `MAX(number)+1` inside the existing create transaction, backfilled by `createdAt ASC`, never recycled. Surfaces the `#NNN.` prefix on the practice list, workspace header, UserHome cards, and `/profile` recents. `/practice/<n>` numeric URL redirects to the canonical slug. MCP `list_problems` projection includes `number`. Public `/practice` now sorts by `number ASC` to match the LeetCode reading order.
 - **V8 — Custom problem lists** (PR #44). LeetCode-style "My Lists" — `ProblemList` + `ProblemListItem` with composite-PK dedupe and `position` column for reorder. Caps: 100 lists/user, 1000 items/list (pagination not needed in v1). Surfaces: `/me/lists` index, `/me/lists/[id]` detail with rename, delete, drag-and-drop reorder, sort menu (manual / recently added / recently solved / unsolved first / number), and per-row "Added X · Solved Y" / "Not solved" metadata. AddToListButton popover on the workspace header for one-click bookmarking. Last-solved info comes from a single indexed `Submission(userId, status)` groupBy — cheap even at the 1000-item cap.
+- **Daily Problem v1** (PR #46). One stable UTC daily problem with auto-fill fallback and admin manual override. `/daily` resolves today and redirects to the normal practice workspace. Signed-in home, UserMenu, and mobile nav surface the daily entry point and solved-today state. Uses normal `Submission` rows, so the existing activity streak remains the only streak.
 - **Repository governance baseline** (PR #28 + Phase B `gh api`). GitHub Flow + squash-only merges, branch protection on `main` (4 required status checks, linear history, no force-push, conversation resolution), `.github/CONTRIBUTING.md` / `PULL_REQUEST_TEMPLATE.md` / `CODEOWNERS` / `dependabot.yml`. Solo-tier today; collaborator-tier toggle queued in CONTRIBUTING.
 
 ### April 2026 — v0.1.0 foundation
@@ -250,7 +251,7 @@ Major platform expansions that take Data Learn from "SQL practice + learning hub
 
 **Scope estimate:** Medium for the Stripe integration + plan gates; the hard part is figuring out what's actually worth charging for.
 
-### ✅ V7 — Stable problem numbers (`#247. Group Anagrams`) — SHIPPED v0.2.0 (PR #43)
+### ✅ V7 — Stable problem numbers (`#247. Group Anagrams`) — SHIPPED v0.1.2 (PR #43)
 
 **What:** Monotonic `SQLProblem.number Int @unique`, minted at create-time as `MAX(number)+1` inside the existing transaction. Backfilled on existing rows by `createdAt ASC`. Never recycled.
 
@@ -258,7 +259,7 @@ Major platform expansions that take Data Learn from "SQL practice + learning hub
 
 **MCP-side:** `list_problems` minimal projection now includes `number`, README updated, e2e harness asserts a positive integer is minted on `create_problem`.
 
-### ✅ V8 — Custom problem lists (private to user) — SHIPPED v0.2.0 (PR #44)
+### ✅ V8 — Custom problem lists (private to user) — SHIPPED v0.1.2 (PR #44)
 
 **What:** LeetCode-style "My Lists" — private named collections. Owner-only in v1; public sharing is a v2 of this section.
 
@@ -279,6 +280,16 @@ Major platform expansions that take Data Learn from "SQL practice + learning hub
 **Server actions** in `actions/lists.ts`: create / rename / delete list, add / remove (idempotent on duplicate; mints `position = MAX+1`), reorder (single transaction restamps positions), getMyLists / getList (with lastSolvedAt) / getListIdsContainingProblem.
 
 **Deferred to v2:** public sharing (slug + visibility), MCP integration (`list_my_lists`, `add_to_list`, `remove_from_list`) once the MCP path opens up beyond admin.
+
+### ✅ Daily Problem v1 — SHIPPED v0.1.2 (PR #46)
+
+**What:** One stable daily SQL challenge for each UTC calendar date. Admins can schedule a specific published problem, and the platform auto-fills a missing day so `/daily` always works when published problems exist.
+
+**Surfaces shipped:** `/daily` redirects to the normal `/practice/[slug]` workspace, signed-in UserHome has a compact Daily Problem card, UserMenu and mobile nav link to `/daily`, and `/admin/daily` lets admins set or replace the daily problem.
+
+**Streak behavior:** No separate daily streak in v1. Daily submissions write normal `Submission` rows, so the existing activity streak remains the only streak.
+
+**Coverage shipped:** Pure UTC/selection helper tests plus Playwright E2E for auto-fill redirect, admin manual override, and solved-today state.
 
 ### V9 — Study plans / tracks
 
