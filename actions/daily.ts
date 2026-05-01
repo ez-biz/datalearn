@@ -148,6 +148,35 @@ export async function getDailyStatusForCurrentUser(
     return { daily, solvedToday: solved !== null }
 }
 
+export async function getExistingDailyStatusForCurrentUser(
+    date: Date = new Date()
+): Promise<DailyStatus> {
+    const normalizedDate = normalizeDailyDate(date)
+    const [session, daily] = await Promise.all([
+        auth(),
+        findDailyProblem(normalizedDate),
+    ])
+
+    if (!session?.user?.id || !daily) {
+        return { daily, solvedToday: false }
+    }
+
+    const solved = await prisma.submission.findFirst({
+        where: {
+            userId: session.user.id,
+            problemId: daily.problem.id,
+            status: "ACCEPTED",
+            createdAt: {
+                gte: daily.date,
+                lt: addUtcDays(daily.date, 1),
+            },
+        },
+        select: { id: true },
+    })
+
+    return { daily, solvedToday: solved !== null }
+}
+
 export async function listDailyProblems(
     center: Date = new Date()
 ): Promise<DailyProblemSummary[]> {

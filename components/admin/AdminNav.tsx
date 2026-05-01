@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
     BookOpen,
+    CalendarCheck2,
     Database,
     Flag,
     FileCode,
@@ -25,6 +26,7 @@ const items: {
     badgeKey?: BadgeKey
 }[] = [
     { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
+    { href: "/admin/daily", label: "Daily", icon: CalendarCheck2 },
     { href: "/admin/problems", label: "Problems", icon: Database },
     { href: "/admin/schemas", label: "Schemas", icon: FileCode },
     { href: "/admin/topics", label: "Topics", icon: FolderOpen },

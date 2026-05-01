@@ -1,5 +1,6 @@
 import Link from "next/link"
-import { PenSquare, Shield } from "lucide-react"
+import { CalendarCheck2, PenSquare, Shield } from "lucide-react"
+import { getExistingDailyStatusForCurrentUser } from "@/actions/daily"
 import { getNavLinks } from "@/actions/nav"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
@@ -16,20 +17,23 @@ export async function Navbar() {
     const isAdmin = session?.user?.role === "ADMIN"
     const isContributor = session?.user?.role === "CONTRIBUTOR"
 
-    // Fetch the small data the UserMenu needs (solved count + total problems)
-    // when there's a session. Two cheap queries that run only for logged-in
-    // requests — anonymous traffic pays nothing.
-    let menuStats: { solved: number; total: number } | null = null
+    // Fetch the small data the UserMenu needs only for logged-in requests.
+    let menuStats: { solved: number; total: number; dailySolved: boolean } | null = null
     if (session?.user?.id) {
-        const [solvedRows, total] = await Promise.all([
+        const [solvedRows, total, dailyStatus] = await Promise.all([
             prisma.submission.findMany({
                 where: { userId: session.user.id, status: "ACCEPTED" },
                 select: { problemId: true },
                 distinct: ["problemId"],
             }),
             prisma.sQLProblem.count({ where: { status: "PUBLISHED" } }),
+            getExistingDailyStatusForCurrentUser(),
         ])
-        menuStats = { solved: solvedRows.length, total }
+        menuStats = {
+            solved: solvedRows.length,
+            total,
+            dailySolved: dailyStatus.solvedToday,
+        }
     }
 
     const navItems = [
@@ -67,6 +71,7 @@ export async function Navbar() {
                             role={session.user.role ?? "USER"}
                             solved={menuStats?.solved ?? 0}
                             total={menuStats?.total ?? 0}
+                            dailySolved={menuStats?.dailySolved ?? false}
                         />
                     ) : (
                         <LinkButton href="/api/auth/signin" size="sm" className="ml-1">
@@ -78,6 +83,18 @@ export async function Navbar() {
                         extra={
                             session?.user ? (
                                 <div className="space-y-2">
+                                    <Link
+                                        href="/daily"
+                                        className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium hover:bg-surface-muted"
+                                    >
+                                        <CalendarCheck2 className="h-4 w-4" />
+                                        Daily problem
+                                        {menuStats?.dailySolved && (
+                                            <span className="ml-auto text-xs text-easy-fg">
+                                                Solved
+                                            </span>
+                                        )}
+                                    </Link>
                                     <Link
                                         href="/profile"
                                         className="block rounded-md px-3 py-2 text-sm font-medium hover:bg-surface-muted"
