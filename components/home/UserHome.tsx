@@ -2,6 +2,7 @@ import Link from "next/link"
 import {
     ArrowRight,
     BookOpen,
+    CalendarCheck2,
     CheckCircle2,
     Clock,
     Compass,
@@ -13,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/Card"
 import { Badge, DifficultyBadge } from "@/components/ui/Badge"
 import { LinkButton } from "@/components/ui/Button"
 import { cn } from "@/lib/utils"
+import type { DailyStatus } from "@/actions/daily"
 import type { UserStats } from "@/actions/submissions"
 
 type PublicProblem = {
@@ -29,6 +31,7 @@ interface UserHomeProps {
     stats: UserStats
     problems: PublicProblem[]
     solvedSlugs: string[]
+    dailyStatus: DailyStatus
 }
 
 const RECENT_LIMIT = 5
@@ -45,7 +48,13 @@ function formatRelative(date: Date): string {
     return date.toLocaleDateString(undefined, { month: "short", day: "numeric" })
 }
 
-export function UserHome({ name, stats, problems, solvedSlugs }: UserHomeProps) {
+export function UserHome({
+    name,
+    stats,
+    problems,
+    solvedSlugs,
+    dailyStatus,
+}: UserHomeProps) {
     const solvedSet = new Set(solvedSlugs)
     const totalByDifficulty = { EASY: 0, MEDIUM: 0, HARD: 0 } as Record<
         "EASY" | "MEDIUM" | "HARD",
@@ -91,7 +100,7 @@ export function UserHome({ name, stats, problems, solvedSlugs }: UserHomeProps) 
                 </div>
 
                 {isNew ? (
-                    <NewUserHero />
+                    <NewUserHero dailyStatus={dailyStatus} />
                 ) : (
                     <div className="grid gap-4 lg:grid-cols-3">
                         <div className="lg:col-span-2">
@@ -110,8 +119,11 @@ export function UserHome({ name, stats, problems, solvedSlugs }: UserHomeProps) 
                             byDifficulty={stats.byDifficulty}
                             total={totalByDifficulty}
                         />
-                        <RecommendedCard problem={recommended} />
                         <div className="lg:col-span-2">
+                            <DailyProblemCard status={dailyStatus} />
+                        </div>
+                        <RecommendedCard problem={recommended} />
+                        <div className="lg:col-span-3">
                             <RecentActivityCard items={recent} />
                         </div>
                     </div>
@@ -121,7 +133,11 @@ export function UserHome({ name, stats, problems, solvedSlugs }: UserHomeProps) 
     )
 }
 
-function NewUserHero() {
+function NewUserHero({ dailyStatus }: { dailyStatus: DailyStatus }) {
+    const daily = dailyStatus.daily
+    const href = daily ? "/daily" : "/practice/simple-select"
+    const label = daily ? "Start today's daily" : "Start with an easy one"
+
     return (
         <Card>
             <CardContent className="p-8 sm:p-10 flex flex-col sm:flex-row sm:items-center gap-6">
@@ -145,8 +161,8 @@ function NewUserHero() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <LinkButton href="/practice/simple-select" size="md">
-                        Start with an easy one
+                    <LinkButton href={href} size="md">
+                        {label}
                     </LinkButton>
                     <LinkButton href="/practice" variant="outline" size="md">
                         Browse all
@@ -286,6 +302,50 @@ function ProgressCard({
     )
 }
 
+function DailyProblemCard({ status }: { status: DailyStatus }) {
+    const daily = status.daily
+    return (
+        <Card>
+            <CardContent className="p-6">
+                <SectionHeading
+                    icon={<CalendarCheck2 className="h-3.5 w-3.5" />}
+                    label="Daily problem"
+                />
+                {daily ? (
+                    <Link
+                        href="/daily"
+                        className="group mt-4 -mx-2 flex items-start gap-3 rounded-md px-2 py-2 hover:bg-surface-muted transition-colors"
+                    >
+                        <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                                <span className="text-muted-foreground tabular-nums mr-1">
+                                    {daily.problem.number}.
+                                </span>
+                                {daily.problem.title}
+                            </h3>
+                            <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                                {status.solvedToday ? (
+                                    <>
+                                        <CheckCircle2 className="h-3 w-3 text-easy-fg" />
+                                        Solved today
+                                    </>
+                                ) : (
+                                    "Not solved today"
+                                )}
+                            </p>
+                        </div>
+                        <DifficultyBadge difficulty={daily.problem.difficulty} />
+                    </Link>
+                ) : (
+                    <p className="mt-3 text-sm text-muted-foreground">
+                        No published problems are available for today&apos;s daily.
+                    </p>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
+
 function RecommendedCard({ problem }: { problem: PublicProblem | null }) {
     return (
         <Card>
@@ -321,7 +381,7 @@ function RecommendedCard({ problem }: { problem: PublicProblem | null }) {
                             All caught up
                         </Badge>
                         <p className="text-xs text-muted-foreground mt-2">
-                            You've solved every published problem. New ones drop
+                            You&apos;ve solved every published problem. New ones drop
                             regularly — check back soon.
                         </p>
                     </div>

@@ -15,6 +15,7 @@ import { Badge, DifficultyBadge } from "@/components/ui/Badge"
 import { getProblems } from "@/actions/problems"
 import { getTopics } from "@/actions/content"
 import { auth } from "@/lib/auth"
+import { getDailyStatusForCurrentUser } from "@/actions/daily"
 import { getSolvedSlugs, getUserStats } from "@/actions/submissions"
 import { UserHome } from "@/components/home/UserHome"
 
@@ -28,9 +29,10 @@ export default async function Home() {
     // Logged-in users get a personalized dashboard. Anonymous visitors get
     // the marketing pitch below.
     if (session?.user?.id) {
-        const [stats, solvedSlugs] = await Promise.all([
+        const [stats, solvedSlugs, dailyStatus] = await Promise.all([
             getUserStats(),
             getSolvedSlugs(),
+            getDailyStatusForCurrentUser(),
         ])
         if (stats) {
             return (
@@ -39,6 +41,7 @@ export default async function Home() {
                     stats={stats}
                     problems={problems ?? []}
                     solvedSlugs={solvedSlugs}
+                    dailyStatus={dailyStatus}
                 />
             )
         }
