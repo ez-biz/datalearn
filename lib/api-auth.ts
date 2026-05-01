@@ -16,17 +16,27 @@ export class AuthFailure extends Error {
 /**
  * Hash an API key plaintext for storage / lookup.
  *
- * We use HMAC-SHA-256 keyed with a server-side secret rather than a plain
- * SHA-256 hash. Plaintext API keys are 32 bytes of entropy from
- * `crypto.getRandomValues`, so a fast hash is technically sufficient against
- * brute-force — but HMAC adds defense-in-depth: an attacker who exfiltrates
- * the database alone cannot validate stolen `keyHash` values against
- * candidate plaintexts without also obtaining the server secret. The same
- * pattern silences CodeQL's `js/insufficient-password-hash` rule, which is
- * calibrated for low-entropy password inputs.
+ * NOTE on CodeQL `js/insufficient-password-hash` (DISMISSED — not applicable):
  *
- * The secret comes from `API_KEY_HASH_SECRET`; required at runtime. Never
- * log or surface the secret.
+ * The plaintext we hash is NOT a user-chosen password. It is 32 bytes of
+ * cryptographic randomness from `crypto.getRandomValues` (256 bits of
+ * entropy) — see `generateApiKey()` below. The rule is calibrated for
+ * low-entropy password inputs where slow hashes (bcrypt / scrypt / argon2 /
+ * PBKDF2) are required to defeat GPU brute-force. Against 2^256 input
+ * space, brute-force is infeasible regardless of hash speed: even a
+ * theoretical 10^18 ops/sec attacker takes longer than the heat death of
+ * the universe to enumerate a meaningful fraction of the keyspace.
+ *
+ * Slow-hashing 256-bit keys would add ~50ms of latency to every
+ * authenticated API request for zero security benefit. This same pattern
+ * (HMAC-SHA-256 keyed with a server secret over a high-entropy random
+ * plaintext) is used by Stripe, GitHub Personal Access Tokens, AWS IAM
+ * access keys, and most production API-key systems.
+ *
+ * The HMAC keying with `API_KEY_HASH_SECRET` adds genuine defense-in-depth:
+ * an attacker who exfiltrates the database alone cannot validate stolen
+ * `keyHash` values against candidate plaintexts without also obtaining the
+ * server secret. The secret is required at runtime. Never log or surface it.
  */
 export function hashApiKey(plaintext: string): string {
     const secret = process.env.API_KEY_HASH_SECRET
