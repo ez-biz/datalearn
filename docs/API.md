@@ -78,6 +78,7 @@ curl http://localhost:3000/api/admin/problems \
   "data": [
     {
       "id": "cuid…",
+      "number": 247,
       "title": "Top customers by revenue",
       "slug": "top-customers-by-revenue",
       "difficulty": "MEDIUM",
@@ -131,6 +132,7 @@ Create a problem. Either provide an existing `schemaId` **or** an inline `schema
 - `tagSlugs` are upserted by slug; unknown slugs are created with `name = slug.replace(/-/g, " ")`.
 - `solutionSql` is optional and stored on the problem for reference / future re-capture.
 - The admin UI captures `expectedOutput` automatically by running `solutionSql` against the schema in the browser via DuckDB-WASM. External callers can do the same client-side or compute it however they want.
+- The response's `number` is the **stable display ID** (`#247.` LeetCode-style). It's minted server-side as `MAX(number)+1` inside the create transaction; you cannot supply it in the request, and it is never recycled — even after archive — so external callers can persist it as a stable foreign key.
 
 **Response 201**
 
@@ -327,6 +329,21 @@ That's everything you need to script content onboarding from CSV / spreadsheets 
 
 ---
 
+## Custom problem lists
+
+Custom problem lists (`/me/lists`) are intentionally **not exposed via this REST surface** in v1.
+
+They are owner-private, user-scoped data — every operation needs the calling user's identity, not an admin Bearer key. The platform implements them as Server Actions (`actions/lists.ts`) which talk to Prisma directly under the active session. There is no `/api/lists` or `/api/me/lists` route.
+
+If we need programmatic access later (e.g. to expose lists to MCP or to a contributor's own scripts), the path will be:
+
+1. A new `/api/me/lists/*` REST surface that authenticates by the user's session (same pattern as `/api/me/articles/*`).
+2. Or extending the MCP server's auth model to support per-user keys instead of admin-only.
+
+Either is a deliberate v2 expansion — see `docs/ROADMAP.md` § V8.
+
+---
+
 ## Things this API doesn't do (yet)
 
 - Pagination on `GET` endpoints (current dataset is small enough not to need it)
@@ -334,5 +351,6 @@ That's everything you need to script content onboarding from CSV / spreadsheets 
 - Webhooks for content changes
 - Rate limiting on bearer auth
 - API key scopes (every key is full-admin)
+- Custom problem lists (see section above — server actions only in v1)
 
 If you need any of these for production automation, open an issue describing the use case.

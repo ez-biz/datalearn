@@ -1,10 +1,18 @@
 # 🚀 Antigravity Data Learning Platform — Long-Term Roadmap
 
-> **Last updated:** 2026-04-26
+> **Last updated:** 2026-05-01
 > **Status:** Active Development
-> **Version:** 0.1.0 (Beta)
+> **Version:** 0.1.0 (Beta) → 0.2.0 in progress
 
-## Recently shipped (April 2026)
+## Recently shipped
+
+### May 2026 — v0.2.0 in flight
+
+- **V7 — Stable problem numbers** (PR #43). `SQLProblem.number Int @unique`, minted as `MAX(number)+1` inside the existing create transaction, backfilled by `createdAt ASC`, never recycled. Surfaces the `#NNN.` prefix on the practice list, workspace header, UserHome cards, and `/profile` recents. `/practice/<n>` numeric URL redirects to the canonical slug. MCP `list_problems` projection includes `number`. Public `/practice` now sorts by `number ASC` to match the LeetCode reading order.
+- **V8 — Custom problem lists** (PR #44). LeetCode-style "My Lists" — `ProblemList` + `ProblemListItem` with composite-PK dedupe and `position` column for reorder. Caps: 100 lists/user, 1000 items/list (pagination not needed in v1). Surfaces: `/me/lists` index, `/me/lists/[id]` detail with rename, delete, drag-and-drop reorder, sort menu (manual / recently added / recently solved / unsolved first / number), and per-row "Added X · Solved Y" / "Not solved" metadata. AddToListButton popover on the workspace header for one-click bookmarking. Last-solved info comes from a single indexed `Submission(userId, status)` groupBy — cheap even at the 1000-item cap.
+- **Repository governance baseline** (PR #28 + Phase B `gh api`). GitHub Flow + squash-only merges, branch protection on `main` (4 required status checks, linear history, no force-push, conversation resolution), `.github/CONTRIBUTING.md` / `PULL_REQUEST_TEMPLATE.md` / `CODEOWNERS` / `dependabot.yml`. Solo-tier today; collaborator-tier toggle queued in CONTRIBUTING.
+
+### April 2026 — v0.1.0 foundation
 
 - **Learn CMS v1** — admin/contributor article authoring with approval queue, cross-linking from `/learn` and `/practice`, reading-time recompute on save, TOC and prev/next.
 - **CONTRIBUTOR role** — role-grant UI in `/admin/contributors`, `/me/articles` authoring surface for contributors gated by admin approval.
@@ -242,37 +250,35 @@ Major platform expansions that take Data Learn from "SQL practice + learning hub
 
 **Scope estimate:** Medium for the Stripe integration + plan gates; the hard part is figuring out what's actually worth charging for.
 
-### V7 — Stable problem numbers (`#247. Group Anagrams`)
+### ✅ V7 — Stable problem numbers (`#247. Group Anagrams`) — SHIPPED v0.2.0 (PR #43)
 
-**What:** Mint a monotonic integer ID for every problem — the LeetCode `#247. Group Anagrams` pattern. Visible in problem listings, problem URLs (alongside slug), share images, and search.
+**What:** Monotonic `SQLProblem.number Int @unique`, minted at create-time as `MAX(number)+1` inside the existing transaction. Backfilled on existing rows by `createdAt ASC`. Never recycled.
 
-**Why:** Numbers are how the SQL-practice community already talks about problems out in the wild ("#1083" or "LC 175"). Stable numbers also help us in the contest UI (problem A / B / C labelling), the Discuss surface (V1), and the Skills bucketing — they're a free affordance once added.
+**Surfaces shipped:** `#NNN.` prefix on PracticeList rows, workspace ProblemPanel header, UserHome Continue/Recommended/Recent cards, `/profile` recent activity, admin `/admin/problems` table. `/practice/<n>` numeric URL redirects to canonical slug. MCP `list_problems` projection adds `number`. Public `/practice` sorts by `number ASC`.
 
-**Components:**
-- Schema: `SQLProblem.number Int @unique` — minted in a transaction at create-time as `MAX(number) + 1`. Backfill the existing problems by `createdAt ASC` order. Numbers never recycle even after archive.
-- UI: small monospace `#NNN` chip on the problem card, the workspace header, recent-activity rows, the home dashboard cards.
-- URL: keep slug-routed (`/practice/<slug>`) for SEO; allow numeric redirect (`/practice/247` → `/practice/group-anagrams`) for typing convenience.
-- MCP: `list_problems` projection adds `number` so AI-authored problems land with the next id automatically.
+**MCP-side:** `list_problems` minimal projection now includes `number`, README updated, e2e harness asserts a positive integer is minted on `create_problem`.
 
-**Dependencies:** None. Small migration + UI pass.
+### ✅ V8 — Custom problem lists (private to user) — SHIPPED v0.2.0 (PR #44)
 
-**Scope estimate:** Small. ~150 lines + a backfill migration.
+**What:** LeetCode-style "My Lists" — private named collections. Owner-only in v1; public sharing is a v2 of this section.
 
-### V8 — Custom problem lists (private to user)
+**Schema shipped:**
+- `ProblemList { id, ownerId, name, description?, createdAt, updatedAt }`
+- `ProblemListItem { listId, problemId, position, addedAt }` — composite PK `(listId, problemId)` so a problem can't appear twice in one list
 
-**What:** LeetCode-style "My Lists" — every user can create as many private named collections as they want and add/remove problems. Visible only to the owner (no public sharing in v1).
+**Caps (no pagination in v1):** 100 lists per user, 1000 items per list.
 
-**Why:** Personal organization is the missing layer between the platform's tags and the user's intent. Users naturally curate ("problems my interviewer asked", "stuff I want to redo before next Friday", "JOIN problems I keep getting wrong"). Without lists, that intent goes into a Notes app outside the platform.
+**Surfaces shipped:**
+- `/me/lists` — index of the user's lists with item count + last-touched
+- `/me/lists/[id]` — detail with rename, delete, drag-and-drop reorder, up/down arrows on mobile, per-row remove
+- Sort menu — Manual (default, draggable) / Recently added / Recently solved / Unsolved first / Problem number. Sorting is a view option; never mutates stored position.
+- Per-row metadata: solved indicator (green check / outline circle), "Added X · Solved Y / Not solved" timestamps. Last-solved comes from a single indexed `Submission(userId, status)` groupBy.
+- `AddToListButton` popover on the workspace header — toggles list membership and lets you create a new list inline
+- "My lists" entry in the UserMenu dropdown
 
-**Components:**
-- Schema: `ProblemList { id, ownerId, name, description?, createdAt, updatedAt }`, `ProblemListItem { listId, problemId, addedAt, position? }` for ordered lists.
-- Surfaces: `/me/lists` index, `/me/lists/[id]` detail with reorder + remove, "Add to list" affordance on every problem card and the workspace header.
-- Cap on number of lists per user (e.g. 100) + items per list (e.g. 1000) so we don't need pagination on v1 surfaces.
-- MCP integration: `list_my_lists`, `add_to_list`, `remove_from_list` if we extend the contributor MCP path (today the MCP is admin-only).
+**Server actions** in `actions/lists.ts`: create / rename / delete list, add / remove (idempotent on duplicate; mints `position = MAX+1`), reorder (single transaction restamps positions), getMyLists / getList (with lastSolvedAt) / getListIdsContainingProblem.
 
-**Dependencies:** None for v1. Public sharing is a v2 of this section (would need slug + visibility column + share page).
-
-**Scope estimate:** Small-medium. ~300 lines + 2 small Prisma migrations.
+**Deferred to v2:** public sharing (slug + visibility), MCP integration (`list_my_lists`, `add_to_list`, `remove_from_list`) once the MCP path opens up beyond admin.
 
 ### V9 — Study plans / tracks
 
