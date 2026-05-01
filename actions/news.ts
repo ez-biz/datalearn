@@ -9,6 +9,22 @@ function extractTag(xml: string, tag: string): string {
     return (match?.[1] || match?.[2] || "").trim()
 }
 
+/**
+ * Strip HTML tags from a string. Single-pass `.replace(/<[^>]+>/g, "")` is
+ * bypassable — `<<script>script>` becomes `<script>` after one pass — which
+ * CodeQL flags as `js/incomplete-multi-character-sanitization`. Loop until
+ * the string stabilizes, then drop any stray angle brackets.
+ */
+function stripHtml(input: string): string {
+    let prev = ""
+    let out = input
+    while (prev !== out) {
+        prev = out
+        out = out.replace(/<[^>]*>/g, "")
+    }
+    return out.replace(/[<>]/g, "")
+}
+
 const getCachedNews = unstable_cache(
     async () => {
         const res = await fetch(FEED_URL, { next: { revalidate: 3600 } })
@@ -19,7 +35,7 @@ const getCachedNews = unstable_cache(
             title: extractTag(item, "title"),
             link: extractTag(item, "link"),
             pubDate: extractTag(item, "pubDate"),
-            contentSnippet: extractTag(item, "description").replace(/<[^>]+>/g, "").slice(0, 200),
+            contentSnippet: stripHtml(extractTag(item, "description")).slice(0, 200),
             source: "Data Engineering Weekly"
         }))
     },

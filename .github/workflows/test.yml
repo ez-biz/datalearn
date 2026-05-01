@@ -6,6 +6,11 @@ on:
   push:
     branches: [main]
 
+# Default to read-only token permissions (CodeQL: actions/missing-workflow-permissions).
+# Individual jobs can re-grant if they ever need to write.
+permissions:
+  contents: read
+
 # Cancel in-flight runs on force-push to the same PR
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -42,6 +47,9 @@ jobs:
       AUTH_GITHUB_SECRET: ci-dummy
       AUTH_GOOGLE_ID: ci-dummy
       AUTH_GOOGLE_SECRET: ci-dummy
+      # API key hashing secret (HMAC-SHA-256 in lib/api-auth.ts). Run-scoped
+      # so each CI run gets a fresh value; tests don't share keys across runs.
+      API_KEY_HASH_SECRET: ci-test-key-secret-${{ github.run_id }}-do-not-reuse
 
     steps:
       - uses: actions/checkout@v4

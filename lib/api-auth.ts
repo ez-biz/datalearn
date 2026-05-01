@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createHash } from "node:crypto"
+import { createHmac } from "node:crypto"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 
@@ -13,8 +13,29 @@ export class AuthFailure extends Error {
     }
 }
 
+/**
+ * Hash an API key plaintext for storage / lookup.
+ *
+ * We use HMAC-SHA-256 keyed with a server-side secret rather than a plain
+ * SHA-256 hash. Plaintext API keys are 32 bytes of entropy from
+ * `crypto.getRandomValues`, so a fast hash is technically sufficient against
+ * brute-force — but HMAC adds defense-in-depth: an attacker who exfiltrates
+ * the database alone cannot validate stolen `keyHash` values against
+ * candidate plaintexts without also obtaining the server secret. The same
+ * pattern silences CodeQL's `js/insufficient-password-hash` rule, which is
+ * calibrated for low-entropy password inputs.
+ *
+ * The secret comes from `API_KEY_HASH_SECRET`; required at runtime. Never
+ * log or surface the secret.
+ */
 export function hashApiKey(plaintext: string): string {
-    return createHash("sha256").update(plaintext).digest("hex")
+    const secret = process.env.API_KEY_HASH_SECRET
+    if (!secret) {
+        throw new Error(
+            "API_KEY_HASH_SECRET env var is required for API key hashing"
+        )
+    }
+    return createHmac("sha256", secret).update(plaintext).digest("hex")
 }
 
 /**

@@ -7,7 +7,7 @@
 
 import "dotenv/config"
 import { spawn } from "node:child_process"
-import { createHash, randomBytes } from "node:crypto"
+import { createHmac, randomBytes } from "node:crypto"
 import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
 import pg from "pg"
@@ -20,7 +20,13 @@ const ADMIN_EMAIL = "anchitgupt2012@gmail.com"
 const BASE_URL = "http://localhost:3000"
 
 function hashApiKey(plaintext) {
-    return createHash("sha256").update(plaintext).digest("hex")
+    const secret = process.env.API_KEY_HASH_SECRET
+    if (!secret) {
+        throw new Error(
+            "API_KEY_HASH_SECRET env var is required (matches lib/api-auth.ts)"
+        )
+    }
+    return createHmac("sha256", secret).update(plaintext).digest("hex")
 }
 
 function generateKey() {
