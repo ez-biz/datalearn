@@ -113,6 +113,7 @@ export default async function ProblemPage({ params }: Props) {
                 schemaDescription={problem.schemaDescription}
                 schemaSql={problem.schema?.sql ?? null}
                 hints={problem.hints ?? []}
+                dialects={problem.dialects ?? ["DUCKDB"]}
                 expectedColumns={expectedColumns}
                 expectedRows={expectedRows}
                 initialHistory={history}

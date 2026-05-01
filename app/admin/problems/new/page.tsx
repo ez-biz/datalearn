@@ -35,6 +35,7 @@ export default function NewProblemPage() {
                     description: "",
                     schemaDescription: "",
                     ordered: false,
+                    dialects: ["DUCKDB", "POSTGRES"],
                     hints: [],
                     tagSlugs: [],
                     schemaId: undefined,

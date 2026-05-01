@@ -93,6 +93,7 @@ export const POST = withAdmin(async (req) => {
                     expectedOutput: input.expectedOutput!,
                     solutionSql: input.solutionSql ?? null,
                     ordered: input.ordered,
+                    dialects: input.dialects,
                     hints: input.hints,
                     tags: {
                         connect: tagIds.map((id) => ({ id })),

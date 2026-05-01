@@ -405,7 +405,7 @@ export function ListDetail({
                                                     <GripVertical className="h-4 w-4" />
                                                 </span>
                                             ) : null}
-                                            <div className="flex flex-col gap-0.5 sm:hidden">
+                                            <div className="flex flex-col gap-1 sm:hidden">
                                                 <button
                                                     type="button"
                                                     onClick={() =>
@@ -417,9 +417,9 @@ export function ListDetail({
                                                         pending
                                                     }
                                                     aria-label="Move up"
-                                                    className="h-5 w-5 inline-flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-surface-muted disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                                    className="h-9 w-9 inline-flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-surface-muted disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                                                 >
-                                                    <ArrowUp className="h-3.5 w-3.5" />
+                                                    <ArrowUp className="h-4 w-4" />
                                                 </button>
                                                 <button
                                                     type="button"
@@ -433,9 +433,9 @@ export function ListDetail({
                                                         pending
                                                     }
                                                     aria-label="Move down"
-                                                    className="h-5 w-5 inline-flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-surface-muted disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                                    className="h-9 w-9 inline-flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-surface-muted disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                                                 >
-                                                    <ArrowDown className="h-3.5 w-3.5" />
+                                                    <ArrowDown className="h-4 w-4" />
                                                 </button>
                                             </div>
                                         </div>
@@ -507,7 +507,7 @@ export function ListDetail({
                                             }
                                             disabled={pending}
                                             aria-label="Remove from list"
-                                            className="h-7 w-7 inline-flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50 cursor-pointer"
+                                            className="relative h-7 w-7 inline-flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background before:absolute before:inset-[-9px] before:content-['']"
                                         >
                                             <X className="h-3.5 w-3.5" />
                                         </button>
@@ -650,7 +650,8 @@ function AddProblemsPicker({
                                             disabled={isAdding}
                                             className={cn(
                                                 "w-full grid grid-cols-[2.5rem_1fr_auto_1.25rem] items-center gap-2 px-2 py-2 text-sm rounded-md text-left cursor-pointer transition-colors",
-                                                "hover:bg-surface-muted disabled:opacity-60"
+                                                "hover:bg-surface-muted disabled:opacity-60",
+                                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                                             )}
                                         >
                                             <span className="text-xs tabular-nums text-muted-foreground">
@@ -744,6 +745,7 @@ function SortMenu({
                             }}
                             className={cn(
                                 "w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted transition-colors cursor-pointer flex items-center justify-between",
+                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                                 value === k && "bg-surface-muted"
                             )}
                         >

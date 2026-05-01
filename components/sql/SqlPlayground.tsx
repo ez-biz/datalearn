@@ -6,6 +6,7 @@ import { SqlEditor } from "./SqlEditor"
 import { ResultTable } from "./ResultTable"
 import { ValidationResult as ValidationResultView } from "./ValidationResult"
 import type { ValidationResult } from "@/lib/sql-validator"
+import type { Dialect } from "@/lib/use-problem-db"
 import { Button } from "@/components/ui/Button"
 import { cn } from "@/lib/utils"
 
@@ -27,6 +28,12 @@ interface SqlPlaygroundProps {
     onQueryChange?: (query: string) => void
     onSubmit?: (userResult: unknown[]) => Promise<ValidationResult>
     onReset?: () => void
+    /** Currently selected engine. */
+    dialect?: Dialect
+    /** Engines this problem allows. If only one, the toggle becomes a static badge. */
+    allowedDialects?: Dialect[]
+    /** Called when learner picks a different engine. */
+    onDialectChange?: (d: Dialect) => void
 }
 
 type Tab = "results" | "verdict"
@@ -41,6 +48,9 @@ export function SqlPlayground({
     onQueryChange,
     onSubmit,
     onReset,
+    dialect = "DUCKDB",
+    allowedDialects = ["DUCKDB"],
+    onDialectChange,
 }: SqlPlaygroundProps) {
     const controlled = queryProp !== undefined
     const placeholder = initialSchema
@@ -168,6 +178,9 @@ export function SqlPlayground({
                     onRun={handleRun}
                     onSubmit={showSubmit ? handleSubmit : undefined}
                     running={loading}
+                    dialect={dialect}
+                    allowedDialects={allowedDialects}
+                    onDialectChange={onDialectChange}
                 />
             </div>
 
@@ -317,3 +330,4 @@ function TabButton({
         </button>
     )
 }
+

@@ -15,6 +15,7 @@ type FullProblem = {
     difficulty: "EASY" | "MEDIUM" | "HARD"
     status: "DRAFT" | "BETA" | "PUBLISHED" | "ARCHIVED"
     description: string
+    dialects?: ("DUCKDB" | "POSTGRES")[]
     expectedOutput?: string | null
     solutionSql?: string | null
     tags?: Array<{ id: string; slug: string; name: string }>
@@ -51,7 +52,7 @@ export function registerProblemTools(
 ): void {
     server.tool(
         "list_problems",
-        "List SQL problems. Returns a minimal projection (number, slug, title, difficulty, status, tags) — use get_problem to fetch a single problem's full data including expectedOutput.",
+        "List SQL problems. Returns a minimal projection (number, slug, title, difficulty, status, dialects, tags) — use get_problem to fetch a single problem's full data including expectedOutput. `dialects` lists which engines (DUCKDB, POSTGRES) the problem can be solved in.",
         ListProblemsShape,
         async (input) => {
             try {
@@ -68,6 +69,7 @@ export function registerProblemTools(
                     title: p.title,
                     difficulty: p.difficulty,
                     status: p.status,
+                    dialects: p.dialects ?? ["DUCKDB", "POSTGRES"],
                     tags: (p.tags ?? []).map((t) => t.slug),
                 }))
                 return ok(projected)

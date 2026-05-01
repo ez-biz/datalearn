@@ -24,6 +24,7 @@ export async function getProblems() {
                 title: true,
                 description: true,
                 difficulty: true,
+                dialects: true,
             },
         })
         return { success: true, data: problems }
@@ -77,6 +78,7 @@ export async function getProblem(slug: string) {
                 expectedOutput: true,
                 ordered: true,
                 hints: true,
+                dialects: true,
                 createdAt: true,
                 updatedAt: true,
                 relatedArticles: {

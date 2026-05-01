@@ -91,8 +91,8 @@ Rules of thumb:
 Source of truth: [`.github/CONTRIBUTING.md`](./.github/CONTRIBUTING.md). Highlights for fast lookup:
 
 - Branches: `<type>/<short-description>` where `type` is `feat / fix / sec / perf / refactor / docs / test / chore / ci / build`.
-- Commit messages: conventional-ish (`feat:`, `fix:`, `feat(ui):`, `chore:`, `docs:`). Branch commits can be messy — they get squashed.
-- PR titles are the squashed commit message on `main` — keep them clean and conventional. They're also the input to `gh release create --generate-notes`.
+- Commit messages: conventional-ish (`feat:`, `fix:`, `feat(ui):`, `chore:`, `docs:`). For squash merges, branch commits can be messy (they get erased); for merge / rebase, every branch commit lands on `main` so write each one cleanly.
+- PR titles become the commit message on `main` for squash merges, and also feed `gh release create --generate-notes` — keep them clean and conventional.
 - PR descriptions follow the template at `.github/PULL_REQUEST_TEMPLATE.md`: Summary / Verified / Not yet verified, plus screenshots for UI changes.
 - Hard rules: no direct push to `main`, no `--no-verify`, no force-push to `main`. One PR = one logical change.
-- Merge mode: **squash & merge only**. Branches auto-delete on merge.
+- Merge modes: **all three enabled** — Squash & merge (default for most), Merge commit (preserve a multi-commit story), Rebase & merge (clean linear replay). Branches auto-delete on merge.

@@ -55,6 +55,7 @@ export default async function EditProblemPage({ params }: Props) {
                     description: problem.description,
                     schemaDescription: problem.schemaDescription,
                     ordered: problem.ordered,
+                    dialects: problem.dialects ?? ["DUCKDB", "POSTGRES"],
                     hints: problem.hints,
                     tagSlugs: problem.tags.map((t) => t.slug),
                     schemaId: problem.schemaId,

@@ -75,6 +75,7 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                     solutionSql: input.solutionSql,
                 }),
                 ...(input.ordered !== undefined && { ordered: input.ordered }),
+                ...(input.dialects !== undefined && { dialects: input.dialects }),
                 ...(input.hints !== undefined && { hints: input.hints }),
             }
 
