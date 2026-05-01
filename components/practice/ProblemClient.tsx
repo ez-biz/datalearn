@@ -240,7 +240,6 @@ export function ProblemClient({
                     difficulty={difficulty}
                     description={description}
                     schemaDescription={schemaDescription}
-                    schemaSql={schemaSql}
                     hints={hints}
                     tableInfos={tableInfos}
                     tablesLoading={dbReady && tableInfos === null}

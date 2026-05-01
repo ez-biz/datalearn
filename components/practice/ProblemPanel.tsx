@@ -4,7 +4,6 @@ import { useState } from "react"
 import {
     CheckCircle2,
     ChevronRight,
-    Database,
     FileText,
     History as HistoryIcon,
     Lightbulb,
@@ -25,7 +24,7 @@ export type RelatedArticle = {
     topic: { slug: string }
 }
 
-type Tab = "description" | "schema" | "hints" | "history"
+type Tab = "description" | "hints" | "history"
 
 export type TableInfo = {
     name: string
@@ -39,7 +38,6 @@ interface ProblemPanelProps {
     difficulty: string
     description: string | null
     schemaDescription: string | null
-    schemaSql: string | null
     hints: string[]
     tableInfos: TableInfo[] | null
     tablesLoading: boolean
@@ -57,7 +55,6 @@ export function ProblemPanel({
     difficulty,
     description,
     schemaDescription,
-    schemaSql,
     hints,
     tableInfos,
     tablesLoading,
@@ -103,12 +100,6 @@ export function ProblemPanel({
                         icon={<FileText className="h-3.5 w-3.5" />}
                         label="Description"
                     />
-                    <TabBtn
-                        active={tab === "schema"}
-                        onClick={() => setTab("schema")}
-                        icon={<Database className="h-3.5 w-3.5" />}
-                        label="Schema"
-                    />
                     {hasHints && (
                         <TabBtn
                             active={tab === "hints"}
@@ -137,12 +128,6 @@ export function ProblemPanel({
                         expectedRows={expectedRows}
                         expectedColumns={expectedColumns}
                         relatedArticles={relatedArticles}
-                    />
-                )}
-                {tab === "schema" && (
-                    <SchemaTab
-                        schemaDescription={schemaDescription}
-                        schemaSql={schemaSql}
                     />
                 )}
                 {tab === "hints" && hasHints && <HintsTab hints={hints} />}
@@ -413,44 +398,6 @@ function DataTable({
                     ))}
                 </tbody>
             </table>
-        </div>
-    )
-}
-
-function SchemaTab({
-    schemaDescription,
-    schemaSql,
-}: {
-    schemaDescription: string | null
-    schemaSql: string | null
-}) {
-    return (
-        <div className="p-5 space-y-4">
-            {schemaDescription && (
-                <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                        Overview
-                    </h3>
-                    <p className="text-sm leading-relaxed text-foreground/90">
-                        {schemaDescription}
-                    </p>
-                </div>
-            )}
-            {schemaSql && (
-                <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                        DDL
-                    </h3>
-                    <pre className="rounded-md border border-border bg-surface-muted px-3 py-3 text-[12px] leading-relaxed font-mono overflow-x-auto scrollbar-thin">
-                        <code>{schemaSql}</code>
-                    </pre>
-                </div>
-            )}
-            {!schemaDescription && !schemaSql && (
-                <p className="text-sm text-muted-foreground italic">
-                    No schema details available.
-                </p>
-            )}
         </div>
     )
 }
