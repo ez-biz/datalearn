@@ -84,6 +84,11 @@ Rules of thumb:
 
 ## Commit / PR style
 
-- Conventional-ish prefixes (`feat:`, `fix:`, `feat(ui):`, `chore:`).
-- PR descriptions list **Verified** (what you actually checked) and **Not yet verified** (what the reviewer should click through). Don't claim things you didn't run.
-- Don't add `--no-verify` or skip hooks. Don't push directly to `main` — open a PR.
+Source of truth: [`.github/CONTRIBUTING.md`](./.github/CONTRIBUTING.md). Highlights for fast lookup:
+
+- Branches: `<type>/<short-description>` where `type` is `feat / fix / sec / perf / refactor / docs / test / chore / ci / build`.
+- Commit messages: conventional-ish (`feat:`, `fix:`, `feat(ui):`, `chore:`, `docs:`). Branch commits can be messy — they get squashed.
+- PR titles are the squashed commit message on `main` — keep them clean and conventional. They're also the input to `gh release create --generate-notes`.
+- PR descriptions follow the template at `.github/PULL_REQUEST_TEMPLATE.md`: Summary / Verified / Not yet verified, plus screenshots for UI changes.
+- Hard rules: no direct push to `main`, no `--no-verify`, no force-push to `main`. One PR = one logical change.
+- Merge mode: **squash & merge only**. Branches auto-delete on merge.

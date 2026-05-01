@@ -1,0 +1,81 @@
+# Dependabot config for Data Learn
+#
+# Security alerts (separate from this) cover vulnerabilities. This file
+# covers ROUTINE version drift — keeps deps current so we don't accumulate
+# a year of "lib 4.2 → 4.9" gaps that compound into painful upgrades.
+#
+# Schedule: weekly on Mondays. Daily floods the PR list; monthly drifts.
+# Group: minor + patch into one PR per ecosystem (less noise). Major
+# bumps stay individual so they get real review.
+
+version: 2
+updates:
+  # Root: Next.js app (npm)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "anchitgupt"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+
+  # MCP server (separate package.json)
+  - package-ecosystem: "npm"
+    directory: "/mcp-server"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "anchitgupt"
+    commit-message:
+      prefix: "chore(mcp)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "mcp"
+    groups:
+      mcp-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions — keep workflow actions current
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "anchitgupt"
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+      - "ci"
+    groups:
+      actions-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
