@@ -167,7 +167,7 @@ export default async function ProfilePage() {
                                             <li key={s.id}>
                                                 <Link
                                                     href={`/practice/${s.problem.slug}`}
-                                                    className="group flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-md hover:bg-surface-muted transition-colors"
+                                                    className="group flex items-center gap-3 py-3 -mx-2 px-2 rounded-md hover:bg-surface-muted transition-colors min-h-[44px]"
                                                 >
                                                     <span
                                                         aria-hidden
