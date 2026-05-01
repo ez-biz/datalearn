@@ -4,6 +4,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
 import {
+    Bookmark,
     LogOut,
     PenSquare,
     Shield,
@@ -181,6 +182,12 @@ export function UserMenu({
                             href="/profile"
                             icon={<UserIcon className="h-4 w-4" />}
                             label="Profile"
+                            onClick={() => setOpen(false)}
+                        />
+                        <MenuItem
+                            href="/me/lists"
+                            icon={<Bookmark className="h-4 w-4" />}
+                            label="My lists"
                             onClick={() => setOpen(false)}
                         />
                         {isContributor && (
