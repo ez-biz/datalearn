@@ -111,7 +111,7 @@ branch → push → open PR → CI runs → preview deploy → review → squash
 
 ### 2. CI
 
-These checks must pass before merge is allowed:
+CI runs on every PR and on every push to `main`:
 
 | Check | What it does |
 |---|---|
@@ -123,14 +123,23 @@ These checks must pass before merge is allowed:
 If CI is red, fix it on the same branch — push more commits, the
 checks re-run automatically.
 
-> **Solo-phase note:** branch protection runs with `strict: false`,
-> meaning a PR doesn't need to be up-to-date with `main` before merge
-> as long as the four checks above are green. This avoids the "all
-> checks green but PR is BLOCKED waiting on a recompute" loop GitHub
-> falls into when there are no required reviewers to provide a
-> recompute event. When contributor #2 lands, flip `strict: true`
-> back on (see *Future hardening* below) — paired with required
-> reviews, the up-to-date check becomes meaningful again.
+> **Solo-phase note:** branch protection currently runs with
+> `required_status_checks: null` — i.e. CI is **not a hard merge
+> gate**. The reason: GitHub's mergeable-state computation has a
+> known bug where solo, no-required-reviewer PRs stay `BLOCKED` even
+> with every check green and `strict: false`, and the only escape is
+> `--admin --squash`. Rather than rely on the admin override every
+> merge, we drop the required-checks gate entirely while solo and
+> trust the author to read the badges before merging.
+>
+> Other guardrails (`required_linear_history`, no force-push, no
+> deletion, `required_conversation_resolution`) stay on, so `main`
+> still can't be force-pushed or deleted.
+>
+> When contributor #2 lands, re-add the required checks (and turn
+> `strict: true` back on alongside required reviews — see *Future
+> hardening* below). The "review approved" event will reliably push
+> GitHub past the stuck state, and the gate becomes meaningful again.
 
 ### 3. Preview deploy
 
@@ -268,19 +277,27 @@ titles matter — they *are* the changelog.
 
 These flips are queued but not active today:
 
-- Branch protection: `enforce_admins=true` (no more solo escape hatch).
+- Branch protection: re-add required status checks (`e2e`, `CodeQL`,
+  `Analyze (javascript-typescript)`, `Analyze (actions)`) — disabled in
+  solo phase due to GitHub's mergeable-state bug; see CI note above.
 - Branch protection: `required_status_checks.strict=true` (require PRs
   to be up-to-date with `main` before merge — only meaningful with
-  required reviews; safely disabled in solo phase, see CI note above).
+  required reviews).
+- Branch protection: `enforce_admins=true` (no more solo escape hatch).
 - Branch protection: require 1 approving CODEOWNER review.
 - Branch protection: dismiss stale reviews on push.
 - CODEOWNERS: uncomment path-specific routes in `.github/CODEOWNERS`.
 
-When you onboard a collaborator, do all five in the same setup pass.
+When you onboard a collaborator, do all six in the same setup pass.
 The exact one-liners:
 
 ```bash
-gh api -X PATCH repos/ez-biz/datalearn/branches/main/protection/required_status_checks -F strict=true
+gh api -X PUT repos/ez-biz/datalearn/branches/main/protection/required_status_checks \
+  -F strict=true \
+  -f 'contexts[]=e2e' \
+  -f 'contexts[]=CodeQL' \
+  -f 'contexts[]=Analyze (javascript-typescript)' \
+  -f 'contexts[]=Analyze (actions)'
 gh api -X PATCH repos/ez-biz/datalearn/branches/main/protection/enforce_admins
 gh api -X PUT repos/ez-biz/datalearn/branches/main/protection/required_pull_request_reviews \
   -F required_approving_review_count=1 -F dismiss_stale_reviews=true -F require_code_owner_reviews=true
