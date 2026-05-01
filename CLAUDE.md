@@ -22,6 +22,7 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor, querie
 - `components/layout/` — Navbar, Footer, ThemeProvider, MobileNav
 - `components/practice/` — workspace pieces (ProblemClient, ProblemPanel, PracticeList, HistoryPanel)
 - `components/sql/` — SQL UI (SqlPlayground, SqlEditor, ResultTable, ValidationResult)
+- `components/lists/` — custom problem lists (CreateListButton popover, ListDetail with rename/delete/reorder/sort, AddToListButton workspace popover, AddProblemsPicker search-and-add). All client components consuming `actions/lists.ts`.
 - `lib/` — shared modules (`auth.ts`, `prisma.ts`, `sql-validator.ts`, `duckdb.ts`, `use-problem-db.ts`, `utils.ts`, `admin-validation.ts` — kept Prisma-free; imported by `mcp-server/`, `schema-parser.ts` — server-side parser that pre-computes table info from `SqlSchema.sql` so the problem page doesn't wait on DuckDB for the Schema/INPUT panels)
 - `prisma/` — `schema.prisma`, migrations, `seed.ts`
 - `mcp-server/` — standalone stdio MCP server (own `package.json`, tsup-bundled). Lets MCP-aware assistants author SQL problems via the `/api/admin/*` REST surface using a Bearer key. Imports `lib/admin-validation.ts` directly; the bundler inlines it.
@@ -35,13 +36,16 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor, querie
 - **Inter character variants enabled** via `font-feature-settings: "cv02", "cv03", "cv04", "cv11"` on body. Use `tabular-nums` utility for numeric columns.
 - **Workspace state lives in `ProblemClient`** — the editor query, draft autosave (localStorage `dl:draft:<slug>`), DB connection (via `useProblemDB`), and submission history all flow through it. `SqlPlayground` is fully controlled.
 - **Validation flow** — `validateSubmission` server action compares user rows against `SQLProblem.expectedOutput` (JSON) using `lib/sql-validator.ts`. It also writes a `Submission` row when the user is authed.
+- **Stable problem numbers** — `SQLProblem.number Int @unique` is minted at create-time as `MAX(number)+1` inside the same transaction that creates the row; never recycled. When adding new code that surfaces problems, include `number` in the projection and prefix the title with `<n>. Title` to match LeetCode parlance.
+- **Custom lists are private and v1-deduped at the DB level** — `ProblemListItem` has composite PK `(listId, problemId)`. `addToList` is idempotent and catches `P2002` as silent success. Caps: 100 lists/user, 1000 items/list, enforced at write-time.
 
 ## Things to avoid
 
 - **Don't `next build` without `--webpack`** — Turbopack hits an internal panic (`entered unreachable code` in `chunk_group.rs`) on this code shape in Next 16.1.1. `package.json` already pins `--webpack` for `build` and `vercel-build`. Revisit when fixed upstream.
 - **Don't initialize DuckDB-WASM twice on a page.** Use the shared `useProblemDB` hook; pass `runQuery` / `dbReady` / `dbError` down. Two inits = two WASM downloads + two engines.
 - **Don't store decimal types in seed schemas as `DECIMAL`** — DuckDB-WASM's Arrow→JSON conversion returns raw integer mantissas. Use `DOUBLE` for currency in seeds.
-- **Don't filter Prisma queries with `select` and forget new fields.** When adding a column to `SQLProblem` or similar, audit `actions/problems.ts` etc.
+- **Don't filter Prisma queries with `select` and forget new fields.** When adding a column to `SQLProblem` or similar, audit `actions/problems.ts`, `actions/profile.ts`, `actions/submissions.ts`, `actions/lists.ts`, and any admin route's `select` projections.
+- **Don't try to mutate `SQLProblem.number`.** It's set once at create-time and is the public stable ID. The admin API rejects `number` in `PATCH` bodies and `POST` does not accept it. Same rule for `ProblemListItem.position` outside the `reorderList` transaction.
 - **`session.user.id` and `session.user.role`** are available; the augmentation lives in `types/next-auth.d.ts` and the values are populated in `lib/auth.ts` `session` callback. Don't cast around them.
 - **Don't seed the local DB with the wrong Postgres user.** Local trust auth uses `anchitgupta`, not `postgres`.
 - **Don't add Prisma or Next/server imports to `lib/admin-validation.ts`.** The MCP server bundles this file via tsup; pulling in Prisma would balloon the bundle and break the stdio runtime. Comment at the top of the file states this contract.

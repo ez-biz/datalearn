@@ -1,6 +1,6 @@
 # Data Learn — Technical Design Document
 
-> **Version:** 2.0
+> **Version:** 2.1
 > **Last updated:** 2026-05-01
 > **Owner:** Anchit Gupta
 > **Repo:** <https://github.com/ez-biz/datalearn>
@@ -63,14 +63,15 @@ Data Learn is a single Next.js 16 application backed by Postgres. The runtime ar
 
 | § | Subsystem | What it owns |
 |---|---|---|
-| 4 | Database schema | Users, sessions, problems, schemas, submissions, articles, topics, tags, API keys |
+| 4 | Database schema | Users, sessions, problems, schemas, submissions, articles, topics, tags, API keys, problem lists |
 | 5 | Auth & authorization | NextAuth config, edge middleware, role-based access (USER / CONTRIBUTOR / ADMIN), CSRF + Origin gate |
 | 6 | SQL execution engine | DuckDB-WASM bootstrap, shared-DB hook, validator, expected-output capture |
 | 7 | Learn CMS | Topics, articles, status state machine, snapshot-on-publish, contributor authoring |
 | 8 | Admin REST API | `/api/admin/*` endpoints, Bearer-key auth, validation pipeline |
 | 9 | MCP server | Standalone stdio process, 9 tools, forced-DRAFT writes |
 | 10 | Profile & stats | Activity heatmap, streaks, solved donut, skills-by-tag |
-| 11 | Security posture | Threat model, mitigations, audit log of shipped fixes |
+| 11 | Custom problem lists | Private user-curated collections — `/me/lists`, drag-drop reorder, sort options, add-from-workspace popover |
+| 12 | Security posture | Threat model, mitigations, audit log of shipped fixes |
 
 ---
 
@@ -132,6 +133,7 @@ datalearn/
 │   │   ├── page.tsx              Topic listing
 │   │   └── [topicSlug]/[articleSlug]/page.tsx  Article render w/ TOC, reading time, prev/next, related problems
 │   ├── me/articles/              Contributor authoring surface (CONTRIBUTOR + ADMIN only)
+│   ├── me/lists/                 Custom problem lists — index + [id] detail (any signed-in user)
 │   ├── admin/                    Admin CMS — gated by middleware + AdminLayout
 │   ├── profile/page.tsx          Two-column profile: heatmap, donut, skills, recent activity, placeholder cards
 │   ├── api/
@@ -140,15 +142,17 @@ datalearn/
 │   │   └── me/articles/          Contributor REST surface (session-only, no Bearer)
 │   └── …                         Pages, profile, dynamic [slug]
 ├── actions/                      Server actions ("use server")
-│   ├── problems.ts               Public problem listing + detail (no expectedOutput leak)
+│   ├── problems.ts               Public problem listing + detail (no expectedOutput leak); getSlugByNumber for /practice/<n> redirect
 │   ├── submissions.ts            validateSubmission, getUserStats, getSolvedSlugs, getProblemHistory
 │   ├── content.ts                Public articles + topics
 │   ├── profile.ts                getProfileData — composes 8 cheap Prisma calls for /profile
+│   ├── lists.ts                  Custom problem lists — create / rename / delete / add / remove / reorder; getMyLists, getList, getListIdsContainingProblem
 │   └── nav.ts                    Dynamic navbar links
 ├── components/
 │   ├── ui/                       Hand-rolled primitives (Button, Card, Badge, Input, Skeleton, Logo, ThemeToggle, Container, EmptyState)
 │   ├── layout/                   Navbar, Footer, ThemeProvider, MobileNav, UserMenu (avatar dropdown)
 │   ├── practice/                 ProblemClient (workspace state), ProblemPanel, PracticeList, HistoryPanel, RelatedArticlesPanel, ReportDialog
+│   ├── lists/                    CreateListButton (popover), ListDetail (rename/delete/reorder/sort), AddToListButton (workspace popover), AddProblemsPicker (search-and-add)
 │   ├── sql/                      SqlPlayground (Monaco + Run/Submit), SqlEditor, ResultTable, ValidationResult, SqlPlaygroundSkeleton
 │   ├── home/                     UserHome (logged-in dashboard with continue / progress / recommended / recent cards)
 │   ├── profile/                  ProfileSidebar, ActivityHeatmap, SolvedDonut, SkillsByTag, PlaceholderCard
@@ -222,14 +226,15 @@ User ──┐
        │              \
        │               └─ 1:N ──> ArticleVersion (snapshot-on-publish)
        ├── 1:N ──> ApiKey (createdBy)
-       └── 1:N ──> ProblemReport
+       ├── 1:N ──> ProblemReport
+       └── 1:N ──> ProblemList ── 1:N ──> ProblemListItem ──N:1 ──> SQLProblem
 ```
 
 ### Key models
 
 - **User** — id, email, name, image, role (`USER` / `CONTRIBUTOR` / `ADMIN`), accounts, sessions, submissions, authored articles, created API keys.
 - **Session** — NextAuth-managed; database session strategy.
-- **SQLProblem** — slug, title, difficulty, status (`DRAFT` / `BETA` / `PUBLISHED` / `ARCHIVED`), description, schemaDescription, ordered, hints[], expectedOutput (JSON-stringified array of row objects), solutionSql (admin-only reference), schemaId, tags M:N.
+- **SQLProblem** — `number` (stable display ID, `Int @unique`, minted as `MAX(number)+1` in the create transaction; never recycled), slug, title, difficulty, status (`DRAFT` / `BETA` / `PUBLISHED` / `ARCHIVED`), description, schemaDescription, ordered, hints[], expectedOutput (JSON-stringified array of row objects), solutionSql (admin-only reference), schemaId, tags M:N.
 - **SqlSchema** — name, sql (CREATE TABLE + INSERT VALUES — **not** stored as separate DDL/seed columns).
 - **Submission** — userId, problemId, status (`ACCEPTED` / `WRONG_ANSWER`), code, reason, createdAt.
 - **Tag** — slug, name; M:N to Problem and to Article.
@@ -237,6 +242,8 @@ User ──┐
 - **ArticleVersion / ProblemVersion** — immutable snapshots written on publish, so PUBLISHED content can be referenced/cited even after edits.
 - **ApiKey** — Bearer keys for `/api/admin/*`. SHA-256 hash at rest; plaintext only shown at creation; createdById, prefix, expiresAt, revokedAt, lastUsedAt, name.
 - **ProblemReport** — per-user reports against problems (anonymous variant rate-limited).
+- **ProblemList** — `{ id, ownerId, name, description?, createdAt, updatedAt }`. Cascade-deletes with the User. Indexed on `(ownerId, updatedAt)` for the index page sort.
+- **ProblemListItem** — `{ listId, problemId, position, addedAt }` with composite PK `(listId, problemId)` so the same problem can't appear twice in one list. `position` is mutated by `reorderList` in a single transaction; never auto-managed. Indexed on `(listId, position)` for the detail-page render.
 
 ### Design decisions
 
@@ -245,6 +252,8 @@ User ──┐
 - **Status state machine on Article**: `DRAFT → SUBMITTED → PUBLISHED → ARCHIVED`. Approve/reject are explicit verbs; publish triggers an `ArticleVersion` snapshot.
 - **Tag is shared between Problems and Articles** via two M:N relations (`ProblemTags`, `ArticleTags`) so cross-linking is explicit, not tag-similarity-heuristic.
 - **Schemas are stored as one `sql` string** (DDL + seed `INSERTs` together). Keeps the model simple at the cost of needing the schema parser (`lib/schema-parser.ts`) for fast first-paint introspection.
+- **Problem numbers are minted in-transaction, never recycled.** `SQLProblem.number` is set as `MAX(number)+1` inside the same `prisma.$transaction` that creates the row, so concurrent creates can't collide; the DB-side `UNIQUE` constraint is the ultimate guard. Even after `ARCHIVED`, the number stays — external links, search results, and shared screenshots remain stable forever.
+- **Custom lists dedupe at the DB level.** `ProblemListItem` uses a composite PK `(listId, problemId)`, so `addToList` is idempotent — a duplicate insert raises `P2002` and the action treats it as success. No application-level dedupe logic.
 
 ---
 
@@ -462,11 +471,57 @@ Anonymous traffic still gets the full marketing page unchanged.
 
 ### 10.5 Avatar dropdown (`components/layout/UserMenu.tsx`)
 
-Replaces the navbar's previous direct link to `/profile` with a popover that contains a profile chip, a "Problems solved X/Y" stats banner, and links (Profile / My articles / Admin / Sign out) gated by role. Accessible: `aria-haspopup="menu"`, Escape closes and refocuses trigger, click-outside via document `pointerdown` listener.
+Replaces the navbar's previous direct link to `/profile` with a popover that contains a profile chip, a "Problems solved X/Y" stats banner, and links (Profile / My lists / My articles / Admin / Sign out) gated by role. Accessible: `aria-haspopup="menu"`, Escape closes and refocuses trigger, click-outside via document `pointerdown` listener.
 
 ---
 
-## 11. Security Posture
+## 11. Custom Problem Lists
+
+Private, user-curated collections — LeetCode-style "My Lists". Visible only to the owner in v1; public sharing is deferred (would need a `visibility` column + slug + share page).
+
+### 11.1 Models
+
+- **`ProblemList`** — owner-cascading row, indexed on `(ownerId, updatedAt)` for the index sort.
+- **`ProblemListItem`** — composite PK `(listId, problemId)` (DB-level dedupe), `position` (mutated by reorder), `addedAt`. Indexed on `(listId, position)` for the detail-page render and on `problemId` for the future "lists containing this problem" lookup.
+
+### 11.2 Server actions (`actions/lists.ts`)
+
+| Action | What it does | Concurrency notes |
+|---|---|---|
+| `createList` | Cap-checks `count(ProblemList) < 100`, creates row, revalidates `/me/lists` | — |
+| `renameList` | `updateMany(where: {id, ownerId})` so a missing/foreign-owned id returns 0 instead of leaking existence | — |
+| `deleteList` | Same `updateMany` ownership-guard pattern; cascade clears items | — |
+| `addToList` | Cap-checks `count(items) < 1000`, looks up problem, mints `position = MAX+1`, inserts. Catches P2002 as silent success (idempotent) | Race: two concurrent adds can collide on `position`, but `(listId, problemId)` PK + retry on caller is enough; not worth a transaction |
+| `removeFromList` | Single `deleteMany` keyed by `(listId, problem.id)` | — |
+| `reorderList` | `prisma.$transaction` of N `update` calls, restamping every `position`. Caller sends the full ordering after a drag-drop | Transaction so we never observe a half-reordered list |
+| `getMyLists` | Index projection with `_count: { items: true }` | — |
+| `getList` | List + items + per-item `lastSolvedAt` via one `prisma.submission.groupBy` over `problemId IN (...)` keyed by `userId, status='ACCEPTED'` | Uses existing `Submission(userId, status)` index — cheap even at 1000-item cap |
+| `getListIdsContainingProblem` | Powers the AddToListButton popover's checked state; one indexed query | — |
+
+### 11.3 Surfaces
+
+- **`/me/lists`** — index. Sorted by `updatedAt DESC`. Empty state points to the top-right "New list" popover.
+- **`/me/lists/[id]`** — detail. Header has rename / delete / add-problems. Sort menu (Manual / Recently added / Recently solved / Unsolved first / Problem number). When sort = Manual, drag-and-drop is enabled (native HTML5 DnD with a `GripVertical` handle on desktop, up/down arrows on mobile). Each row shows the solved indicator (green check / outline circle), `#NNN`, title, "Added X · Solved Y / Not solved" timestamps, difficulty, remove button.
+- **`AddToListButton`** — popover on the practice workspace header. Lists all the user's lists with checked-state for those already containing the problem; toggle to add/remove. Inline "New list" inside the popover so a user can create + add in one flow.
+- **UserMenu** — "My lists" entry between Profile and My articles.
+
+### 11.4 Caps + reasoning
+
+- **100 lists per user** — UX threshold, not a DB one. Without it the index would need pagination.
+- **1000 items per list** — same. The `getList` payload is the realistic ceiling for what's renderable in one DOM tree without virtualization. Hit this cap and the UX would deteriorate before the DB notices.
+
+Both caps are checked at write-time in `addToList` / `createList` and surface a friendly error to the user.
+
+### 11.5 What's not in v1
+
+- Public sharing (slug + visibility + share page).
+- MCP tools (`list_my_lists`, `add_to_list`, `remove_from_list`) — today the MCP path is admin-only; opens up when we extend MCP for contributors.
+- Bulk operations (move N problems between lists).
+- "Lists containing this problem" surface on the practice page — the `getListIdsContainingProblem` query exists but is only consumed by AddToListButton today.
+
+---
+
+## 12. Security Posture
 
 A consolidated view of the threat surface and the mitigations shipped to date.
 
@@ -502,7 +557,7 @@ A consolidated view of the threat surface and the mitigations shipped to date.
 
 ---
 
-## 12. Environment & Configuration
+## 13. Environment & Configuration
 
 ### Required env vars
 
@@ -555,16 +610,16 @@ npm run start
 
 ---
 
-## 13. Future Architecture Considerations
+## 14. Future Architecture Considerations
 
-### 13.1 Multi-dialect SQL (MySQL / Postgres / Hive)
+### 14.1 Multi-dialect SQL (MySQL / Postgres / Hive)
 
 Two paths, in increasing order of complexity:
 
 1. **PGlite** (Postgres compiled to WASM, same browser-side architecture as DuckDB) — drop-in for any problem that needs Postgres-specific syntax. Workspace plumbing (`lib/duckdb.ts`, `use-problem-db.ts`) gets a sibling module; the rest of the stack is unchanged. Zero infrastructure change.
 2. **Server-side ephemeral Postgres** — Neon's branch-per-submission API spins up copy-on-write database clones in milliseconds. Run user SQL against a branch, drop it. Strategically, this is why **Neon is the recommended provider over Supabase** even though we currently only use it as a metadata DB — branching is the unlock for this architecture.
 
-### 13.2 MCP server v2
+### 14.2 MCP server v2
 
 - Article-authoring tools (`create_article`, `submit_article`, `approve_article`).
 - `update_problem`, `archive_problem`, `publish_problem` (currently UI-only).
@@ -572,7 +627,7 @@ Two paths, in increasing order of complexity:
 - HTTP/SSE remote MCP transport so the server can run as a Vercel route and not require a local install.
 - Extract `mcp-server/` to its own npm package (`@datalearn/mcp`).
 
-### 13.3 Profile schema work (deferred)
+### 14.3 Profile schema work (deferred)
 
 The placeholder cards on `/profile` (Contests / Languages-DBs / Work / Education / Resume / Links) ship today as sized placeholders so the layout doesn't shift later. Wiring them up requires:
 
@@ -581,13 +636,13 @@ The placeholder cards on `/profile` (Contests / Languages-DBs / Work / Education
 - A profile-edit surface (only the user themselves can edit).
 - Visibility toggle (public profile vs private).
 
-### 13.4 Real-time collaboration
+### 14.4 Real-time collaboration
 
 Originally scoped for "Phase 3" of the older roadmap. Not started. If/when it lands, the natural place is a Y.js / WebRTC layer over the existing `ProblemClient` state, with NextAuth providing presence identity. Out of scope for current work.
 
 ---
 
-## 14. Known Technical Debt
+## 15. Known Technical Debt
 
 ### Resolved (since v1.0 of this doc, 2026-02-16)
 
