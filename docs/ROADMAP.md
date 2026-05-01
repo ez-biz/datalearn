@@ -128,6 +128,122 @@ Build the **go-to open platform** for data engineering education — combining i
 
 ---
 
+## 🌌 Vision items (long-term, scoped but undated)
+
+Major platform expansions that take Data Learn from "SQL practice + learning hub" to a full data-engineering career platform. Each is large enough to be its own phase. Listed in roughly the order they make sense to pursue, but the order is negotiable based on user signal.
+
+### V1 — Discuss (community forum)
+
+**What:** Reddit-style discussion surface inside the platform. Categories: `For You` (personalized), `Career`, `Contest`, `Compensation`, `Feedback`, `Interview`. Posts support upvotes, view counts, comment threads with their own upvotes, markdown body, code blocks, problem-link embeds.
+
+**Why:** Community is the long-term moat. LeetCode's "Discuss" tab is where the actual learning compounds — problem-specific tips, interview experiences, comp data points. Without it, Data Learn is a content-consumption surface; with it, users have a reason to come back daily.
+
+**Components:**
+- Schema: `Post`, `Comment`, `PostVote`, `CommentVote`, `PostView`; categories as an enum or `Category` table; M:N to `Tag`.
+- Listing surfaces: per-category feeds, hot/new/top sort, search.
+- Anti-spam: rate limits per user (already have the primitive); shadow-banning; report flow (reuse the `ProblemReport` pattern).
+- Notifications: replies to your post / comment, mentions.
+- Moderation: admin tooling to lock/unlock, pin, remove.
+
+**Dependencies:** None blocking; can be greenfield. Probably wants the existing CONTRIBUTOR/ADMIN role split extended with a `MODERATOR` tier. Would benefit from email notifications (current platform has none).
+
+**Scope estimate:** Medium-large. Schema + REST + UI for posting/listing/voting is the v1 floor. Search and notifications are v2 of this section.
+
+### V2 — Contest
+
+**What:** Weekly + monthly timed contests with multiple problems, a leaderboard, and a **mathematically-backed rating system** that updates each user's rating after every contest. Rating shown on the profile page (the placeholder card already exists).
+
+**Why:** Contests turn the platform into a sport. They give users a reason to be present at a specific time, create cohort rivalries, and seed the Discuss > Contest category with post-mortems.
+
+**Components:**
+- **Rating system: Glicko-2** (more responsive than ELO, used by chess.com and Codeforces; well-documented). Per-user state: `rating`, `ratingDeviation`, `volatility`, `lastContestAt`. Update happens server-side in a transactional batch when a contest closes.
+- **Contest model:** `Contest`, `ContestProblem` (M:N with offset/score), `ContestSubmission`, `ContestLeaderboard` (materialized).
+- **Problem locking:** problems used in a contest must not appear in the public `/practice` list while the contest is live; surface them only inside the contest UI. Existing status state machine extends with `CONTEST_LOCKED`.
+- **Live leaderboard:** server-rendered with progressive enhancement; refreshes on a tick, not real-time pushed (avoid websockets on v1).
+- **Anti-cheat baselines:** rate limits per user during contest, IP fingerprint logging, identical-solution detection (cosine similarity on tokenized SQL), public submissions only revealed *after* contest ends.
+- **Profile integration:** rating + ratingDeviation pill on the existing `Contests` placeholder card; contest history list with score + rank + delta per contest.
+
+**Dependencies:** Discuss helps for post-contest discussion but isn't a blocker. Would benefit from email notifications ("Your weekly contest starts in 1 hour").
+
+**Scope estimate:** Large. Rating math + contest runtime + UI. Plan a 4–6 PR sequence.
+
+### V3 — Custom badges (animated, shareable)
+
+**What:** Achievement badges users earn for milestones. **Animated** (subtle SVG/Lottie loops), with a "shining" treatment for rare badges. Each badge has a public share page with OG image generation so it renders nicely when posted to LinkedIn / Twitter / Discord.
+
+**Why:** Badges are cheap motivation. The shareability piece is the actual growth lever — a user posting "I just earned the SQL Aggregation Pro badge on Data Learn" pulls in friends.
+
+**Components:**
+- Schema: `Badge` (slug, name, description, rarity, animation_url), `UserBadge` (userId, badgeId, earnedAt). Rarity tiers determine the visual treatment.
+- Earning rules: declarative `BadgeRule` table or hardcoded predicates evaluated in a server action after each submission. Examples: 10 Easy solved, 5-day streak, first contest, top 100 in any contest, 100% acceptance on a topic, first published article (CONTRIBUTOR).
+- Animation: prefer SVG (scalable, no Lottie runtime cost) with subtle CSS keyframes. The "shining" treatment is a moving gradient overlay — keep it tasteful, respect `prefers-reduced-motion`.
+- Share surface: `/badges/[slug]/[user-handle]` public page with OG image (`@vercel/og`). Embed in profile sidebar.
+- Profile placeholder card already exists; this fills it in.
+
+**Dependencies:** None. Can be greenfield. Some badges become more meaningful after Contests ship.
+
+**Scope estimate:** Medium. Schema + a handful of rule predicates + share-page rendering.
+
+### V4 — Interview prep
+
+**What:** A new top-level surface (`/interview`) bundling four pieces:
+
+1. **Resume builder** — opinionated templates for data engineers; in-browser editor; PDF export. Sections pre-wired for the data-eng story (Roles → Projects → Skills → Education).
+2. **Resume rater** — paste/upload resume, get an AI critique with section-level scores (impact, clarity, keyword density, ATS-friendliness) and concrete rewrite suggestions. Model call sits behind a server action; rate-limit per user.
+3. **System design for data engineers** — curated set of system-design problems specific to the data domain (build a data lake, design an analytics platform, partition a 100B-row table, choose between Kafka and Kinesis). Each problem ships with reference solutions + multiple valid approaches + tradeoff discussions.
+4. **Live interview platform** — built-in collaborative whiteboard (Excalidraw/draw.io-style) and a synced SQL editor where interviewer + candidate share the same session. Real-time, presence-aware. Use case: practice mock interviews; eventually serve as a tool companies could use to actually conduct interviews on.
+
+**Why:** This is what turns Data Learn into a career platform. Discuss gives users a reason to come back daily; Interview Prep gives them a reason to pay (see V6 below). It's also the natural intersection of everything else: SQL practice + system design + community + content.
+
+**Components:**
+- Resume builder: schema for resume sections, templates as React components, PDF export via Puppeteer or `react-pdf`.
+- Resume rater: model integration (OpenAI / Anthropic / local), prompt engineering, structured output (Zod schema for the score breakdown), rate limit + abuse prevention. Model cost = ~$0.05/resume; needs a freemium gate.
+- System design: content-only at first (markdown articles), grows into an interactive canvas later.
+- Live interview platform: hardest piece — needs realtime infra (Y.js + WebSocket or LiveKit data channels), RBAC (interviewer vs candidate roles for the session), persistence (replay finished sessions). Whiteboard: integrate Excalidraw as a library or build over `tldraw`. Synced SQL editor reuses our existing playground but in a multi-cursor mode.
+
+**Dependencies:** Resume builder + rater can ship independently. System design content piggybacks on the existing Learn CMS. Live interview needs realtime infra (not in the stack today).
+
+**Scope estimate:** XL. Plan as 4 separate sub-phases (one per piece). Live interview is its own multi-month project.
+
+### V5 — Multi-language: data + Python
+
+**What:** Expand beyond SQL to Python (pandas / pyspark) and eventually general data tooling. Each problem can specify accepted languages; the workspace adapts.
+
+**Why:** "Data engineering" is bigger than SQL. Pandas + PySpark are the obvious next steps; their problem sets overlap heavily with SQL (joins, aggregations, window functions) but with different syntax and gotchas.
+
+**Components:**
+- **Pyodide** for in-browser Python (parallel architecture to DuckDB-WASM). Pandas works out of the box; PySpark needs a server-side runner.
+- Server-side execution path for runtimes that can't run in the browser (Spark, Hive). Neon-branching pattern from the existing Postgres roadmap (§13.1 in TECHNICAL_DESIGN.md) generalizes here.
+- Validator extension: tabular-output comparison stays the same; add support for non-tabular outputs (single value, plot, JSON blob).
+- UI: language picker on the workspace toolbar; language-aware Monaco modes; per-language hint sets.
+
+**Dependencies:** Some refactor of the workspace to be language-aware (currently DuckDB-coupled). The schema parser and validator generalize naturally.
+
+**Scope estimate:** Large. Pyodide is the easiest first step; PySpark on the server is the heavy one.
+
+### V6 — Plans & monetization
+
+**What:** Tiered pricing on top of the platform. Tentative shape:
+
+- **Free** — Public problem library, public articles, sign-in, profile, MCP self-serve. Effectively today's product.
+- **Pro** — Premium problem packs (FAANG-curated, advanced topics), Resume Rater (V4), full Interview Prep (V4), private contests, no rate limits on AI tooling.
+- **Teams** — Shared problem libraries, hiring portal (use Live Interview to actually interview candidates), org-level analytics on team practice.
+
+**Why:** Sustainability. Hosting + Anthropic/OpenAI API costs scale with usage; free-forever doesn't. Monetization also unlocks investing in V4 (Resume Rater + Live Interview both have real per-use cost).
+
+**Components:**
+- **Stripe integration** for subscription management. Webhook handlers for plan changes.
+- **Plan gate primitive** — a `requirePlan('PRO')` helper layered on `requireAdmin`/`requireContributor`. Server-side; never trust client. Plan stored on `User.plan`.
+- **Premium content marker** — `Article.plan` and `SQLProblem.plan` columns; surfaces lock with a "Pro" pill on free tier.
+- **Billing UI** — `/billing` surface with current plan, payment method, invoice history. Stripe Customer Portal embed for the messy parts.
+- **Free tier preservation** — monetization should make Pro better, not Free worse. Existing problems and articles stay free forever.
+
+**Dependencies:** V4 (Resume Rater + Live Interview) is the core Pro value prop; without it, Pro is too thin. So sequence: ship V4 → ship V6.
+
+**Scope estimate:** Medium for the Stripe integration + plan gates; the hard part is figuring out what's actually worth charging for.
+
+---
+
 ## Quarterly Goals (2026)
 
 ### Q1 2026 (Jan–Mar)
