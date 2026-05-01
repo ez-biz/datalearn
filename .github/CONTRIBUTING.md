@@ -14,8 +14,7 @@ If anything here is unclear or out of date, that's a bug — open a PR.
 - Every change ships through a pull request. No direct pushes to `main`.
 - Branches are named `<type>/<short-description>` (e.g. `feat/admin-sorting`).
 - Commits use conventional-commit-style prefixes (`feat:`, `fix:`, …).
-- PRs are merged via **squash & merge**. The PR title becomes the commit
-  message on `main`, so write it carefully.
+- All three merge methods are enabled — **squash & merge**, **merge commit**, and **rebase & merge**. Pick the one that fits the change. PR title becomes the commit message on `main` for squash, so write it carefully.
 - CI must be green before merge. `--no-verify` is not allowed.
 - Merged branches auto-delete. Don't fight it.
 
@@ -84,22 +83,26 @@ Same vocabulary as branch prefixes, applied per-commit. Examples:
 - `docs: explain release tagging`
 
 **Why "conventional-ish" but not commitlint:**
-We don't enforce this with a linter. The PR title is the only commit
-message that ends up on `main` (squash merge), and it gets reviewed
-by a human. Branch commits can be messy; the squash erases them.
+We don't enforce this with a linter. For squash merges the PR title
+becomes the commit message on `main`; for merge commits / rebase
+merges, every branch commit lands on `main` verbatim. Either way the
+goal is the same — `main` should read like a clean conventional log.
 
-**On the branch:** commit as often as you want. "wip", "fix typo",
-"address review" are fine — they get squashed.
+**On the branch:** if you plan to **squash**, branch commits can be
+messy ("wip", "fix typo", "address review") — they get erased. If
+you plan to **merge** or **rebase**, write each commit cleanly because
+they all land on `main`. Use `git rebase -i` or `git commit --amend`
+to clean up before merging if needed.
 
-**On `main`:** every commit is a clean, conventional, present-tense
-PR title.
+**On `main`:** every commit should read like a conventional, present-
+tense statement of intent.
 
 ---
 
 ## Pull request lifecycle
 
 ```
-branch → push → open PR → CI runs → preview deploy → review → squash & merge → branch auto-deleted
+branch → push → open PR → CI runs → preview deploy → review → merge → branch auto-deleted
 ```
 
 ### 1. Open the PR
@@ -132,7 +135,7 @@ checks re-run automatically.
 > merge, we drop the required-checks gate entirely while solo and
 > trust the author to read the badges before merging.
 >
-> Other guardrails (`required_linear_history`, no force-push, no
+> Other guardrails (no force-push, no
 > deletion, `required_conversation_resolution`) stay on, so `main`
 > still can't be force-pushed or deleted.
 >
@@ -159,11 +162,21 @@ Resolve all review conversations before merging.
 
 ### 5. Merge
 
-- Use **Squash & merge** (the only option enabled).
-- The PR title becomes the commit message on `main` — edit it before
-  clicking merge if it isn't clean.
-- Click "Enable auto-merge" if CI is still running; it'll merge when
-  green.
+Three merge methods are enabled — pick the one that fits the change:
+
+| Method | When to use | What lands on `main` |
+|---|---|---|
+| **Squash & merge** | Default for most PRs. Many small / messy / "wip" branch commits, or anything where only the end state matters. | One commit (the PR title) |
+| **Merge commit** | When the branch has a meaningful multi-commit story you want to preserve — e.g. a refactor split into reviewable steps that each compile and test green. | All branch commits + a merge commit |
+| **Rebase & merge** | When the branch is one or a few clean, conventional commits and you want them in the linear log without a merge commit. | Each branch commit, replayed onto `main` |
+
+Rules of thumb:
+
+- If you wouldn't want to read your branch commits in `git log main` six months from now → squash.
+- If each branch commit is itself a thoughtful conventional commit → rebase.
+- If preserving the *path* of how the change came together has review or archaeology value → merge commit.
+
+For all three: the PR title / commit messages should be clean before clicking merge. Click "Enable auto-merge" if CI is still running; it'll merge when green.
 
 ### 6. After merge
 
@@ -230,7 +243,7 @@ exactly like any other bug:
 2. Fix it. Test it locally.
 3. Open the PR. Mention "production bug" in the summary.
 4. CI runs. Preview deploys. Self-review (or expedited review).
-5. Squash-merge. (When Vercel is wired up) `main` auto-deploys.
+5. Merge (squash is fine for most fixes). (When Vercel is wired up) `main` auto-deploys.
 
 The whole cycle is fast because the rest of the process is fast. We
 don't need a parallel hotfix track.
@@ -312,7 +325,7 @@ Actions updates (config in `.github/dependabot.yml`). Treat them like
 any other PR:
 
 - Minor + patch updates land grouped — review the diff, let CI go
-  green, squash-merge.
+  green, squash-merge (or rebase if the bump messages are useful).
 - Major bumps come individually because they're likely to need real
   attention. Read release notes; verify locally; then merge.
 - Don't auto-merge Dependabot PRs without a glance — CI catches
