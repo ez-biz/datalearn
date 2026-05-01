@@ -268,6 +268,21 @@ When you onboard a collaborator, do all four in the same setup pass.
 
 ---
 
+## Dependabot PRs
+
+Dependabot opens grouped weekly PRs every Monday for npm + GitHub
+Actions updates (config in `.github/dependabot.yml`). Treat them like
+any other PR:
+
+- Minor + patch updates land grouped — review the diff, let CI go
+  green, squash-merge.
+- Major bumps come individually because they're likely to need real
+  attention. Read release notes; verify locally; then merge.
+- Don't auto-merge Dependabot PRs without a glance — CI catches
+  breakage but not new behavior.
+
+---
+
 ## Stale branches
 
 The repo auto-deletes merged branches from now on. If you find an old
