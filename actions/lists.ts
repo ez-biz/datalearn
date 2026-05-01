@@ -67,6 +67,8 @@ export type ListWithItems = {
         problemId: string
         position: number
         addedAt: Date
+        /** Most recent ACCEPTED submission for this user+problem; null if never solved. */
+        lastSolvedAt: Date | null
         problem: {
             number: number
             slug: string
@@ -108,7 +110,34 @@ export async function getList(listId: string): Promise<ListWithItems | null> {
                 },
             },
         })
-        return row as ListWithItems | null
+        if (!row) return null
+
+        // One indexed query for last-solved per problem in this list.
+        // Uses Submission(userId, status) + (userId, problemId, createdAt)
+        // indexes — cheap even for the 1000-item cap.
+        const problemIds = row.items.map((i) => i.problemId)
+        const lastSolvedRows = problemIds.length
+            ? await prisma.submission.groupBy({
+                  by: ["problemId"],
+                  where: {
+                      userId,
+                      status: "ACCEPTED",
+                      problemId: { in: problemIds },
+                  },
+                  _max: { createdAt: true },
+              })
+            : []
+        const lastSolvedById = new Map(
+            lastSolvedRows.map((r) => [r.problemId, r._max.createdAt ?? null])
+        )
+
+        return {
+            ...row,
+            items: row.items.map((it) => ({
+                ...it,
+                lastSolvedAt: lastSolvedById.get(it.problemId) ?? null,
+            })),
+        } as ListWithItems
     } catch (e) {
         console.error("getList failed:", e)
         return null
