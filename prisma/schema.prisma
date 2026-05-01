@@ -165,6 +165,7 @@ model SQLProblem {
   reports           ProblemReport[]
   relatedArticles   Article[]  @relation("ArticleProblems")
   listItems         ProblemListItem[]
+  dailyProblems     DailyProblem[]
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 
@@ -297,3 +298,21 @@ model ProblemListItem {
   @@index([problemId])
 }
 
+/// One stable daily challenge for a UTC calendar date. Rows can be manually
+/// scheduled by admins or auto-filled on first request.
+model DailyProblem {
+  id        String             @id @default(cuid())
+  date      DateTime           @unique @db.Date
+  problemId String
+  problem   SQLProblem         @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  source    DailyProblemSource @default(AUTO)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@index([problemId])
+}
+
+enum DailyProblemSource {
+  AUTO
+  MANUAL
+}

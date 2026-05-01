@@ -5,6 +5,8 @@ import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
 import {
     Bookmark,
+    CalendarCheck2,
+    CheckCircle2,
     LogOut,
     PenSquare,
     Shield,
@@ -23,6 +25,7 @@ interface UserMenuProps {
     solved: number
     /** Total PUBLISHED problems on the platform. */
     total: number
+    dailySolved: boolean
 }
 
 const ROLE_LABEL: Record<Role, string> = {
@@ -44,6 +47,7 @@ export function UserMenu({
     role,
     solved,
     total,
+    dailySolved,
 }: UserMenuProps) {
     const [open, setOpen] = useState(false)
     const containerRef = useRef<HTMLDivElement>(null)
@@ -179,6 +183,20 @@ export function UserMenu({
                     {/* Menu items */}
                     <ul className="py-1.5" role="none">
                         <MenuItem
+                            href="/daily"
+                            icon={<CalendarCheck2 className="h-4 w-4" />}
+                            label="Daily problem"
+                            trailing={
+                                dailySolved ? (
+                                    <span className="ml-auto inline-flex items-center gap-1 text-xs text-easy-fg">
+                                        <CheckCircle2 className="h-3 w-3" />
+                                        Solved
+                                    </span>
+                                ) : null
+                            }
+                            onClick={() => setOpen(false)}
+                        />
+                        <MenuItem
                             href="/profile"
                             icon={<UserIcon className="h-4 w-4" />}
                             label="Profile"
@@ -232,12 +250,14 @@ function MenuItem({
     icon,
     label,
     tone,
+    trailing,
     onClick,
 }: {
     href: string
     icon: React.ReactNode
     label: string
     tone?: "primary" | "accent"
+    trailing?: React.ReactNode
     onClick?: () => void
 }) {
     const toneClass =
@@ -258,7 +278,8 @@ function MenuItem({
                 )}
             >
                 {icon}
-                {label}
+                <span>{label}</span>
+                {trailing}
             </Link>
         </li>
     )
