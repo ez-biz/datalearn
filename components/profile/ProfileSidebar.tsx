@@ -45,10 +45,10 @@ export function ProfileSidebar({
                             alt={user.name ?? "Profile"}
                             width={88}
                             height={88}
-                            className="h-22 w-22 rounded-full object-cover ring-2 ring-border"
+                            className="h-22 w-22 rounded-full object-cover ring-1 ring-foreground/10"
                         />
                     ) : (
-                        <span className="flex h-22 w-22 items-center justify-center rounded-full bg-primary/15 text-3xl font-semibold text-primary ring-2 ring-border">
+                        <span className="flex h-22 w-22 items-center justify-center rounded-full bg-primary/15 text-3xl font-semibold text-primary ring-1 ring-foreground/10">
                             {initial}
                         </span>
                     )}
