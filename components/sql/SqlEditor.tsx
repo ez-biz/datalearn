@@ -174,7 +174,8 @@ function DialectToggle({
             title={`Switch to ${DIALECT_LABEL[otherDialect]}`}
             className={cn(
                 "relative inline-flex items-center gap-0 rounded-md border border-border bg-surface p-0.5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 transition-colors",
-                "hover:border-border-strong"
+                "hover:border-border-strong",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
             )}
         >
             {ordered.map((d) => {
