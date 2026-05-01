@@ -22,7 +22,7 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor, querie
 - `components/layout/` — Navbar, Footer, ThemeProvider, MobileNav
 - `components/practice/` — workspace pieces (ProblemClient, ProblemPanel, PracticeList, HistoryPanel)
 - `components/sql/` — SQL UI (SqlPlayground, SqlEditor, ResultTable, ValidationResult)
-- `lib/` — shared modules (`auth.ts`, `prisma.ts`, `sql-validator.ts`, `duckdb.ts`, `use-problem-db.ts`, `utils.ts`, `admin-validation.ts` — kept Prisma-free; imported by `mcp-server/`)
+- `lib/` — shared modules (`auth.ts`, `prisma.ts`, `sql-validator.ts`, `duckdb.ts`, `use-problem-db.ts`, `utils.ts`, `admin-validation.ts` — kept Prisma-free; imported by `mcp-server/`, `schema-parser.ts` — server-side parser that pre-computes table info from `SqlSchema.sql` so the problem page doesn't wait on DuckDB for the Schema/INPUT panels)
 - `prisma/` — `schema.prisma`, migrations, `seed.ts`
 - `mcp-server/` — standalone stdio MCP server (own `package.json`, tsup-bundled). Lets MCP-aware assistants author SQL problems via the `/api/admin/*` REST surface using a Bearer key. Imports `lib/admin-validation.ts` directly; the bundler inlines it.
 - `scripts/mcp-e2e-test.mjs` — end-to-end harness that spawns the built MCP server with a freshly-seeded admin API key and exercises all 9 tools against the live API. Run with the dev server up.
@@ -46,6 +46,7 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor, querie
 - **Don't seed the local DB with the wrong Postgres user.** Local trust auth uses `anchitgupta`, not `postgres`.
 - **Don't add Prisma or Next/server imports to `lib/admin-validation.ts`.** The MCP server bundles this file via tsup; pulling in Prisma would balloon the bundle and break the stdio runtime. Comment at the top of the file states this contract.
 - **Don't bypass the MCP `create_problem` DRAFT guard.** The tool input schema deliberately omits `status`; the handler hardcodes `status: "DRAFT"` after spreading user input. If you add a new write tool, follow the same omit-then-inject pattern for any field that must be controlled by humans.
+- **Don't add INSERT shapes the schema parser doesn't recognize without falling back gracefully.** `lib/schema-parser.ts` handles only single-row `INSERT INTO foo VALUES (...)` because that's the seed format we emit. If you add multi-row INSERTs or computed defaults to `SqlSchema.sql`, the parser returns `null` and the page transparently falls back to DuckDB introspection — but you'll regress the first-paint UX win. Either keep the seed shape consistent or extend the parser + tests in `scripts/test-schema-parser.ts`.
 
 ## Running locally
 

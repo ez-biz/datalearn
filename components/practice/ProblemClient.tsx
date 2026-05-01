@@ -7,11 +7,12 @@ import type { ValidationResult } from "@/lib/sql-validator"
 import type { ProblemHistoryEntry } from "@/actions/submissions"
 import { ProblemPanel, type TableInfo } from "./ProblemPanel"
 import { extractTableNames, useProblemDB } from "@/lib/use-problem-db"
+import { SqlPlaygroundSkeleton } from "@/components/sql/SqlPlaygroundSkeleton"
 
 const SqlPlayground = dynamic(
     () =>
         import("@/components/sql/SqlPlayground").then((mod) => mod.SqlPlayground),
-    { ssr: false }
+    { ssr: false, loading: () => <SqlPlaygroundSkeleton /> }
 )
 
 interface ProblemClientProps {
@@ -26,6 +27,14 @@ interface ProblemClientProps {
     expectedColumns: string[] | null
     initialHistory: ProblemHistoryEntry[]
     isSolved: boolean
+    /**
+     * Pre-computed table info from the server-side schema parser. When
+     * present, the Schema tab + INPUT example previews render at first
+     * paint with no DuckDB dependency. When `null`, the parser couldn't
+     * recognize the schema shape and we fall back to running DESCRIBE +
+     * SELECT against DuckDB once `dbReady`.
+     */
+    initialTableInfos: TableInfo[] | null
     relatedArticles: Array<{
         id: string
         slug: string
@@ -51,13 +60,16 @@ export function ProblemClient({
     expectedColumns,
     initialHistory,
     isSolved,
+    initialTableInfos,
     relatedArticles,
 }: ProblemClientProps) {
     const [query, setQuery] = useState("")
     const [hydrated, setHydrated] = useState(false)
     const [history, setHistory] = useState(initialHistory)
     const [solved, setSolved] = useState(isSolved)
-    const [tableInfos, setTableInfos] = useState<TableInfo[] | null>(null)
+    const [tableInfos, setTableInfos] = useState<TableInfo[] | null>(
+        initialTableInfos
+    )
     const draftKey = `${DRAFT_PREFIX}${slug}`
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -90,9 +102,13 @@ export function ProblemClient({
         }
     }, [query, hydrated, draftKey])
 
-    // Once the DB is ready, fetch table schemas + samples for the description tab
+    // Once the DB is ready, fetch table schemas + samples for the description
+    // tab — but only when the server-side parser couldn't pre-compute them.
+    // (When `initialTableInfos` was provided, `tableInfos` is already populated
+    // and there's nothing to fetch.)
     useEffect(() => {
         if (!dbReady) return
+        if (tableInfos !== null) return
         let cancelled = false
 
         async function loadTables() {
@@ -124,7 +140,7 @@ export function ProblemClient({
         return () => {
             cancelled = true
         }
-    }, [dbReady, schemaSql, runQuery])
+    }, [dbReady, schemaSql, runQuery, tableInfos])
 
     const resetDraft = useCallback(() => {
         setQuery("")

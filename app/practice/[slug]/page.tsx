@@ -10,6 +10,7 @@ import { notFound } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { ProblemClient } from "@/components/practice/ProblemClient"
 import { ReportDialog } from "@/components/practice/ReportDialog"
+import { parseSchema } from "@/lib/schema-parser"
 
 type Props = {
     params: Promise<{ slug: string }>
@@ -95,6 +96,7 @@ export default async function ProblemPage({ params }: Props) {
                 expectedRows={expectedRows}
                 initialHistory={history}
                 isSolved={isSolved}
+                initialTableInfos={parseSchema(problem.schema?.sql)}
                 relatedArticles={problem.relatedArticles ?? []}
             />
         </div>

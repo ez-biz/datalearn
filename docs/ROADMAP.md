@@ -10,6 +10,7 @@
 - **CONTRIBUTOR role** — role-grant UI in `/admin/contributors`, `/me/articles` authoring surface for contributors gated by admin approval.
 - **Admin security hardening** — edge middleware gating `/admin/*` and `/api/admin/*`, NextAuth signIn guard against pre-seeded-admin auto-link takeover, malformed-Authorization-header rejection, full E2E coverage.
 - **MCP server v1** — stdio Model Context Protocol server in `mcp-server/`. 9 tools (`list_topics`, `create_topic`, `list_tags`, `create_tag`, `list_schemas`, `create_schema`, `list_problems`, `get_problem`, `create_problem`) for Claude Desktop / Cursor / any MCP-aware client. Forced DRAFT on `create_problem` so AI-authored content always passes through human review.
+- **Problem-page first-paint UX** — pure-function schema parser (`lib/schema-parser.ts`) pre-computes column types + INPUT sample rows server-side from `SqlSchema.sql`, so the Schema panel and INPUT example tables render immediately instead of waiting on DuckDB-WASM init (~200 ms cached, 1–3 s on first visit). Falls back to DuckDB introspection for schemas the parser doesn't recognize. SqlPlayground also renders the editor immediately and gates only Run/Submit on `dbReady` so users can start typing right away.
 
 ---
 
