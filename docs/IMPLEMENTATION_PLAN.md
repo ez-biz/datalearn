@@ -1,7 +1,10 @@
 # 📋 Antigravity Data Learning Platform — Implementation Plan
 
-> **Version:** 1.0  
-> **Last updated:** 2026-02-16  
+> **⚠️ HISTORICAL — kept for context, no longer the source of truth.**
+> This was the working plan as of **2026-02-16**, before the Learn CMS, CONTRIBUTOR role, security hardening, MCP server, UI revamp, and profile redesign shipped. For current architecture see [`TECHNICAL_DESIGN.md`](./TECHNICAL_DESIGN.md). For shipped/planned work see [`ROADMAP.md`](./ROADMAP.md). For per-feature specs and plans see [`superpowers/specs/`](./superpowers/specs/) and [`superpowers/plans/`](./superpowers/plans/).
+
+> **Version:** 1.0
+> **Last updated:** 2026-02-16
 > **Scope:** Phase 1 Completion + Phase 2 Core Features
 
 ---
