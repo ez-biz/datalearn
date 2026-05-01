@@ -134,10 +134,13 @@ mcp-server/              Standalone stdio MCP server for AI-driven problem autho
 
 ## Documentation
 
-- [`docs/ADMIN.md`](./docs/ADMIN.md) — how to author problems via the admin portal (workflow + tips)
+- [`docs/TECHNICAL_DESIGN.md`](./docs/TECHNICAL_DESIGN.md) — **architecture reference** (subsystems, data flow, security model, schema, env, future considerations)
+- [`docs/ROADMAP.md`](./docs/ROADMAP.md) — what's shipped and what's planned
 - [`docs/API.md`](./docs/API.md) — REST API reference for `/api/admin/*` (auth, payloads, examples)
+- [`docs/ADMIN.md`](./docs/ADMIN.md) — how to author problems via the admin portal (workflow + tips)
 - [`mcp-server/README.md`](./mcp-server/README.md) — MCP server install + Claude Desktop config + per-tool data formats
 - [`CLAUDE.md`](./CLAUDE.md) — project guide for AI-assisted contributors
+- [GitHub Wiki](https://github.com/ez-biz/datalearn/wiki) — getting-started, contributor & admin guides, FAQ
 
 ## Contributing
 

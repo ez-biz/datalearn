@@ -72,6 +72,16 @@ Rules of thumb:
 - If you're about to grep for the same string twice in two messages, you should have delegated.
 - For known paths (e.g. "read `app/layout.tsx`"), skip the agent and use `Read` directly.
 
+## Where to find things
+
+- [`docs/TECHNICAL_DESIGN.md`](./docs/TECHNICAL_DESIGN.md) — current architecture: subsystems (auth, SQL engine, Learn CMS, MCP server, profile), data flow, security posture, env, technical debt. Read this first when joining the project or planning anything cross-cutting.
+- [`docs/ROADMAP.md`](./docs/ROADMAP.md) — shipped work + planned. Updated when something ships.
+- [`docs/API.md`](./docs/API.md) — `/api/admin/*` REST reference with curl examples.
+- [`docs/ADMIN.md`](./docs/ADMIN.md) — admin-portal walkthrough.
+- [`mcp-server/README.md`](./mcp-server/README.md) — MCP install, Claude Desktop config, per-tool data formats. Source-of-truth for the AI-authoring contract.
+- [`docs/superpowers/specs/`](./docs/superpowers/specs/) and [`docs/superpowers/plans/`](./docs/superpowers/plans/) — design specs and implementation plans for major features (e.g. MCP server v1).
+- GitHub Wiki — friendlier onboarding docs for contributors / admins.
+
 ## Commit / PR style
 
 - Conventional-ish prefixes (`feat:`, `fix:`, `feat(ui):`, `chore:`).

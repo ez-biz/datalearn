@@ -1,7 +1,10 @@
 # 🎯 Product Strategy Review — Antigravity Data Learning Platform
 
-> **Reviewer:** PM Analysis  
-> **Date:** 2026-02-16  
+> **⚠️ HISTORICAL — strategic snapshot from 2026-02-16, kept for context.**
+> Some recommendations have shipped (depth-first content focus, contributor onboarding, security hardening); others have evolved (the MCP server is now the AI-authoring path). For current state see [`TECHNICAL_DESIGN.md`](./TECHNICAL_DESIGN.md) and [`ROADMAP.md`](./ROADMAP.md).
+
+> **Reviewer:** PM Analysis
+> **Date:** 2026-02-16
 > **TL;DR:** The product idea is strong but the phasing strategy needs adjustment. Phase 3 (Collaboration) is too ambitious for a solo-developer project and should be deprioritized. The real moat is **content depth + interactive SQL** — double down there first.
 
 ---
