@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { CheckCircle2, Database, Loader2, Play, RotateCcw, Send } from "lucide-react"
+import { CheckCircle2, Loader2, Play, RotateCcw, Send } from "lucide-react"
 import { SqlEditor } from "./SqlEditor"
 import { ResultTable } from "./ResultTable"
 import { ValidationResult as ValidationResultView } from "./ValidationResult"
@@ -11,11 +11,6 @@ import { Button } from "@/components/ui/Button"
 import { cn } from "@/lib/utils"
 
 const DEFAULT_QUERY = "-- Write your SQL query here.\n\nSELECT 1 AS hello;"
-
-const DIALECT_LABEL: Record<Dialect, string> = {
-    DUCKDB: "DuckDB",
-    POSTGRES: "Postgres",
-}
 
 interface SqlPlaygroundProps {
     /**
@@ -183,6 +178,9 @@ export function SqlPlayground({
                     onRun={handleRun}
                     onSubmit={showSubmit ? handleSubmit : undefined}
                     running={loading}
+                    dialect={dialect}
+                    allowedDialects={allowedDialects}
+                    onDialectChange={onDialectChange}
                 />
             </div>
 
@@ -210,12 +208,6 @@ export function SqlPlayground({
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    <DialectChip
-                        dialect={dialect}
-                        allowed={allowedDialects}
-                        onChange={onDialectChange}
-                        disabled={loading || submitting || !dbReady}
-                    />
                     {elapsedMs != null && !loading && !submitting && (
                         <span className="text-xs text-muted-foreground tabular-nums hidden sm:inline">
                             {elapsedMs} ms
@@ -339,61 +331,3 @@ function TabButton({
     )
 }
 
-function DialectChip({
-    dialect,
-    allowed,
-    onChange,
-    disabled,
-}: {
-    dialect: Dialect
-    allowed: Dialect[]
-    onChange?: (d: Dialect) => void
-    disabled?: boolean
-}) {
-    const isToggleable = allowed.length > 1 && Boolean(onChange)
-    const label = DIALECT_LABEL[dialect]
-
-    if (!isToggleable) {
-        return (
-            <span
-                className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium text-muted-foreground"
-                title={`Engine: ${label}`}
-            >
-                <Database className="h-3 w-3" />
-                {label}
-            </span>
-        )
-    }
-
-    return (
-        <div
-            className="inline-flex items-center gap-0.5 rounded-md border border-border bg-surface p-0.5"
-            role="radiogroup"
-            aria-label="SQL engine"
-        >
-            {allowed.map((d) => {
-                const active = d === dialect
-                return (
-                    <button
-                        key={d}
-                        type="button"
-                        role="radio"
-                        aria-checked={active}
-                        disabled={disabled}
-                        onClick={() => onChange?.(d)}
-                        className={cn(
-                            "inline-flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60",
-                            active
-                                ? "bg-surface-muted text-foreground"
-                                : "text-muted-foreground hover:text-foreground"
-                        )}
-                        title={`Switch engine to ${DIALECT_LABEL[d]}`}
-                    >
-                        {active && <Database className="h-3 w-3" />}
-                        {DIALECT_LABEL[d]}
-                    </button>
-                )
-            })}
-        </div>
-    )
-}
