@@ -242,6 +242,224 @@ Major platform expansions that take Data Learn from "SQL practice + learning hub
 
 **Scope estimate:** Medium for the Stripe integration + plan gates; the hard part is figuring out what's actually worth charging for.
 
+### V7 — Stable problem numbers (`#247. Group Anagrams`)
+
+**What:** Mint a monotonic integer ID for every problem — the LeetCode `#247. Group Anagrams` pattern. Visible in problem listings, problem URLs (alongside slug), share images, and search.
+
+**Why:** Numbers are how the SQL-practice community already talks about problems out in the wild ("#1083" or "LC 175"). Stable numbers also help us in the contest UI (problem A / B / C labelling), the Discuss surface (V1), and the Skills bucketing — they're a free affordance once added.
+
+**Components:**
+- Schema: `SQLProblem.number Int @unique` — minted in a transaction at create-time as `MAX(number) + 1`. Backfill the existing problems by `createdAt ASC` order. Numbers never recycle even after archive.
+- UI: small monospace `#NNN` chip on the problem card, the workspace header, recent-activity rows, the home dashboard cards.
+- URL: keep slug-routed (`/practice/<slug>`) for SEO; allow numeric redirect (`/practice/247` → `/practice/group-anagrams`) for typing convenience.
+- MCP: `list_problems` projection adds `number` so AI-authored problems land with the next id automatically.
+
+**Dependencies:** None. Small migration + UI pass.
+
+**Scope estimate:** Small. ~150 lines + a backfill migration.
+
+### V8 — Custom problem lists (private to user)
+
+**What:** LeetCode-style "My Lists" — every user can create as many private named collections as they want and add/remove problems. Visible only to the owner (no public sharing in v1).
+
+**Why:** Personal organization is the missing layer between the platform's tags and the user's intent. Users naturally curate ("problems my interviewer asked", "stuff I want to redo before next Friday", "JOIN problems I keep getting wrong"). Without lists, that intent goes into a Notes app outside the platform.
+
+**Components:**
+- Schema: `ProblemList { id, ownerId, name, description?, createdAt, updatedAt }`, `ProblemListItem { listId, problemId, addedAt, position? }` for ordered lists.
+- Surfaces: `/me/lists` index, `/me/lists/[id]` detail with reorder + remove, "Add to list" affordance on every problem card and the workspace header.
+- Cap on number of lists per user (e.g. 100) + items per list (e.g. 1000) so we don't need pagination on v1 surfaces.
+- MCP integration: `list_my_lists`, `add_to_list`, `remove_from_list` if we extend the contributor MCP path (today the MCP is admin-only).
+
+**Dependencies:** None for v1. Public sharing is a v2 of this section (would need slug + visibility column + share page).
+
+**Scope estimate:** Small-medium. ~300 lines + 2 small Prisma migrations.
+
+### V9 — Study plans / tracks
+
+**What:** Curated multi-problem learning paths that the platform itself authors (and possibly contributors via the existing CONTRIBUTOR role). A track is an ordered sequence of problems + articles around a theme — "SQL aggregations from zero to ranking interview", "Window functions deep dive", "Joins for data engineers". Users opt in to a track and get progress, recommended-next, and an estimated completion time.
+
+**Why:** Tags and topics describe what content *is*. Tracks describe a *path* — the problem sequence, the order of articles to read in between, the difficulty ramp. Without tracks, a new user faces a wall of 100+ problems and doesn't know where to start. With tracks, they have an opinionated guide.
+
+**Components:**
+- Schema: `Track { id, slug, name, description, difficulty, estimatedMinutes, createdAt }`, `TrackItem { trackId, kind: PROBLEM|ARTICLE, refId, position }`, `UserTrackProgress { userId, trackId, completedItemIds, currentItemId, startedAt, completedAt }`.
+- Author surface: under the existing admin CMS — `/admin/tracks` to create + reorder items.
+- Learner surface: `/learn/tracks` index with cover images and difficulty/length, `/learn/tracks/[slug]` detail showing the sequence + the user's progress, plus a sticky "Next item" affordance.
+- Profile integration: the existing UserHome "Continue" card can promote the next item in an in-progress track ahead of the last individual problem.
+
+**Dependencies:** Reuses Article + Problem; no new content models. Reuses `getUserStats` for some progress accounting.
+
+**Scope estimate:** Medium. ~600 lines across the new admin and learn surfaces.
+
+### V10 — Marketing & growth
+
+**What:** A bundle of growth-side investments that the codebase mostly enables but doesn't yet pursue:
+
+- **OG image generation** for every problem, article, badge, and contest result via `@vercel/og` so links to Data Learn render correctly when posted to LinkedIn / Twitter / Slack.
+- **Social share buttons** on problems + articles + (eventually) earned badges (V3) and contest results (V2).
+- **Public profile pages** at `/u/[handle]` that serve as a portable "data engineering portfolio" — problems solved, articles authored, badges earned, contest rating. SEO-indexed.
+- **Newsletter** — "What's new on Data Learn this month" — shipped from a server action against the `Submission` / `Article` / `Contest` tables, sent via Resend or similar.
+- **Content distribution channels** — cross-post curated articles to dev.to, Medium, Hashnode (manual at first; an admin tool later). RSS feed already exists.
+- **Referral program** — explicit invite codes that grant the inviter a small Pro perk (V6) when invitees subscribe.
+
+**Why:** Product-led growth needs growth surfaces. The platform is content-rich; if users can't easily share what they've made or solved, the network never starts.
+
+**Components:** Mostly per-feature; each item above is small individually but the bundle is meaningful.
+
+**Dependencies:** Public profile pages benefit from V3 Badges (visual richness) and V2 Contest (ratings to display). Newsletter benefits from cross-feature data — ship after at least V1 and V2 land.
+
+**Scope estimate:** Medium overall, but spread across many small wins.
+
+### V11 — Internal analytics portal
+
+**What:** Admin-facing analytics surface (`/admin/analytics`) covering platform health and content performance. Distinct from the per-user `/profile` stats: this is for operators, not learners.
+
+**Why:** We're flying blind today — there's no view of "which problem has the worst acceptance rate" or "which articles are read but not clicked through to practice" or "what fraction of users return weekly". Without analytics, every product decision is a guess.
+
+**Components:**
+- **Platform overview:** weekly active users, sign-ups, avg problems solved per active user, retention curves (D1 / D7 / D30), funnel from sign-up → first submission → first acceptance.
+- **Content performance:** per-problem acceptance rate + abandonment rate (started but never submitted) + median time-to-accept; per-article views, time-on-page (estimated from reading-time vs return), click-through to linked problems.
+- **Health:** error rates, slow queries, P95 page latencies (from existing Vercel Analytics integration if we expose them server-side).
+- **Implementation note:** start with materialized views in Postgres updated on a daily cron; only graduate to a separate OLAP store (DuckDB locally / Athena / ClickHouse remotely) if the materialized views start straining the operational DB. Don't over-engineer v1.
+
+**Dependencies:** None blocking. V2 Contest produces a lot of new analytics needs (rating distributions, contest participation curves) — those slot in here.
+
+**Scope estimate:** Medium. The data exists; the visualization layer is the work.
+
+### V12 — Support ticketing
+
+**What:** A ticketing system inside the platform for general user support. Today we have `ProblemReport` for problem-specific reports — this generalizes to anything ("the editor froze", "I can't reset my draft", "billing question").
+
+**Why:** As traffic grows, support routes through email or Twitter, both of which leak. A ticketing portal keeps issues attributable, traceable, and replyable inside the platform — and doubles as a feedback corpus for prioritization.
+
+**Components:**
+- Schema: `Ticket { id, userId, category, subject, body, status: OPEN|IN_PROGRESS|RESOLVED|CLOSED, priority, createdAt, resolvedAt }`, `TicketMessage { ticketId, authorId, body, isAdmin, createdAt }` for the conversation thread, `TicketAttachment` for file uploads (deferred — start text-only).
+- User surface: `/support` to file new tickets + `/support/[id]` to view + reply to existing ones.
+- Admin surface: `/admin/tickets` triage queue with filters by category / status / priority / assignee.
+- Email pipeline: status-change emails ("your ticket has been resolved") via Resend; admin-side new-ticket pings.
+- Reuse the existing rate-limit primitive for ticket creation.
+
+**Dependencies:** None blocking. Benefits from V10 (newsletter infra includes the same Resend pipeline).
+
+**Scope estimate:** Medium. ~500 lines + Prisma migrations.
+
+### V13 — Virtual sessions (live & guest)
+
+**What:** Platform-hosted live sessions. Two flavors:
+
+1. **Free / community sessions** — community AMAs, "office hours with a senior data engineer", monthly contest debriefs.
+2. **Paid / monetized sessions** — premium masterclasses (e.g., "Window Functions for Senior Interviews — 2-hour workshop with [Industry Guest]"), with bookings, capacity caps, and revenue split between platform and guest.
+
+The session itself reuses **V4's live-interview platform** (collaborative whiteboard + synced SQL editor + presence) so two users in the same session see and interact with the same canvas. Guest hosts have elevated controls (mute attendees, raise-hand queue, share screen of the canvas).
+
+**Why:** Live sessions are a strong retention loop and a meaningful source of revenue (V6) without commoditizing the existing free tier. They're also a recruiting funnel for guest experts who become content contributors.
+
+**Components:**
+- Schema: `Session { id, hostUserId, title, description, scheduledAt, durationMinutes, capacity, isPaid, priceCents?, status: SCHEDULED|LIVE|ENDED|CANCELLED, recordingUrl? }`, `SessionAttendee { sessionId, userId, role: HOST|COHOST|ATTENDEE, joinedAt, leftAt }`, `SessionPayment` for the paid case (Stripe charge id, amount, refunded).
+- Surfaces: `/sessions` upcoming-sessions index (free + paid filter), `/sessions/[id]` detail + booking, `/sessions/[id]/live` the actual room (gated by attendee membership).
+- Scheduling + reminders: emails 24h / 1h before via Resend.
+- Recording: capture the canvas + audio (later phase; v1 can be live-only).
+- Guest payout: at ship-time of v1, manual reconciliation against Stripe transfers; automate later.
+
+**Dependencies:**
+- **V4 live interview platform is the prerequisite** — the realtime canvas + synced editor + presence stack is what makes a session work. Without V4 this is just a calendar.
+- V6 monetization for the paid case (Stripe + plan-gate primitive).
+- V11 analytics for session-attendance signal.
+
+**Scope estimate:** Large, mostly because it depends on V4 + V6 already existing. Once those are in, the Session-specific wiring is medium.
+
+### V14 — AI hint system
+
+**What:** When a learner is stuck on a problem, they can ask for progressive hints from a model. Three tiers: **nudge** (one-sentence direction without spoiling), **walkthrough** (the approach in plain English, no code), **solution** (the actual SQL with comments). Tiers unlock sequentially — you can't skip to "solution" on a first attempt — and each unlock is recorded so the validator/leaderboard can flag heavily-hinted submissions.
+
+**Why:** The platform already has `solutionSql` (admin-only reference) and `expectedOutput` (correctness oracle). An AI layer between them turns a binary pass/fail into a real teaching loop: a learner who can't progress doesn't bounce — they get just enough scaffolding to keep going. This is the single most-aligned-with-mission feature on this list.
+
+**Components:**
+- **Prompt design:** the model sees `problem.description`, `schemaSql`, `expectedOutput`, learner's current draft, and the requested tier. System prompt enforces "do not reveal the full solution at the nudge tier".
+- **Schema:** `HintRequest { id, userId, problemId, tier, createdAt, modelUsed }` — used for cost accounting + leaderboard flagging.
+- **Cost guardrails:** per-user-per-day cap on hint requests; falls under V6 monetization (Pro = unlimited; Free = 5/day). Token budget per tier (nudge ≤ 200 output tokens, walkthrough ≤ 500, solution ≤ 1500).
+- **Surface:** a "Stuck?" panel inside the workspace, expandable. Each tier renders progressively. Already-unlocked tiers persist per-problem-per-user.
+- **Anti-gaming:** the existing `Submission.code` history makes it easy to flag "user requested solution-tier hint, then submitted a verbatim copy" — surface as a tone in profile (not a hard ban; it's a learning signal).
+
+**Dependencies:** Benefits from V6 (rate limits / Pro gating), but a free-tier daily cap works without it.
+
+**Scope estimate:** Medium. ~500 lines + a model integration + prompt tuning.
+
+### V15 — Daily problem
+
+**What:** One curated problem per day, surfaced in a sticky banner on the homepage, in the avatar dropdown, and via opt-in email. Solving the daily extends a separate **daily streak** (distinct from the activity streak in §10). Solving N consecutive dailies unlocks the corresponding "Daily Streak" badge (V3).
+
+**Why:** A daily commitment is a known retention loop (LeetCode's Daily Challenge, Wordle, NYT Mini). It gives a casual user a reason to open the site every day without the activation cost of choosing what to solve. It also gives admins a curation surface — the daily can be tied to a topic to drive traffic to recently-published articles.
+
+**Components:**
+- Schema: `DailyProblem { date PK, problemId, theme?, articleId? }` — admins schedule the rotation in `/admin/daily`. Auto-fill from a "needs more eyes" rule if no manual schedule.
+- Surfaces: homepage banner, avatar dropdown row, email digest opt-in.
+- Profile placeholder: a daily-streak counter in the existing `ProfileSidebar`'s streak block.
+- Email: same Resend pipeline as V12 / V10.
+
+**Dependencies:** V3 Badges for the streak badges. None for v1 of the daily-problem mechanic itself.
+
+**Scope estimate:** Small-medium. ~250 lines + a small admin surface.
+
+### V16 — PWA / mobile experience
+
+**What:** Make the existing site a Progressive Web App: installable, offline-capable for read-only browsing, push notifications. Don't ship a native app in v1 — SQL editing on a phone is genuinely poor UX, and a PWA covers the realistic mobile use cases (browse problems, read articles, check contest leaderboard, view profile, get notified when a daily / contest opens).
+
+**Why:** Mobile traffic is non-negotiable in a content-heavy product. A PWA gets us 80% of native-app benefits for ~10% of the build cost. The 20% we lose (native push on iOS Safari is restricted, slightly less polished install flow) doesn't matter for the audience.
+
+**Components:**
+- `manifest.webmanifest` with icons + theme color + display mode + install handlers.
+- Service worker (Workbox) that caches the article + problem-list shells offline, falls back gracefully on the workspace (which needs the network to validate against the API).
+- Push notification opt-in (web-push) for: daily problem, contest start, ticket reply (V12), session reminder (V13).
+- Mobile UX pass: the workspace already responsive but the bottom-pane geometry could use a phone-specific stack mode.
+
+**Dependencies:** None blocking. Service worker shouldn't fight Next.js's ISR/caching — needs careful scoping.
+
+**Scope estimate:** Medium. ~400 lines + a mobile UX audit pass.
+
+### V17 — First-run onboarding
+
+**What:** Replace the silent landing on `/` after sign-up with a 4-step onboarding: (1) welcome + name confirmation, (2) skill self-assessment (3 short SQL puzzles to bucket into Beginner / Intermediate / Advanced), (3) recommend a Track (V9) matching that level, (4) set up daily-problem opt-in (V15). End by dropping the user on the recommended Track or `/practice` filtered to their level.
+
+**Why:** Right now a new user signs in and sees the same homepage everyone else does — the dashboard cards (PR #21) help, but they're built for users with submission history. New users have empty cards. An onboarding flow converts an account-creation event into an actual first attempt — the strongest predictor of D7 retention.
+
+**Components:**
+- `User.onboardingCompletedAt` column + a `<Onboarding>` modal triggered when the user is signed in but `completedAt` is null. Not a separate route — modal over `/`.
+- Skill-assessment problems are a special tag (`onboarding-only`) and don't show in `/practice`.
+- Tracking: each step records a timestamp so we can compute funnel drop-off (V11).
+
+**Dependencies:** V9 Tracks for the recommendation step. V15 daily for step 4. Both are listed above; ship onboarding after them or land it with placeholder steps.
+
+**Scope estimate:** Small-medium. ~400 lines.
+
+### V18 — Companies tagging
+
+**What:** Tag problems with the companies that ask them in interviews. "Asked at Stripe", "Asked at Meta data team", "Frequent at Snowflake interviews". A top-level filter on `/practice` lets a user generate "the FAANG SQL set" in one click. Companies are also a track (V9) source.
+
+**Why:** Interview prep is an explicit job-to-be-done for a real fraction of the audience. They don't want every problem; they want the ones their target company asks. Without this, that user goes back to LeetCode (which has it).
+
+**Components:**
+- Schema: extend `Tag` with a `kind: TOPIC | COMPANY` enum (cleaner than a separate model) + display affordances per kind.
+- Source: admin-curated, with optional "user-reported" via a small form on each problem ("Were you asked this in an interview? Which company?") that admins approve.
+- Surfaces: `/practice` filter UI gets a "Companies" facet alongside difficulty + tags. Per-company landing pages (`/practice/companies/[slug]`) that double as SEO entry points.
+- Privacy / accuracy: never publish a single user-reported attribution — require ≥3 independent reports before a company-tag becomes public.
+
+**Dependencies:** None. Reuses Tag.
+
+**Scope estimate:** Small-medium. ~300 lines + a small admin surface.
+
+---
+
+### Considered, not pursuing (yet)
+
+Keeping the bar honest — these were thought about and intentionally **not** added as roadmap items because they don't fit the product or the cost outweighs the win at our stage:
+
+- **Native iOS / Android app** — Real native apps on top of a web platform double maintenance for marginal value. PWA (V16) covers the realistic use cases.
+- **General-language playground** — Out of scope. Data Learn is narrow on purpose: SQL → Python (V5) → maybe Spark. Not "leetcode for everything".
+- **Live 1v1 head-to-head racing** — Sounds fun, builds nothing durable. The retention math doesn't work for a solo project.
+- **Internationalization (i18n)** — Multiplies addressable market but also content-translation cost. Revisit when revenue (V6) actually exists to fund it.
+- **Browser extension** — Niche audience, ongoing maintenance per browser, low ROI vs. a public read-only API + OG images (V10).
+- **Custom themes** — Single emerald-on-slate theme keeps the brand tight. Theming is design debt, not a feature.
+
 ---
 
 ## Quarterly Goals (2026)
