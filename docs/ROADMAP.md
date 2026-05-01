@@ -2,11 +2,11 @@
 
 > **Last updated:** 2026-05-01
 > **Status:** Active Development
-> **Version:** 0.1.0 (Beta) → 0.2.0 in progress
+> **Version:** 0.1.0 (Beta) → 0.2.0 pending release tag
 
 ## Recently shipped
 
-### May 2026 — v0.2.0 in flight
+### May 2026 — merged for v0.2.0, release tag pending
 
 - **V7 — Stable problem numbers** (PR #43). `SQLProblem.number Int @unique`, minted as `MAX(number)+1` inside the existing create transaction, backfilled by `createdAt ASC`, never recycled. Surfaces the `#NNN.` prefix on the practice list, workspace header, UserHome cards, and `/profile` recents. `/practice/<n>` numeric URL redirects to the canonical slug. MCP `list_problems` projection includes `number`. Public `/practice` now sorts by `number ASC` to match the LeetCode reading order.
 - **V8 — Custom problem lists** (PR #44). LeetCode-style "My Lists" — `ProblemList` + `ProblemListItem` with composite-PK dedupe and `position` column for reorder. Caps: 100 lists/user, 1000 items/list (pagination not needed in v1). Surfaces: `/me/lists` index, `/me/lists/[id]` detail with rename, delete, drag-and-drop reorder, sort menu (manual / recently added / recently solved / unsolved first / number), and per-row "Added X · Solved Y" / "Not solved" metadata. AddToListButton popover on the workspace header for one-click bookmarking. Last-solved info comes from a single indexed `Submission(userId, status)` groupBy — cheap even at the 1000-item cap.
