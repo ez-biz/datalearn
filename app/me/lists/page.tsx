@@ -53,8 +53,7 @@ export default async function MyListsPage() {
                 <EmptyState
                     icon={<ListPlus className="h-5 w-5" />}
                     title="No lists yet"
-                    description="Create your first list to start curating problems."
-                    action={<CreateListButton size="sm" />}
+                    description="Click 'New list' above to create your first one."
                 />
             ) : (
                 <Card className="overflow-hidden">

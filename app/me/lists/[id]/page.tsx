@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { Container } from "@/components/ui/Container"
 import { getList } from "@/actions/lists"
+import { getProblems } from "@/actions/problems"
 import { ListDetail } from "@/components/lists/ListDetail"
 
 export const dynamic = "force-dynamic"
@@ -22,7 +23,10 @@ export default async function ListDetailPage({ params }: Props) {
     if (!session?.user?.id)
         redirect(`/api/auth/signin?callbackUrl=/me/lists/${id}`)
 
-    const list = await getList(id)
+    const [list, { data: allProblems }] = await Promise.all([
+        getList(id),
+        getProblems(),
+    ])
     if (!list) notFound()
 
     return (
@@ -34,7 +38,7 @@ export default async function ListDetailPage({ params }: Props) {
                 <ChevronLeft className="h-3.5 w-3.5" />
                 All lists
             </Link>
-            <ListDetail list={list} />
+            <ListDetail list={list} allProblems={allProblems ?? []} />
         </Container>
     )
 }
