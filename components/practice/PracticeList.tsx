@@ -136,11 +136,11 @@ export function PracticeList({ problems, solvedSlugs }: PracticeListProps) {
             ) : (
                 <Card className="overflow-hidden">
                     <div className="hidden md:grid grid-cols-[2.5rem_3rem_1fr_8rem_3rem] items-center gap-4 px-6 py-3 border-b border-border bg-surface-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
-                        <span className="sr-only">Status</span>
+                        <span><span className="sr-only">Status</span></span>
                         <span>#</span>
                         <span>Title</span>
                         <span>Difficulty</span>
-                        <span className="sr-only">Open</span>
+                        <span><span className="sr-only">Open</span></span>
                     </div>
                     <ul className="divide-y divide-border">
                         {filtered.map((p) => {

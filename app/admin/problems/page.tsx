@@ -58,7 +58,7 @@ export default async function AdminProblemsPage() {
                         <span>Schema</span>
                         <span>Tags</span>
                         <span className="text-right tabular-nums">Submissions</span>
-                        <span className="sr-only">Actions</span>
+                        <span><span className="sr-only">Actions</span></span>
                     </div>
                     <ul className="divide-y divide-border">
                         {problems.map((p) => (
