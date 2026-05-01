@@ -1,19 +1,36 @@
 import Link from "next/link"
-import Image from "next/image"
 import { PenSquare, Shield } from "lucide-react"
 import { getNavLinks } from "@/actions/nav"
 import { auth } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
 import { Logo } from "@/components/ui/Logo"
 import { LinkButton } from "@/components/ui/Button"
 import { ThemeToggle } from "@/components/ui/ThemeToggle"
 import { NavLink } from "./NavLink"
 import { MobileNav } from "./MobileNav"
+import { UserMenu } from "./UserMenu"
 
 export async function Navbar() {
     const { data: pages } = await getNavLinks()
     const session = await auth()
     const isAdmin = session?.user?.role === "ADMIN"
     const isContributor = session?.user?.role === "CONTRIBUTOR"
+
+    // Fetch the small data the UserMenu needs (solved count + total problems)
+    // when there's a session. Two cheap queries that run only for logged-in
+    // requests — anonymous traffic pays nothing.
+    let menuStats: { solved: number; total: number } | null = null
+    if (session?.user?.id) {
+        const [solvedRows, total] = await Promise.all([
+            prisma.submission.findMany({
+                where: { userId: session.user.id, status: "ACCEPTED" },
+                select: { problemId: true },
+                distinct: ["problemId"],
+            }),
+            prisma.sQLProblem.count({ where: { status: "PUBLISHED" } }),
+        ])
+        menuStats = { solved: solvedRows.length, total }
+    }
 
     const navItems = [
         { href: "/learn", label: "Learn" },
@@ -43,47 +60,14 @@ export async function Navbar() {
                 <div className="ml-auto flex items-center gap-1">
                     <ThemeToggle />
                     {session?.user ? (
-                        <>
-                            {(isContributor || isAdmin) && (
-                                <Link
-                                    href="/me/articles"
-                                    className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
-                                >
-                                    <PenSquare className="h-3.5 w-3.5" />
-                                    My articles
-                                </Link>
-                            )}
-                            {isAdmin && (
-                                <Link
-                                    href="/admin"
-                                    className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-accent hover:bg-accent/10 transition-colors"
-                                >
-                                    <Shield className="h-3.5 w-3.5" />
-                                    Admin
-                                </Link>
-                            )}
-                            <Link
-                                href="/profile"
-                                className="ml-1 rounded-full ring-2 ring-transparent hover:ring-primary/30 transition-shadow duration-150"
-                                aria-label="Profile"
-                            >
-                                {session.user.image ? (
-                                    <Image
-                                        src={session.user.image}
-                                        alt={session.user.name ?? "Profile"}
-                                        width={32}
-                                        height={32}
-                                        className="h-8 w-8 rounded-full object-cover"
-                                    />
-                                ) : (
-                                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
-                                        {(session.user.name ?? session.user.email ?? "?")
-                                            .charAt(0)
-                                            .toUpperCase()}
-                                    </span>
-                                )}
-                            </Link>
-                        </>
+                        <UserMenu
+                            name={session.user.name ?? null}
+                            email={session.user.email ?? null}
+                            image={session.user.image ?? null}
+                            role={session.user.role ?? "USER"}
+                            solved={menuStats?.solved ?? 0}
+                            total={menuStats?.total ?? 0}
+                        />
                     ) : (
                         <LinkButton href="/api/auth/signin" size="sm" className="ml-1">
                             Sign in
