@@ -14,12 +14,37 @@ import { Card, CardContent } from "@/components/ui/Card"
 import { Badge, DifficultyBadge } from "@/components/ui/Badge"
 import { getProblems } from "@/actions/problems"
 import { getTopics } from "@/actions/content"
+import { auth } from "@/lib/auth"
+import { getSolvedSlugs, getUserStats } from "@/actions/submissions"
+import { UserHome } from "@/components/home/UserHome"
 
 export default async function Home() {
-    const [{ data: problems }, { data: topics }] = await Promise.all([
+    const [{ data: problems }, { data: topics }, session] = await Promise.all([
         getProblems(),
         getTopics(),
+        auth(),
     ])
+
+    // Logged-in users get a personalized dashboard. Anonymous visitors get
+    // the marketing pitch below.
+    if (session?.user?.id) {
+        const [stats, solvedSlugs] = await Promise.all([
+            getUserStats(),
+            getSolvedSlugs(),
+        ])
+        if (stats) {
+            return (
+                <UserHome
+                    name={session.user.name ?? null}
+                    stats={stats}
+                    problems={problems ?? []}
+                    solvedSlugs={solvedSlugs}
+                />
+            )
+        }
+        // If getUserStats failed (DB blip), fall through to the anonymous
+        // page rather than rendering a broken dashboard.
+    }
 
     const totalProblems = problems?.length ?? 0
     const totalTopics = topics?.length ?? 0
