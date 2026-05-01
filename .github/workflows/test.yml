@@ -52,7 +52,7 @@ jobs:
       API_KEY_HASH_SECRET: ci-test-key-secret-${{ github.run_id }}-do-not-reuse
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
