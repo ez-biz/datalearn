@@ -123,6 +123,15 @@ These checks must pass before merge is allowed:
 If CI is red, fix it on the same branch — push more commits, the
 checks re-run automatically.
 
+> **Solo-phase note:** branch protection runs with `strict: false`,
+> meaning a PR doesn't need to be up-to-date with `main` before merge
+> as long as the four checks above are green. This avoids the "all
+> checks green but PR is BLOCKED waiting on a recompute" loop GitHub
+> falls into when there are no required reviewers to provide a
+> recompute event. When contributor #2 lands, flip `strict: true`
+> back on (see *Future hardening* below) — paired with required
+> reviews, the up-to-date check becomes meaningful again.
+
 ### 3. Preview deploy
 
 Once Vercel is wired up (planned), each PR will get a preview URL
@@ -260,11 +269,22 @@ titles matter — they *are* the changelog.
 These flips are queued but not active today:
 
 - Branch protection: `enforce_admins=true` (no more solo escape hatch).
+- Branch protection: `required_status_checks.strict=true` (require PRs
+  to be up-to-date with `main` before merge — only meaningful with
+  required reviews; safely disabled in solo phase, see CI note above).
 - Branch protection: require 1 approving CODEOWNER review.
 - Branch protection: dismiss stale reviews on push.
 - CODEOWNERS: uncomment path-specific routes in `.github/CODEOWNERS`.
 
-When you onboard a collaborator, do all four in the same setup pass.
+When you onboard a collaborator, do all five in the same setup pass.
+The exact one-liners:
+
+```bash
+gh api -X PATCH repos/ez-biz/datalearn/branches/main/protection/required_status_checks -F strict=true
+gh api -X PATCH repos/ez-biz/datalearn/branches/main/protection/enforce_admins
+gh api -X PUT repos/ez-biz/datalearn/branches/main/protection/required_pull_request_reviews \
+  -F required_approving_review_count=1 -F dismiss_stale_reviews=true -F require_code_owner_reviews=true
+```
 
 ---
 
