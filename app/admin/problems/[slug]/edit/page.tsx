@@ -32,7 +32,11 @@ export default async function EditProblemPage({ params }: Props) {
                 Back to problems
             </Link>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-1">
-                Edit · {problem.title}
+                Edit ·{" "}
+                <span className="text-muted-foreground tabular-nums font-semibold">
+                    {problem.number}.
+                </span>{" "}
+                {problem.title}
             </h1>
             <p className="text-sm text-muted-foreground mb-6">
                 Saved via{" "}

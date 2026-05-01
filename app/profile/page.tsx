@@ -179,6 +179,9 @@ export default async function ProfilePage() {
                                                         )}
                                                     />
                                                     <span className="flex-1 min-w-0 text-sm font-medium truncate group-hover:text-primary transition-colors">
+                                                        <span className="text-muted-foreground tabular-nums mr-1 font-normal">
+                                                            {s.problem.number}.
+                                                        </span>
                                                         {s.problem.title}
                                                     </span>
                                                     <DifficultyBadge

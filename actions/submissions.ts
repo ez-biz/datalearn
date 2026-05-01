@@ -148,7 +148,7 @@ export type UserStats = {
         id: string
         status: "ACCEPTED" | "WRONG_ANSWER"
         createdAt: Date
-        problem: { slug: string; title: string; difficulty: string }
+        problem: { number: number; slug: string; title: string; difficulty: string }
     }>
 }
 
@@ -172,7 +172,7 @@ export async function getUserStats(): Promise<UserStats | null> {
                     id: true,
                     status: true,
                     createdAt: true,
-                    problem: { select: { slug: true, title: true, difficulty: true } },
+                    problem: { select: { number: true, slug: true, title: true, difficulty: true } },
                 },
                 orderBy: { createdAt: "desc" },
                 take: 10,

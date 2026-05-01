@@ -196,6 +196,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             schemaId: usersSchema.id,
         },
         create: {
+            number: 1,
             title: 'Simple Select',
             slug: 'simple-select',
             difficulty: 'EASY',
@@ -213,6 +214,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             ordered: true,
         },
         create: {
+            number: 2,
             title: 'Total Revenue Per Customer',
             slug: 'total-revenue-per-customer',
             difficulty: 'MEDIUM',
@@ -231,6 +233,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             ordered: true,
         },
         create: {
+            number: 3,
             title: 'Top Selling Products',
             slug: 'top-selling-products',
             difficulty: 'HARD',
@@ -252,6 +255,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             expectedOutput: '[{"customer_id":1,"name":"John Doe","email":"john@example.com","country":"USA"},{"customer_id":4,"name":"Bob Brown","email":"bob@example.com","country":"USA"}]'
         },
         create: {
+            number: 4,
             title: 'Customers by Country',
             slug: 'customers-by-country',
             difficulty: 'EASY',
@@ -270,6 +274,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             ordered: false,
         },
         create: {
+            number: 5,
             title: 'Orders in January 2023',
             slug: 'orders-in-january-2023',
             difficulty: 'EASY',
@@ -288,6 +293,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             ordered: false,
         },
         create: {
+            number: 6,
             title: 'Average Order Value',
             slug: 'average-order-value',
             difficulty: 'EASY',
@@ -306,6 +312,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             ordered: false,
         },
         create: {
+            number: 7,
             title: 'Customers with Multiple Orders',
             slug: 'customers-with-multiple-orders',
             difficulty: 'MEDIUM',
@@ -324,6 +331,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             ordered: false,
         },
         create: {
+            number: 8,
             title: 'Products Never Ordered',
             slug: 'products-never-ordered',
             difficulty: 'MEDIUM',
@@ -342,6 +350,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             ordered: false,
         },
         create: {
+            number: 9,
             title: 'Employees Hired in 2025',
             slug: 'employees-hired-in-2025',
             difficulty: 'EASY',
@@ -360,6 +369,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             ordered: false,
         },
         create: {
+            number: 10,
             title: 'Highest-Paid Employee per Department',
             slug: 'highest-paid-per-department',
             difficulty: 'MEDIUM',
@@ -378,6 +388,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             ordered: true,
         },
         create: {
+            number: 11,
             title: 'Largest Department by Headcount',
             slug: 'largest-department',
             difficulty: 'MEDIUM',

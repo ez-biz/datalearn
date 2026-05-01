@@ -143,6 +143,10 @@ model SqlSchema {
 
 model SQLProblem {
   id                String     @id @default(cuid())
+  /// Stable monotonic id for display (`#247.` LeetCode-style). Minted at
+  /// create-time as MAX(number)+1 in a transaction; never recycled even
+  /// after archive. Backfill on existing rows ordered by createdAt ASC.
+  number            Int        @unique
   title             String
   slug              String     @unique
   difficulty        Difficulty

@@ -241,7 +241,7 @@ The Next API runs Zod validation server-side; failures come back as `McpError(In
 { "name": "Ecommerce", "sql": "CREATE TABLE customers (...); INSERT INTO customers VALUES (...);" }
 ```
 
-**`list_problems`** — returns minimal projection (`slug`, `title`, `difficulty`, `status`, `tags`). To inspect `expectedOutput` of a specific problem, follow up with `get_problem`.
+**`list_problems`** — returns minimal projection (`number`, `slug`, `title`, `difficulty`, `status`, `tags`). `number` is the stable display ID (`#247.` LeetCode-style) — minted at create-time, never recycled. To inspect `expectedOutput` of a specific problem, follow up with `get_problem`.
 
 **`get_problem`** — input `{ slug }`. Output is the full record including `expectedOutput` and `solutionSql`. Returns `{ found: false }` if no such slug exists; tools should treat that as a normal "not present" signal, not an error.
 

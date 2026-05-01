@@ -17,6 +17,7 @@ import type { UserStats } from "@/actions/submissions"
 
 type PublicProblem = {
     id: string
+    number: number
     slug: string
     title: string
     description: string | null
@@ -198,6 +199,9 @@ function ContinueCard({
                 >
                     <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                            <span className="text-muted-foreground tabular-nums mr-1">
+                                {problem.problem.number}.
+                            </span>
                             {problem.problem.title}
                         </h3>
                         <p className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-2 tabular-nums">
@@ -297,6 +301,9 @@ function RecommendedCard({ problem }: { problem: PublicProblem | null }) {
                     >
                         <div className="flex-1 min-w-0">
                             <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                                <span className="text-muted-foreground tabular-nums mr-1">
+                                    {problem.number}.
+                                </span>
                                 {problem.title}
                             </h3>
                             {problem.description && (
@@ -361,6 +368,9 @@ function RecentActivityCard({
                                         aria-hidden
                                     />
                                     <span className="flex-1 min-w-0 text-sm font-medium truncate group-hover:text-primary transition-colors">
+                                        <span className="text-muted-foreground tabular-nums mr-1 font-normal">
+                                            {s.problem.number}.
+                                        </span>
                                         {s.problem.title}
                                     </span>
                                     <DifficultyBadge

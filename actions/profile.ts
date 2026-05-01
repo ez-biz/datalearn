@@ -37,7 +37,7 @@ export type ProfileData = {
         id: string
         status: "ACCEPTED" | "WRONG_ANSWER"
         createdAt: Date
-        problem: { slug: string; title: string; difficulty: string }
+        problem: { number: number; slug: string; title: string; difficulty: string }
     }>
 }
 
@@ -96,6 +96,7 @@ export async function getProfileData(): Promise<ProfileData | null> {
                     createdAt: true,
                     problem: {
                         select: {
+                            number: true,
                             slug: true,
                             title: true,
                             difficulty: true,
