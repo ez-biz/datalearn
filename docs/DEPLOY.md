@@ -1,6 +1,6 @@
 # Deployment
 
-First-time runbook for shipping Data Learn to production. Vercel for the Next.js app, Supabase (or any Postgres host) for the database.
+First-time runbook for shipping Data Learn to production. **Vercel** for the Next.js app, **Neon** for Postgres.
 
 > **Architecture recap**: see [`TECHNICAL_DESIGN.md`](./TECHNICAL_DESIGN.md). The MCP server (`mcp-server/`) is intentionally **not** deployed — it runs on content authors' machines and talks to your live `/api/admin/*` over Bearer auth.
 
@@ -11,23 +11,31 @@ First-time runbook for shipping Data Learn to production. Vercel for the Next.js
 | Env | App | DB | Auto-deploys when |
 |---|---|---|---|
 | Local | `localhost:3000` (`npm run dev`) | local Postgres | — |
-| Preview | `<project>-git-<branch>-<org>.vercel.app` (per-PR) | shared **dev** Supabase project | any push to a non-`main` branch |
-| Production | your custom domain (or `<project>.vercel.app`) | **prod** Supabase project | merge to `main` |
+| Preview | `<project>-git-<branch>-<org>.vercel.app` (per-PR) | dev Neon project (or a Neon **branch** of prod) | any push to a non-`main` branch |
+| Production | your custom domain (or `<project>.vercel.app`) | prod Neon project | merge to `main` |
 
 **Code is identical across environments** — only env vars differ. There is no "staging branch"; preview URLs are auto-generated per PR and validate the PR's exact diff.
+
+> **Neon branching tip**: instead of running two separate projects (one dev, one prod), Neon's free tier lets you create branches off the prod database — copy-on-write Postgres branches that share storage. The Neon-Vercel integration can auto-create one branch per preview deploy, isolating each PR's schema changes. Skip this if you want simpler ops; revisit when previews start stepping on each other.
 
 ---
 
 ## One-time setup
 
-### 1. Create the Supabase projects
+### 1. Create the Neon projects
 
-Two projects: `datalearn-dev` and `datalearn-prod`. From each project's **Settings → Database**, copy:
+Two projects: `datalearn-dev` and `datalearn-prod`. (Or: one prod project plus a `dev` branch of it — see the branching tip above. The simpler path is two projects.)
 
-- **Connection pooling** string (port `6543`, `?pgbouncer=true`) — this is `DATABASE_URL`
-- **Connection string** (port `5432`, direct) — this is `DIRECT_URL`
+From each project's **Connection Details**, you'll see two connection strings:
 
-PgBouncer in transaction mode doesn't accept DDL, so `prisma migrate deploy` needs the direct URL. The runtime app reads the pooled one.
+- **Pooled** (hostname contains `-pooler`, e.g. `ep-cool-name-12345-pooler.us-east-2.aws.neon.tech`) — this is `DATABASE_URL`
+- **Direct** (same host without `-pooler`, e.g. `ep-cool-name-12345.us-east-2.aws.neon.tech`) — this is `DIRECT_URL`
+
+Both are on port `5432` and end with `?sslmode=require`.
+
+Why two URLs: Neon's pooler runs PgBouncer in transaction mode, which doesn't accept DDL. `prisma migrate deploy` needs the direct URL; runtime reads the pooled one. (Same architectural constraint as Supabase, just a different URL convention.)
+
+> **Auto-suspend**: Neon free tier auto-suspends inactive projects after a few minutes of idle. The first request after a cold start adds ~500ms wake-up latency. For a low-traffic app, this is fine; for a paid app with consistent traffic you'd upgrade to a tier without auto-suspend.
 
 ### 2. Configure OAuth providers
 
@@ -58,8 +66,8 @@ Required vars (from [`.env.example`](../.env.example)):
 
 | Var | Production | Preview |
 |---|---|---|
-| `DATABASE_URL` | prod Supabase **pooled** | dev Supabase **pooled** |
-| `DIRECT_URL` | prod Supabase **direct** | dev Supabase **direct** |
+| `DATABASE_URL` | prod Neon **pooled** (`-pooler` host) | dev Neon **pooled** |
+| `DIRECT_URL` | prod Neon **direct** (no `-pooler`) | dev Neon **direct** |
 | `AUTH_SECRET` | `openssl rand -base64 32` (fresh) | `openssl rand -base64 32` (fresh, different) |
 | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | prod OAuth app | dev OAuth app |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | prod OAuth client | dev OAuth client |
@@ -76,7 +84,7 @@ vercel --prod
 Or click "Deploy" in the Vercel UI. The build will:
 
 1. `npm install` (with `postinstall: prisma generate`)
-2. `prisma migrate deploy` — creates every table on prod Supabase
+2. `prisma migrate deploy` — creates every table on prod Neon
 3. `next build --webpack` — produces the bundle
 
 Visit your prod URL. You should see the marketing landing page. You won't be able to do much yet because there's no data and no admin — that's the next step.
@@ -111,8 +119,8 @@ The script idempotently flips `User.role = ADMIN` for the given email. Re-runnin
 ## Day-to-day workflow
 
 ```
-make change → push branch → Preview deploy hits dev Supabase
-            → review → merge to main → Production deploy hits prod Supabase
+make change → push branch → Preview deploy hits dev Neon
+            → review → merge to main → Production deploy hits prod Neon
 ```
 
 What you don't have to think about:
@@ -151,7 +159,7 @@ Wire this into UptimeRobot, Better Uptime, or any monitor. It pings the DB so a 
 
 - Vercel dashboard → Project → Deployments → click a deploy → **Logs**. Filter by function or by request ID.
 - CLI tail: `vercel logs <deploy-url>`
-- DB query logs: Supabase dashboard → Logs → Postgres logs. Slow queries surface here.
+- DB query logs: Neon console → Project → Monitoring (slow-query log + connection counts). Or `psql "$DIRECT_URL"` and run ad-hoc queries.
 
 ---
 
@@ -163,7 +171,7 @@ Wire this into UptimeRobot, Better Uptime, or any monitor. It pings the DB so a 
 | Build pipeline | `package.json` `vercel-build` script |
 | Environment values | Vercel project env vars (per environment) |
 | OAuth callbacks | GitHub + Google developer consoles |
-| DB queries / inspection | `psql "$DIRECT_URL"` or Supabase SQL Editor |
+| DB queries / inspection | `psql "$DIRECT_URL"` or Neon SQL Editor (console → Project → SQL Editor) |
 | Live logs | Vercel deploy logs |
 | Uptime | `GET /api/health` against any monitor |
 
@@ -176,7 +184,7 @@ Wire this into UptimeRobot, Better Uptime, or any monitor. It pings the DB so a 
 These are intentionally not in the v1 deploy runbook; revisit when you have real users:
 
 - **Error tracking**: Sentry. The free tier covers a small project comfortably; install in `app/layout.tsx` and the API routes.
-- **Backups**: Supabase free tier doesn't include automatic daily backups. Either upgrade or schedule `pg_dump` on a cron.
+- **Backups**: Neon's free tier includes 7-day point-in-time restore on the prod branch (you can roll back to any second within the window). For longer retention, schedule `pg_dump` on a cron or upgrade to a paid tier.
 - **Custom domain**: Vercel project → Settings → Domains. CNAME to `cname.vercel-dns.com`.
 - **Analytics deeper dive**: Vercel Analytics is wired in `app/layout.tsx` for page views + web vitals; for funnels and conversion you'd want PostHog or similar.
 - **Rate limiting at the edge**: middleware-level rate limit on `/api/admin/*` and `/api/me/*` (currently per-action, e.g. submission rate limit). Worth doing once the public traffic warrants.
