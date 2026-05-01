@@ -144,9 +144,9 @@ mcp-server/              Standalone stdio MCP server for AI-driven problem autho
 
 ## Contributing
 
-Open a PR from a feature branch. Conventional-ish commit prefixes (`feat:`, `fix:`, `feat(ui):`, `chore:`, `docs:`). PR descriptions list **Verified** (what you actually checked) and **Not yet verified** (what the reviewer should click through).
+See [`.github/CONTRIBUTING.md`](./.github/CONTRIBUTING.md) for the full guide — branching strategy, commit conventions, PR lifecycle, merge mode, hard rules, releases.
 
-Don't `next build` without `--webpack` — see the build caveat above.
+TL;DR: branch as `<type>/<description>`, open a PR, CI must be green, squash-merge. Don't `next build` without `--webpack` (see build caveat above).
 
 ## License
 

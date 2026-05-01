@@ -1,0 +1,34 @@
+# CODEOWNERS for Data Learn
+#
+# Order matters: the LAST matching pattern wins.
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
+#
+# Today: solo dev. Default ownership routes everything to @anchitgupt.
+# When collaborator-2 lands: uncomment the path-specific blocks below
+# and assign real handles / teams.
+
+# Default: everything is owned by @anchitgupt.
+*                               @anchitgupt
+
+# ----------------------------------------------------------------------
+# Reserved path-specific routes — uncomment and reassign when collaborators
+# arrive. Patterns are scaffolding; edit handles freely.
+# ----------------------------------------------------------------------
+
+# Repo governance and CI config
+# /.github/                     @anchitgupt @repo-admins
+
+# MCP server — domain-specialist review
+# /mcp-server/                  @anchitgupt @mcp-team
+
+# Auth and admin validation — security review required
+# /lib/admin-validation.ts      @anchitgupt @security-reviewers
+# /lib/api-auth.ts              @anchitgupt @security-reviewers
+# /middleware.ts                @anchitgupt @security-reviewers
+
+# Database schema and migrations — data-model review
+# /prisma/                      @anchitgupt @db-reviewers
+
+# Deployment / build config
+# /vercel.json                  @anchitgupt @deploy-team
+# /next.config.ts               @anchitgupt @deploy-team
