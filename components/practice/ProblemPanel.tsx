@@ -34,6 +34,7 @@ export type TableInfo = {
 }
 
 interface ProblemPanelProps {
+    number: number
     title: string
     difficulty: string
     description: string | null
@@ -51,6 +52,7 @@ interface ProblemPanelProps {
 }
 
 export function ProblemPanel({
+    number,
     title,
     difficulty,
     description,
@@ -74,6 +76,9 @@ export function ProblemPanel({
             <div className="border-b border-border px-5 pt-5 pb-3">
                 <div className="flex items-start justify-between gap-3">
                     <h1 className="text-xl font-semibold tracking-tight leading-tight">
+                        <span className="text-muted-foreground tabular-nums font-medium mr-1.5">
+                            {number}.
+                        </span>
                         {title}
                     </h1>
                     <div className="flex items-center gap-2 shrink-0">

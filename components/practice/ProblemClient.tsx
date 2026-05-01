@@ -16,6 +16,7 @@ const SqlPlayground = dynamic(
 )
 
 interface ProblemClientProps {
+    number: number
     title: string
     slug: string
     difficulty: string
@@ -49,6 +50,7 @@ const DRAFT_PREFIX = "dl:draft:"
 const SAMPLE_LIMIT = 5
 
 export function ProblemClient({
+    number,
     title,
     slug,
     difficulty,
@@ -180,6 +182,7 @@ export function ProblemClient({
         <div className="flex-1 flex flex-col lg:flex-row min-h-0">
             <aside className="w-full lg:w-2/5 xl:w-1/3 border-b lg:border-b-0 lg:border-r border-border min-h-[40vh] lg:min-h-0">
                 <ProblemPanel
+                    number={number}
                     title={title}
                     difficulty={difficulty}
                     description={description}

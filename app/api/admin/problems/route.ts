@@ -71,8 +71,18 @@ export const POST = withAdmin(async (req) => {
                 tagIds.push(tag.id)
             }
 
+            // Mint the next problem number inside the same transaction so
+            // concurrent creates can't collide. The DB-side UNIQUE on
+            // SQLProblem.number is the ultimate guard; this just avoids a
+            // 50% retry rate on bursts.
+            const max = await tx.sQLProblem.aggregate({
+                _max: { number: true },
+            })
+            const nextNumber = (max._max.number ?? 0) + 1
+
             const problem = await tx.sQLProblem.create({
                 data: {
+                    number: nextNumber,
                     title: input.title,
                     slug: input.slug,
                     difficulty: input.difficulty,

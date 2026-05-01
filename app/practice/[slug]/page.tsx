@@ -1,12 +1,12 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
-import { getProblem } from "@/actions/problems"
+import { getProblem, getSlugByNumber } from "@/actions/problems"
 import {
     getProblemHistory,
     getSolvedSlugs,
 } from "@/actions/submissions"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { ProblemClient } from "@/components/practice/ProblemClient"
 import { ReportDialog } from "@/components/practice/ReportDialog"
@@ -18,6 +18,10 @@ type Props = {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { slug } = await params
+    if (/^\d+$/.test(slug)) {
+        // Numeric URL → defer to the redirect path; metadata is replaced after redirect.
+        return {}
+    }
     const { data: problem } = await getProblem(slug)
     if (!problem) return { title: "Problem not found" }
     return {
@@ -56,6 +60,14 @@ function parseExpectedOutput(raw: string | null | undefined): {
 
 export default async function ProblemPage({ params }: Props) {
     const { slug } = await params
+
+    // `/practice/<n>` shortcut: resolve to the canonical slug and redirect.
+    if (/^\d+$/.test(slug)) {
+        const target = await getSlugByNumber(Number(slug))
+        if (!target) notFound()
+        redirect(`/practice/${target}`)
+    }
+
     const { data: problem } = await getProblem(slug)
 
     if (!problem) {
@@ -85,6 +97,7 @@ export default async function ProblemPage({ params }: Props) {
                 <ReportDialog problemSlug={problem.slug} isSignedIn={isSignedIn} />
             </div>
             <ProblemClient
+                number={problem.number}
                 title={problem.title}
                 slug={problem.slug}
                 difficulty={problem.difficulty}

@@ -9,6 +9,7 @@ import { toMcpError } from "../errors.js"
 
 type FullProblem = {
     id: string
+    number: number
     slug: string
     title: string
     difficulty: "EASY" | "MEDIUM" | "HARD"
@@ -50,7 +51,7 @@ export function registerProblemTools(
 ): void {
     server.tool(
         "list_problems",
-        "List SQL problems. Returns a minimal projection (slug, title, difficulty, status, tags) — use get_problem to fetch a single problem's full data including expectedOutput.",
+        "List SQL problems. Returns a minimal projection (number, slug, title, difficulty, status, tags) — use get_problem to fetch a single problem's full data including expectedOutput.",
         ListProblemsShape,
         async (input) => {
             try {
@@ -62,6 +63,7 @@ export function registerProblemTools(
                     ? all.filter((p) => p.difficulty === input.difficulty)
                     : all
                 const projected = filtered.map((p) => ({
+                    number: p.number,
                     slug: p.slug,
                     title: p.title,
                     difficulty: p.difficulty,
