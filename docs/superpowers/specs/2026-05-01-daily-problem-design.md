@@ -22,7 +22,7 @@ Add a `DailyProblem` model:
 ```prisma
 model DailyProblem {
   id        String             @id @default(cuid())
-  date      DateTime           @unique
+  date      DateTime           @unique @db.Date
   problemId String
   problem   SQLProblem         @relation(fields: [problemId], references: [id], onDelete: Restrict)
   source    DailyProblemSource @default(AUTO)
@@ -38,7 +38,7 @@ enum DailyProblemSource {
 }
 ```
 
-`date` is normalized to UTC midnight. This keeps the schedule globally stable and avoids per-user timezone drift in v1. The user-facing label can render in local time, but the canonical daily key is UTC.
+`date` is stored as a Postgres `DATE` via `@db.Date`. Code should still normalize inputs to UTC midnight before querying or writing so TypeScript `Date` values are stable, but the database column enforces one row per calendar date. The user-facing label can render in local time, but the canonical daily key is UTC.
 
 `onDelete: Restrict` prevents deleting a problem that has already been assigned as a daily. Archiving remains allowed because the relationship stays intact and historical daily links should not break.
 

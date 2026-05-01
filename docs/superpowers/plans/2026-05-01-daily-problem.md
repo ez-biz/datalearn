@@ -51,7 +51,7 @@ Add the new model and enum after `ProblemListItem`:
 /// scheduled by admins or auto-filled on first request.
 model DailyProblem {
   id        String             @id @default(cuid())
-  date      DateTime           @unique
+  date      DateTime           @unique @db.Date
   problemId String
   problem   SQLProblem         @relation(fields: [problemId], references: [id], onDelete: Restrict)
   source    DailyProblemSource @default(AUTO)
@@ -94,6 +94,7 @@ Expected migration properties:
 
 - creates enum `DailyProblemSource`
 - creates table `DailyProblem`
+- creates `date` as `DATE NOT NULL`
 - adds unique index on `date`
 - adds index on `problemId`
 - adds FK from `DailyProblem.problemId` to `SQLProblem.id` with `ON DELETE RESTRICT`
