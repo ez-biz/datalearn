@@ -261,6 +261,19 @@ async function main() {
             passes.push(false)
         }
 
+        // Verify the stable problem number was minted (positive integer)
+        if (Number.isInteger(createdPayload.number) && createdPayload.number > 0) {
+            console.log(
+                `  ✓ create_problem minted stable number=${createdPayload.number}`
+            )
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ create_problem expected positive integer number, got ${createdPayload.number}`
+            )
+            passes.push(false)
+        }
+
         // Try to smuggle status="PUBLISHED" — should still come back as DRAFT
         const sneakSlug = `mcp-sneak-${stamp}`
         const sneak = await mcp.callTool("create_problem", {

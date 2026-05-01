@@ -51,7 +51,8 @@ export default async function AdminProblemsPage() {
                 />
             ) : (
                 <Card className="overflow-hidden">
-                    <div className="hidden md:grid grid-cols-[1fr_8rem_1fr_1fr_6rem_3rem] items-center gap-4 px-5 py-3 border-b border-border bg-surface-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+                    <div className="hidden md:grid grid-cols-[3.5rem_1fr_8rem_1fr_1fr_6rem_3rem] items-center gap-4 px-5 py-3 border-b border-border bg-surface-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+                        <span>#</span>
                         <span>Title</span>
                         <span>Difficulty</span>
                         <span>Schema</span>
@@ -63,14 +64,20 @@ export default async function AdminProblemsPage() {
                         {problems.map((p) => (
                             <li
                                 key={p.id}
-                                className="grid grid-cols-1 md:grid-cols-[1fr_8rem_1fr_1fr_6rem_3rem] items-center gap-4 px-5 py-3"
+                                className="grid grid-cols-1 md:grid-cols-[3.5rem_1fr_8rem_1fr_1fr_6rem_3rem] items-center gap-4 px-5 py-3"
                             >
+                                <div className="hidden md:block text-sm tabular-nums text-muted-foreground">
+                                    {p.number}
+                                </div>
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2">
                                         <Link
                                             href={`/admin/problems/${p.slug}/edit`}
                                             className="font-medium hover:text-primary transition-colors truncate"
                                         >
+                                            <span className="md:hidden text-muted-foreground tabular-nums font-normal mr-1">
+                                                {p.number}.
+                                            </span>
                                             {p.title}
                                         </Link>
                                         {p.status !== "PUBLISHED" && (

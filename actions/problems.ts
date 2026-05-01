@@ -16,7 +16,7 @@ export async function getProblems() {
     try {
         const problems = await prisma.sQLProblem.findMany({
             where: { status: "PUBLISHED" },
-            orderBy: { title: "asc" },
+            orderBy: { number: "asc" },
             select: {
                 id: true,
                 number: true,
