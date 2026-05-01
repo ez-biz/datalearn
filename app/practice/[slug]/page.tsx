@@ -10,6 +10,7 @@ import { notFound, redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { ProblemClient } from "@/components/practice/ProblemClient"
 import { ReportDialog } from "@/components/practice/ReportDialog"
+import { AddToListButton } from "@/components/lists/AddToListButton"
 import { parseSchema } from "@/lib/schema-parser"
 
 type Props = {
@@ -94,7 +95,14 @@ export default async function ProblemPage({ params }: Props) {
                     <ChevronLeft className="h-3.5 w-3.5" />
                     All problems
                 </Link>
-                <ReportDialog problemSlug={problem.slug} isSignedIn={isSignedIn} />
+                <div className="flex items-center gap-4">
+                    <AddToListButton
+                        problemSlug={problem.slug}
+                        problemId={problem.id}
+                        isSignedIn={isSignedIn}
+                    />
+                    <ReportDialog problemSlug={problem.slug} isSignedIn={isSignedIn} />
+                </div>
             </div>
             <ProblemClient
                 number={problem.number}

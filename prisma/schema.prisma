@@ -20,6 +20,7 @@ model User {
   apiKeys       ApiKey[]
   reports       ProblemReport[]
   articles      Article[]
+  lists         ProblemList[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -163,6 +164,7 @@ model SQLProblem {
   submissions       Submission[]
   reports           ProblemReport[]
   relatedArticles   Article[]  @relation("ArticleProblems")
+  listItems         ProblemListItem[]
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 
@@ -262,3 +264,36 @@ enum ProblemReportKind {
   TYPO
   OTHER
 }
+
+/// User-curated private collection of problems. LeetCode-style "My Lists".
+/// Visible only to the owner in v1; public sharing is a future addition.
+model ProblemList {
+  id          String              @id @default(cuid())
+  ownerId     String
+  owner       User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name        String
+  description String?             @db.Text
+  items       ProblemListItem[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([ownerId, updatedAt])
+}
+
+/// Membership row connecting a problem to a user list. `position` is set
+/// at append time as MAX(position)+1 within the list and is mutated by
+/// reorder operations. `(listId, problemId)` is unique so the same
+/// problem can't appear twice in one list.
+model ProblemListItem {
+  listId    String
+  list      ProblemList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  problemId String
+  problem   SQLProblem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  position  Int
+  addedAt   DateTime    @default(now())
+
+  @@id([listId, problemId])
+  @@index([listId, position])
+  @@index([problemId])
+}
+
