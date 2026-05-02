@@ -2,18 +2,21 @@
 
 Practice SQL the way LeetCode does code. Real problems. Real schemas. A real database in your browser.
 
-> ![Built with Next.js 16](https://img.shields.io/badge/Next.js-16-black) ![DuckDB-WASM](https://img.shields.io/badge/SQL-DuckDB--WASM-yellow) ![Prisma 7](https://img.shields.io/badge/ORM-Prisma_7-blue) ![Status](https://img.shields.io/badge/status-beta-orange)
+> **Live**: <https://datalearn-iota.vercel.app>
+> Repo: <https://github.com/ez-biz/datalearn>
 
-Repo: <https://github.com/ez-biz/datalearn>
+> ![Built with Next.js 16](https://img.shields.io/badge/Next.js-16-black) ![DuckDB-WASM](https://img.shields.io/badge/SQL-DuckDB--WASM-yellow) ![Postgres-WASM](https://img.shields.io/badge/SQL-PGlite-336791) ![Prisma 7](https://img.shields.io/badge/ORM-Prisma_7-blue) ![Status](https://img.shields.io/badge/status-beta-orange)
 
 ---
 
 ## Features
 
-- **In-browser SQL execution** — DuckDB-WASM runs every query client-side. Zero round-trips, zero waiting.
+- **In-browser SQL execution** — DuckDB-WASM **and** PGlite (real Postgres compiled to WASM) both run client-side. Per-problem dialect array; learners pick which engine to solve in via a toggle in the editor header.
 - **Instant validation** — submit a query and get an immediate accept / wrong-answer verdict, with row-level diffs on failure.
 - **Curated problem library** — across e-commerce, HR, and SaaS schemas; Easy / Medium / Hard.
-- **LeetCode-style workspace** — two-pane layout: tabbed Description / Schema / Hints / History on the left, Monaco editor + tabbed Results / Verdict on the right.
+- **LeetCode-style workspace** — two-pane layout: tabbed Description / Hints / History on the left, Monaco editor + tabbed Results / Verdict on the right. Stable problem numbers (`#247.` LeetCode-style) on every surface.
+- **Custom problem lists** — private user-curated collections at `/me/lists` with rename, delete, drag-and-drop reorder, sort options (recently added / recently solved / unsolved first / number), and a one-click bookmark popover on the workspace.
+- **Daily problem** — a featured problem rotating daily on the home page; streak-friendly habit hook.
 - **Per-user progress** — solved checkmarks on the problem list, "Solved" badge on the workspace, submission history with code recall, profile stats with by-difficulty breakdown.
 - **Workspace polish** — `⌘↵` run, `⌘⇧↵` submit, draft autosave to localStorage, run timer, NULL-styled cells, tabular numerics.
 - **Admin content portal** — `/admin/*` UI to author problems end-to-end. Type the solution, hit "Run & capture", and we run it against the schema in your browser and store the JSON. No more hand-writing expected output.
@@ -42,13 +45,13 @@ git clone https://github.com/ez-biz/datalearn.git
 cd datalearn
 npm install                  # also runs `prisma generate`
 
-# 2. Set up local Postgres and copy env.example -> .env
+# 2. Set up local Postgres and copy .env.example -> .env
 createdb datalearn           # or use Postgres.app / Docker
-cp env.example .env          # then fill in DATABASE_URL, AUTH_*, etc.
+cp .env.example .env         # then fill in DATABASE_URL, AUTH_*, etc.
 
 # 3. Apply migrations + seed the demo content
 npx prisma migrate dev
-npx tsx prisma/seed.ts       # seeds 11 problems, 3 schemas, 1 topic with 3 articles
+npx tsx prisma/seed.ts       # seeds 23 problems, 3 schemas, 1 topic with 3 articles
 
 # 4. Run
 npm run dev                  # http://localhost:3000
@@ -58,10 +61,10 @@ After modifying `prisma/schema.prisma`, restart the dev server — the running p
 
 ### Becoming an admin
 
-Sign in once via GitHub or Google to create your `User` row, then promote yourself:
+Sign in once via GitHub or Google to create your `User` row, then promote yourself with the bootstrap script (idempotent — safe to re-run):
 
 ```bash
-psql "$DATABASE_URL" -c "UPDATE \"User\" SET role='ADMIN' WHERE email='you@example.com';"
+node scripts/bootstrap-admin.mjs you@example.com
 ```
 
 Then visit `/admin/problems` to author content. See [`docs/ADMIN.md`](./docs/ADMIN.md).
@@ -75,26 +78,25 @@ npm run start
 
 > **Build caveat:** `package.json` pins `--webpack` for both `build` and `vercel-build`. Turbopack hits an internal panic (`entered unreachable code` in `chunk_group.rs`) on this code shape in Next 16.1.1. Webpack build is clean. Will revisit when Turbopack ships a fix.
 
-## Deploying to Vercel + Neon
+## Deploying
 
-1. Create a Neon project (free tier is fine). Copy the **pooled** and **direct** connection strings.
-2. In Vercel, import this repo. Set the following env vars under Project Settings → Environment Variables:
-   - `DATABASE_URL` — Neon pooled connection string (used at runtime)
-   - `DIRECT_URL` — Neon direct connection string (used by `prisma migrate deploy` during build)
-   - `NEXTAUTH_URL` — your production URL (e.g. `https://datalearn.vercel.app`)
-   - `AUTH_SECRET` — generate with `openssl rand -base64 32`
-   - `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` — from a GitHub OAuth app with callback `https://<your-domain>/api/auth/callback/github`
-   - `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` — from a Google OAuth client with the equivalent callback
-3. Vercel auto-runs `vercel-build` from `package.json`: `prisma migrate deploy && next build --webpack`.
-4. After the first deploy, seed the production DB once:
-   ```bash
-   DATABASE_URL="<direct-url>" npx tsx prisma/seed.ts
-   ```
-5. Promote your user to admin in production via `psql` against the production DB.
+**Currently deployed to Vercel + Neon at <https://datalearn-iota.vercel.app>.**
+
+Full first-time runbook (Neon project setup, OAuth callbacks per-environment, Vercel env-var matrix, seed flow, admin bootstrap, day-to-day workflow, schema-change patterns) is in [`docs/DEPLOY.md`](./docs/DEPLOY.md).
+
+Quick reference of what runs on every deploy:
+
+```
+npm install (postinstall: prisma generate)
+  → prisma migrate deploy   (against DIRECT_URL)
+  → next build --webpack    (the production bundle)
+```
+
+Every push to `main` auto-deploys to production. Every push to a non-`main` branch gets its own per-PR preview URL.
 
 ### Note on first load
 
-DuckDB-WASM downloads a ~30 MB WASM binary on first visit. Expect a slow first load on mobile; subsequent visits are cached by the browser.
+DuckDB-WASM downloads a ~30 MB WASM binary on first visit. PGlite (Postgres) lazy-loads ~3 MB only when a learner toggles to the Postgres engine. Both are cached by the browser after the first load.
 
 ## Project layout
 
