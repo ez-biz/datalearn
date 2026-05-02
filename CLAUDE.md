@@ -2,7 +2,7 @@
 
 LeetCode-style SQL practice platform. Users write SQL in a Monaco editor; queries run in-browser via DuckDB-WASM **or** PGlite (real Postgres compiled to WASM, learner-toggleable per problem). Results are validated against expected output, and submissions are tracked per user.
 
-**Live**: <https://datalearn-iota.vercel.app> — Vercel + Neon. Auto-deploys from `main`; preview URLs per PR. `prisma migrate deploy` runs on every Vercel build. Health endpoint: `/api/health`. Full runbook in [`docs/DEPLOY.md`](./docs/DEPLOY.md).
+**Live**: <https://datalearn-iota.vercel.app> — Vercel + Neon. **`main` is integration; `production` is what's live.** Pushes to `main` (and any branch) deploy to a Preview URL only. Production deploys when a `main → production` PR merges (titled `release: vX.Y.Z`). `prisma migrate deploy` runs on every Vercel build. Health endpoint: `/api/health`. Full runbook in [`docs/DEPLOY.md`](./docs/DEPLOY.md); release runbook in [`.github/CONTRIBUTING.md`](./.github/CONTRIBUTING.md#releases).
 
 ## Stack
 

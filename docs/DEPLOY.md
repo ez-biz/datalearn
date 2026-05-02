@@ -11,10 +11,14 @@ First-time runbook for shipping Data Learn to production. **Vercel** for the Nex
 | Env | App | DB | Auto-deploys when |
 |---|---|---|---|
 | Local | `localhost:3000` (`npm run dev`) | local Postgres | — |
-| Preview | `<project>-git-<branch>-<org>.vercel.app` (per-PR) | dev Neon project (or a Neon **branch** of prod) | any push to a non-`main` branch |
-| Production | your custom domain (or `<project>.vercel.app`) | prod Neon project | merge to `main` |
+| Preview | `<project>-git-<branch>-<org>.vercel.app` (per-PR + per-`main`-push) | dev Neon project | any push to a non-`production` branch (including `main`) |
+| Production | your custom domain (or `<project>.vercel.app`) | prod Neon project | merge to `production` |
 
-**Code is identical across environments** — only env vars differ. There is no "staging branch"; preview URLs are auto-generated per PR and validate the PR's exact diff.
+**Code is identical across environments** — only env vars differ.
+
+**`main` is integration, not production.** Pushing to `main` or merging a feature PR into `main` deploys to a Preview URL (your de-facto staging). Production only changes when you cut a release: open a PR `main → production` titled `release: vX.Y.Z`, merge it, and tag.
+
+Vercel knows `production` is the prod branch via **Project → Settings → Git → Production Branch**. (Default is `main`; we override.)
 
 > **Neon branching tip**: instead of running two separate projects (one dev, one prod), Neon's free tier lets you create branches off the prod database — copy-on-write Postgres branches that share storage. The Neon-Vercel integration can auto-create one branch per preview deploy, isolating each PR's schema changes. Skip this if you want simpler ops; revisit when previews start stepping on each other.
 
@@ -120,14 +124,20 @@ The script idempotently flips `User.role = ADMIN` for the given email. Re-runnin
 
 ```
 make change → push branch → Preview deploy hits dev Neon
-            → review → merge to main → Production deploy hits prod Neon
+            → review → merge to main → still Preview (staging URL) on dev Neon
+
+(later, when ready to release)
+
+main → production PR → review → merge → Production deploy hits prod Neon → tag vX.Y.Z
 ```
+
+The first half (feature PRs into `main`) is continuous and cheap. The second half (release PR) is the explicit gate that batches changes into a tagged production version. You decide when to release — there's no auto-promotion from `main` to `production`.
 
 What you don't have to think about:
 
-- **Migrations**: every PR build runs `prisma migrate deploy` against its target DB. If you committed a new migration in `prisma/migrations/`, it ships as part of the deploy.
+- **Migrations**: every Vercel build runs `prisma migrate deploy` against its target DB (dev Neon for previews, prod Neon for production). If you committed a new migration in `prisma/migrations/`, it ships as part of the deploy. By the time `main → production` is merged, the migration has already been applied to dev Neon — so the same migration applying to prod Neon is well-rehearsed.
 - **Schema drift**: impossible by construction. The DB is always at the migration version of the code that's about to serve traffic.
-- **Rollback**: revert the merge commit on main → Vercel auto-deploys the previous state. **But** if the reverted PR included a destructive migration (`DROP COLUMN`, etc.), you need to write a forward-fix migration; you can't roll back the DB by reverting code.
+- **Rollback**: revert the release-PR merge commit on `production` → Vercel auto-deploys the previous state. **But** if the reverted release included a destructive migration (`DROP COLUMN`, etc.), you need to write a forward-fix migration; you can't roll back the DB by reverting code.
 
 ### Schema changes
 
@@ -138,12 +148,14 @@ npx prisma migrate dev --name describe_what_changed
 
 This creates `prisma/migrations/<timestamp>_<name>/migration.sql` and applies it locally. Commit the migration file along with your code change.
 
-For risky migrations (large backfill, NOT NULL on existing nullable column, large table rewrite), split into two PRs:
+For risky migrations (large backfill, NOT NULL on existing nullable column, large table rewrite), split into two **separate releases** (not just two PRs into `main`):
 
-1. **PR A**: add column nullable + backfill in a single transaction. Merge & deploy.
-2. **PR B**: make the column NOT NULL + drop any backwards-compat code. Merge & deploy.
+1. **Release N**: add column nullable + backfill in a single transaction. Merge to `main`, then release to `production`. Wait until you've confirmed it's healthy in prod.
+2. **Release N+1**: make the column NOT NULL + drop any backwards-compat code. Merge to `main`, release to `production`.
 
-This pattern guarantees zero downtime under concurrent prod traffic.
+The two-release rhythm matters because the risky migration runs on prod Neon when the **release PR** merges, not when the feature PR lands on `main`. Splitting across releases gives you a recovery window between the two halves.
+
+For low-risk migrations (additive columns, new tables), batching multiple migrations into one release is fine — just sanity-check the staging Preview before merging the release PR.
 
 ### Health check
 

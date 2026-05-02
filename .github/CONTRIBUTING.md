@@ -10,8 +10,8 @@ If anything here is unclear or out of date, that's a bug — open a PR.
 
 ## TL;DR
 
-- `main` is always deployable. (Vercel deploy is on the roadmap; once shipped, `main` will auto-deploy to production.)
-- Every change ships through a pull request. No direct pushes to `main`.
+- **`main` is integration; `production` is what's live.** Pushes to `main` deploy to a Preview URL only. Production deploys when you open a PR `main → production` (titled `release: vX.Y.Z`) and merge it. This batches multiple feature merges into one explicit, tag-able release event.
+- Every change ships through a pull request. No direct pushes to `main` or `production`.
 - Branches are named `<type>/<short-description>` (e.g. `feat/admin-sorting`).
 - Commits use conventional-commit-style prefixes (`feat:`, `fix:`, …).
 - All three merge methods are enabled — **squash & merge**, **merge commit**, and **rebase & merge**. Pick the one that fits the change. PR title becomes the commit message on `main` for squash, so write it carefully.
@@ -102,8 +102,17 @@ tense statement of intent.
 ## Pull request lifecycle
 
 ```
-branch → push → open PR → CI runs → preview deploy → review → merge → branch auto-deleted
+branch → push → open PR → CI runs → preview deploy → review → merge to main → branch auto-deleted
+                                                                ↓
+                                                  (later, when ready to release)
+                                                                ↓
+                                                    main → production PR → tag → live
 ```
+
+**Two merge events:**
+
+1. **Feature PR → `main`**. Adds the change to the integration branch. Auto-deploys to a Preview URL only — your "staging" environment.
+2. **Release PR `main → production`**. Promotes whatever has accumulated on `main` since the last release to live. This is when prod actually changes. See §Releases below.
 
 ### 1. Open the PR
 
@@ -236,53 +245,66 @@ PRs.
 
 ## Hotfixes
 
-There's no special "hotfix" branch class. A production bug is fixed
-exactly like any other bug:
+For a bug already in production that can't wait for the next release batch, branch from `production` (not `main`) so you don't drag in unfinished `main` work:
 
-1. Branch from `main`: `git checkout -b fix/<bug-description>`.
-2. Fix it. Test it locally.
-3. Open the PR. Mention "production bug" in the summary.
-4. CI runs. Preview deploys. Self-review (or expedited review).
-5. Merge (squash is fine for most fixes). (When Vercel is wired up) `main` auto-deploys.
+1. `git checkout production && git pull`
+2. `git checkout -b fix/<bug-description>`
+3. Fix it. Test it locally.
+4. Open **two PRs**:
+   - `fix/x → production` — ships the fix to live as soon as you merge
+   - `fix/x → main` — back-merges the same fix so `main` doesn't regress on the next release
+5. Tag the production merge as a patch release (e.g. `v0.3.1`) so the live state is identifiable.
 
-The whole cycle is fast because the rest of the process is fast. We
-don't need a parallel hotfix track.
+The whole cycle is fast because the rest of the process is fast. The two-PR pattern is the only thing the production-branch flow adds over plain GitHub Flow.
 
 ---
 
-## Releases and tagging
+## Releases
 
-We tag at **product milestones**, not per-PR.
+`main` accumulates merged feature PRs as Preview deploys (your "staging"). When you want a batch live, you cut a release.
 
 ### Versioning
 
-- Pre-public-beta: `v0.x.y`. Bump `y` for fix-only milestones, `x`
-  for feature milestones.
+- Pre-public-beta: `v0.x.y`. Bump `y` for fix-only releases, `x` for feature releases.
 - At public beta: cut `v1.0.0`.
-- After v1: full [semver](https://semver.org). MAJOR for breaking,
-  MINOR for additive, PATCH for fixes.
+- After v1: full [semver](https://semver.org). MAJOR for breaking, MINOR for additive, PATCH for fixes.
 
 ### How to release
 
 ```bash
-# 1. Make sure main is current and CI is green.
-git checkout main
-git pull
-gh run list --branch main --limit 1   # confirm green
+# 1. Make sure main is current and you've sanity-checked the staging Preview URL.
+git checkout main && git pull
+gh run list --branch main --limit 1   # CI status (informational; not a hard gate)
 
-# 2. Tag.
-git tag -a v0.2.0 -m "Admin dashboard GA"
-git push origin v0.2.0
+# 2. Open the release PR: main → production. Title MUST be `release: vX.Y.Z`.
+gh pr create --base production --head main \
+  --title "release: v0.3.0" \
+  --body "$(gh pr list --base main --state merged --limit 50 --json title,number --jq '.[] | "- #\(.number) \(.title)"')"
 
-# 3. Create the GitHub release with auto-generated notes.
-gh release create v0.2.0 \
+# 3. Review the PR diff (this IS your release notes). Edit the body if needed.
+
+# 4. Merge it. Vercel deploys to production automatically.
+gh pr merge --squash --delete-branch  # or --merge if you want each main commit on production verbatim
+
+# 5. Tag the production merge commit + create the GitHub release.
+git checkout production && git pull
+git tag -a v0.3.0 -m "v0.3.0"
+git push origin v0.3.0
+gh release create v0.3.0 \
+  --target production \
   --generate-notes \
-  --title "v0.2.0 — Admin dashboard GA"
+  --title "v0.3.0"
 ```
 
-`--generate-notes` reads PR titles between the previous tag (`v0.1.0`)
-and `v0.2.0` and builds a categorized changelog. This is why PR
-titles matter — they *are* the changelog.
+`--generate-notes` reads PR titles between the previous tag and this one and builds a categorized changelog. PR titles are your changelog — keep them clean.
+
+### Merge mode for the release PR
+
+- **Squash** — one commit on `production` per release. Cleanest `git log production`. Best when you don't need to revert individual feature merges from prod separately.
+- **Merge commit** — preserves every `main` commit on `production`. Best when you want `git log production` to show exactly what shipped, in order.
+- **Rebase** — replays each `main` commit linearly. Same outcome as merge commit but no merge commit node.
+
+Default to squash unless you have a reason to preserve the per-PR history on `production`.
 
 ---
 
