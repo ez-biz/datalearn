@@ -1,7 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import { z } from "zod"
 import {
     Difficulty,
     ProblemCreateInputBase,
+    ProblemUpdateInput,
     SlugSchema,
 } from "../../../lib/admin-validation"
 import { ApiError, DataLearnClient } from "../client.js"
@@ -41,6 +43,23 @@ function ok(payload: unknown) {
 // with the API's message, so the AI sees the actual validation error.
 const McpProblemCreateInputShape =
     ProblemCreateInputBase.omit({ status: true }).shape
+
+const McpProblemUpdateInputShape = {
+    slug: SlugSchema,
+    title: ProblemUpdateInput.shape.title,
+    newSlug: SlugSchema.optional(),
+    description: ProblemUpdateInput.shape.description,
+    difficulty: Difficulty.optional(),
+    solutionSql: ProblemCreateInputBase.shape.solutionSql,
+    expectedOutput: ProblemUpdateInput.shape.expectedOutput,
+    hints: ProblemUpdateInput.shape.hints,
+    tagSlugs: ProblemUpdateInput.shape.tagSlugs,
+    ordered: ProblemUpdateInput.shape.ordered,
+    schemaId: ProblemUpdateInput.shape.schemaId,
+    schemaDescription: ProblemUpdateInput.shape.schemaDescription,
+    dialects: ProblemUpdateInput.shape.dialects,
+    status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
+}
 
 const ListProblemsShape = {
     difficulty: Difficulty.optional(),
@@ -122,6 +141,32 @@ export function registerProblemTools(
                 )
                 return ok(created)
             } catch (err) {
+                throw toMcpError(err)
+            }
+        }
+    )
+
+    server.tool(
+        "update_problem",
+        "Update an existing SQL problem by slug. Only the fields you pass will be changed; omitted fields are left untouched. Use tagSlugs to replace the full tag set. Set status to ARCHIVED to hide a problem without deleting it (preserves submissions). Use newSlug to rename the problem slug. Returns the updated problem or {found: false}.",
+        McpProblemUpdateInputShape,
+        async (input) => {
+            const { slug, newSlug, ...updates } = input
+            const body = {
+                ...updates,
+                ...(newSlug !== undefined && { slug: newSlug }),
+            }
+            try {
+                const updated = await client.request<FullProblem>(
+                    "PATCH",
+                    `/api/admin/problems/${encodeURIComponent(slug)}`,
+                    body
+                )
+                return ok(updated)
+            } catch (err) {
+                if (err instanceof ApiError && err.status === 404) {
+                    return ok({ found: false })
+                }
                 throw toMcpError(err)
             }
         }

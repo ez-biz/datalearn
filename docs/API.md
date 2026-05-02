@@ -7,7 +7,7 @@ All admin operations on Data Learn are HTTP endpoints under `/api/admin/*`. The 
 - **Content type:** `application/json` for all requests with a body
 - **Auth:** session cookie (UI) **or** `Authorization: Bearer <api-key>` (automation)
 
-> **Tip — for AI-driven authoring** of SQL problems: the [`mcp-server/`](../mcp-server/) package wraps the relevant subset of these endpoints as MCP tools (`list_topics`, `create_topic`, `list_tags`, `create_tag`, `list_schemas`, `create_schema`, `list_problems`, `get_problem`, `create_problem`). Use it from Claude Desktop / Cursor / any MCP-aware client instead of hand-writing curl scripts. See [`mcp-server/README.md`](../mcp-server/README.md) for install + per-tool data formats. The MCP server uses the same Bearer-key auth path documented below; it forces `status: DRAFT` on every `create_problem` so AI-authored content lands in the admin review queue rather than going live.
+> **Tip — for AI-driven authoring** of SQL problems: the [`mcp-server/`](../mcp-server/) package wraps the relevant subset of these endpoints as MCP tools (`list_topics`, `create_topic`, `list_tags`, `create_tag`, `list_schemas`, `create_schema`, `update_schema`, `list_problems`, `get_problem`, `create_problem`, `update_problem`). Use it from Claude Desktop / Cursor / any MCP-aware client instead of hand-writing curl scripts. See [`mcp-server/README.md`](../mcp-server/README.md) for install + per-tool data formats. The MCP server uses the same Bearer-key auth path documented below; it forces `status: DRAFT` on every `create_problem` so AI-authored content lands in the admin review queue, while `update_problem` can deliberately publish or archive reviewed problems.
 
 ## Authentication
 
@@ -163,7 +163,9 @@ Partial update. All fields optional. Tag updates **replace** (not append) — se
   "difficulty": "EASY",
   "description": "…",
   "schemaDescription": "…",
+  "status": "ARCHIVED",
   "ordered": false,
+  "dialects": ["DUCKDB", "POSTGRES"],
   "hints": ["…"],
   "tagSlugs": ["joins"],     // replaces existing tags
   "schemaId": "cuid…",       // inline schema not supported on update
@@ -173,6 +175,8 @@ Partial update. All fields optional. Tag updates **replace** (not append) — se
 ```
 
 > **Note:** Inline schema creation is only supported on `POST`. To swap a problem's schema, create the schema first via `POST /api/admin/schemas`, then `PATCH` the problem with the new `schemaId`.
+>
+> Unlike `POST`, `PATCH` does **not** create missing tags. `tagSlugs` must all exist and replaces the full tag set. Use `status: "ARCHIVED"` to hide a problem without deleting submissions.
 
 ### `DELETE /api/admin/problems/{slug}`
 
@@ -217,6 +221,22 @@ curl -X DELETE http://localhost:3000/api/admin/problems/top-customers-by-revenue
 
 **Errors**
 
+- `409` `A schema with that name already exists.`
+
+### `PATCH /api/admin/schemas/{id}`
+
+Partial update. Both fields are optional; omitted fields are left unchanged.
+
+```jsonc
+{
+  "name": "hr-v2",
+  "sql": "CREATE TABLE employees (…); INSERT INTO employees VALUES (…);"
+}
+```
+
+**Errors**
+
+- `404` `Not found.`
 - `409` `A schema with that name already exists.`
 
 > **Type recommendation:** Use `DOUBLE` (not `DECIMAL`) for currency / floating point columns. DuckDB-WASM's Arrow→JSON conversion returns raw integer mantissas for `DECIMAL`, which breaks validation.

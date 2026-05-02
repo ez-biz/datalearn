@@ -92,6 +92,14 @@
   --hard-fg: 0 80% 75%;
 
   --ring: 142 71% 50%;
+
+  /* Shadows scale up in opacity on dark surfaces so the depth still reads. */
+  --shadow-xs: 0 1px 2px hsl(0 0% 0% / 0.30);
+  --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.35), 0 1px 3px hsl(0 0% 0% / 0.30);
+  --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.40), 0 2px 4px -2px hsl(0 0% 0% / 0.30);
+  --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.45), 0 4px 6px -4px hsl(0 0% 0% / 0.35);
+  --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.50), 0 8px 10px -6px hsl(0 0% 0% / 0.35);
+  --shadow-primary: 0 10px 25px -5px hsl(var(--primary) / 0.25);
 }
 
 @theme inline {
@@ -131,6 +139,15 @@
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
+
+  /* Shadow scale — used like seasoning, not bedding. See docs/design-system/README.md. */
+  --shadow-xs: 0 1px 2px hsl(220 13% 20% / 0.04);
+  --shadow-sm: 0 1px 2px hsl(220 13% 20% / 0.05), 0 1px 3px hsl(220 13% 20% / 0.06);
+  --shadow-md: 0 4px 6px -1px hsl(220 13% 20% / 0.08), 0 2px 4px -2px hsl(220 13% 20% / 0.06);
+  --shadow-lg: 0 10px 15px -3px hsl(220 13% 20% / 0.10), 0 4px 6px -4px hsl(220 13% 20% / 0.05);
+  --shadow-xl: 0 20px 25px -5px hsl(220 13% 20% / 0.10), 0 8px 10px -6px hsl(220 13% 20% / 0.04);
+  /* Brand-tinted glow — reserved for the marketing hero card. */
+  --shadow-primary: 0 10px 25px -5px hsl(var(--primary) / 0.15);
 }
 
 @layer base {

@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Github } from "lucide-react"
+import { SignInDialogButton } from "@/components/auth/SignInDialog"
 import { Logo } from "@/components/ui/Logo"
 
 export function Footer() {
@@ -19,22 +19,25 @@ export function Footer() {
                     </FooterColumn>
                     <FooterColumn title="Account">
                         <FooterLink href="/profile">Profile</FooterLink>
-                        <FooterLink href="/api/auth/signin">Sign in</FooterLink>
+                        <li>
+                            <SignInDialogButton className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                                Sign in
+                            </SignInDialogButton>
+                        </li>
                     </FooterColumn>
-                    <FooterColumn title="Project">
-                        <FooterLink
-                            href="https://github.com/ez-biz/datalearn"
-                            external
-                        >
-                            <Github className="h-3.5 w-3.5" /> GitHub
-                        </FooterLink>
+                    <FooterColumn title="Legal">
+                        <FooterLink href="/privacy">Privacy policy</FooterLink>
+                        <FooterLink href="/terms">Terms</FooterLink>
                     </FooterColumn>
                 </div>
                 <div className="mt-10 pt-6 border-t border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-muted-foreground">
                     <p>© {new Date().getFullYear()} Data Learn. All rights reserved.</p>
                     <p>
-                        Powered by <span className="font-medium text-foreground">DuckDB-WASM</span>{" "}
-                        in your browser.
+                        Powered by{" "}
+                        <span className="font-medium text-foreground">DuckDB-WASM</span>
+                        {" "}and{" "}
+                        <span className="font-medium text-foreground">PGlite</span>
+                        , in your browser.
                     </p>
                 </div>
             </div>

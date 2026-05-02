@@ -3,6 +3,7 @@ import { ChevronLeft } from "lucide-react"
 import { notFound, redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { signInPath } from "@/lib/auth-redirect"
 import { Container } from "@/components/ui/Container"
 import { MyArticleForm } from "@/components/me/MyArticleForm"
 
@@ -14,9 +15,9 @@ export const metadata = {
 type Props = { params: Promise<{ slug: string }> }
 
 export default async function EditMyArticlePage({ params }: Props) {
-    const session = await auth()
-    if (!session?.user?.id) redirect("/api/auth/signin")
     const { slug } = await params
+    const session = await auth()
+    if (!session?.user?.id) redirect(signInPath(`/me/articles/${slug}/edit`))
     const article = await prisma.article.findUnique({
         where: { slug },
         include: {

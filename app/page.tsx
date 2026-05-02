@@ -72,7 +72,7 @@ export default async function Home() {
                         <div>
                             <Badge variant="primary" className="mb-5">
                                 <Sparkles className="h-3 w-3" />
-                                Beta · v0.2
+                                Beta · v0.3
                             </Badge>
                             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.05]">
                                 Practice SQL the way{" "}

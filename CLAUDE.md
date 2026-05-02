@@ -2,7 +2,7 @@
 
 LeetCode-style SQL practice platform. Users write SQL in a Monaco editor; queries run in-browser via DuckDB-WASM **or** PGlite (real Postgres compiled to WASM, learner-toggleable per problem). Results are validated against expected output, and submissions are tracked per user.
 
-**Live**: <https://datalearn-iota.vercel.app> — Vercel + Neon. Auto-deploys from `main`; preview URLs per PR. `prisma migrate deploy` runs on every Vercel build. Health endpoint: `/api/health`. Full runbook in [`docs/DEPLOY.md`](./docs/DEPLOY.md).
+**Live**: <https://datalearn-iota.vercel.app> — Vercel + Neon. **`main` is integration; `production` is what's live.** Pushes to `main` (and any branch) deploy to a Preview URL only. Production deploys when a `main → production` PR merges (titled `release: vX.Y.Z`). `prisma migrate deploy` runs on every Vercel build. Health endpoint: `/api/health`. Full runbook in [`docs/DEPLOY.md`](./docs/DEPLOY.md); release runbook in [`.github/CONTRIBUTING.md`](./.github/CONTRIBUTING.md#releases).
 
 ## Stack
 
@@ -84,6 +84,7 @@ Rules of thumb:
 - [`docs/ROADMAP.md`](./docs/ROADMAP.md) — shipped work + planned. Updated when something ships.
 - [`docs/API.md`](./docs/API.md) — `/api/admin/*` REST reference with curl examples.
 - [`docs/DEPLOY.md`](./docs/DEPLOY.md) — first-time Vercel + Neon setup runbook, env-var matrix, migration + seed flow, admin bootstrap, health check, day-to-day workflow.
+- [`docs/design-system/`](./docs/design-system/) — exported handoff bundle from Claude Design (claude.ai/design). `README.md` is the brand voice + visual foundations spec (palette, typography, spacing, component recipes, copy rules). `colors_and_type.css` mirrors the live `app/globals.css` token contract. `ui_kits/web/` has hi-fi React/JSX recreations of every screen (Home, Practice, SignIn, Profile, Admin, Learn, ArticleReader, TopicDetail) — read these before making cross-cutting UI changes so new work matches the design language.
 - [`docs/ADMIN.md`](./docs/ADMIN.md) — admin-portal walkthrough.
 - [`mcp-server/README.md`](./mcp-server/README.md) — MCP install, Claude Desktop config, per-tool data formats. Source-of-truth for the AI-authoring contract.
 - [`docs/superpowers/specs/`](./docs/superpowers/specs/) and [`docs/superpowers/plans/`](./docs/superpowers/plans/) — design specs and implementation plans for major features (e.g. MCP server v1).

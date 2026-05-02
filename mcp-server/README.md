@@ -8,10 +8,11 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that lets an 
 |---|---|
 | `list_topics`, `create_topic` | Article topics (problems use tags, not topics). |
 | `list_tags`, `create_tag` | Problem tags. |
-| `list_schemas`, `create_schema` | SQL schemas (DDL + seed in one `sql` string). |
+| `list_schemas`, `create_schema`, `update_schema` | SQL schemas (DDL + seed in one `sql` string). |
 | `list_problems` | List problems (minimal projection, optional `difficulty` filter). |
 | `get_problem` | Fetch a single problem's full record by slug (use this to learn the `expectedOutput` JSON shape). |
 | `create_problem` | Create a new problem. **Always lands as DRAFT** — publish manually via the admin UI. |
+| `update_problem` | Patch an existing problem by slug. Can replace tags, rename with `newSlug`, and set `status` to `DRAFT`, `PUBLISHED`, or `ARCHIVED`. |
 
 ## Install
 
@@ -51,7 +52,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) a
 }
 ```
 
-Restart Claude Desktop. The 9 tools appear under the `datalearn` namespace.
+Restart Claude Desktop. The 11 tools appear under the `datalearn` namespace.
 
 ### Local development
 
@@ -98,7 +99,7 @@ The AI will:
 2. Call `list_problems` → find an existing problem to model the `expectedOutput` shape.
 3. Call `get_problem` on a similar problem → see the full JSON.
 4. Call `create_problem` with `schemaId: "<orders-id>"`, generated SQL solution, and a matching `expectedOutput`.
-5. Lands as DRAFT in `/admin/problems`. Review, fix, publish.
+5. Lands as DRAFT in `/admin/problems`. Review, then publish via the admin UI or a deliberate `update_problem` call.
 
 ## Authoring guide — exact data formats
 
@@ -109,7 +110,7 @@ This section is the source of truth for *what* to send to each tool. The Zod val
 1. **Check existing schemas.** Call `list_schemas`. If a fitting schema exists (e.g. `Ecommerce`), use its `id` as `schemaId` and skip `schemaInline`. Reuse beats duplication — schemas are referenced by every problem that runs against them.
 2. **Check existing tags.** Call `list_tags`. The `tagSlugs[]` field on `create_problem` only accepts slugs of tags that already exist. If you want a new tag, call `create_tag` first.
 3. **Mirror an existing problem's `expectedOutput`.** Call `get_problem` on a problem that exercises a similar data shape. Match the column names, value types, and key ordering it returns. The validator does row-by-row JSON equality.
-4. **Author and submit.** Call `create_problem`. The result lands as DRAFT in `/admin/problems` for human review. You cannot publish via this server.
+4. **Author and submit.** Call `create_problem`. The result lands as DRAFT in `/admin/problems` for human review. Use `update_problem` only after review to publish or archive.
 
 ### Field-by-field reference
 
@@ -128,7 +129,28 @@ This section is the source of truth for *what* to send to each tool. The Zod val
 | `schemaInline.sql` | string | 1–50,000 chars | One string containing CREATE TABLE statements + INSERT seed rows. See "Schema format" below. |
 | `expectedOutput` | string | 1–2,000,000 chars, **JSON-stringified array** | Required. Each element is a row object with the columns your SQL returns. See "expectedOutput format" below. |
 | `solutionSql` | string | ≤ 20,000 chars | Optional reference solution. Stored alongside the problem; not shown to learners. |
-| `status` | — | **NOT ACCEPTED** | The MCP tool input schema omits this field. Every `create_problem` lands as DRAFT. |
+| `status` | — | **NOT ACCEPTED on create** | The `create_problem` input schema omits this field. Every `create_problem` lands as DRAFT. Use `update_problem` to change status after review. |
+
+### `update_problem`
+
+`update_problem` identifies the existing problem by `slug`. Only fields you pass are changed; omitted fields are left untouched. To rename the URL slug, pass `newSlug` — this avoids ambiguity between "the slug to find" and "the slug to set".
+
+```json
+{
+  "slug": "total-revenue-per-customer",
+  "title": "Total revenue by customer",
+  "newSlug": "total-revenue-by-customer",
+  "status": "ARCHIVED",
+  "tagSlugs": ["aggregation", "joins"]
+}
+```
+
+Notes:
+
+- `tagSlugs` replaces the full tag set. Every slug must already exist; call `list_tags` or `create_tag` first.
+- `schemaId` may point to an existing schema. Inline schema creation is create-only.
+- `status: "ARCHIVED"` hides a problem from learners while preserving submissions.
+- Missing problems return `{ "found": false }`.
 
 ### Schema format (`schemaInline.sql` or `create_schema`'s `sql`)
 
@@ -241,14 +263,18 @@ The Next API runs Zod validation server-side; failures come back as `McpError(In
 { "name": "Ecommerce", "sql": "CREATE TABLE customers (...); INSERT INTO customers VALUES (...);" }
 ```
 
+**`update_schema`** — input `{ id, name?, sql? }`. Only passed fields change. Returns the updated schema or `{ found: false }`.
+
 **`list_problems`** — returns minimal projection (`number`, `slug`, `title`, `difficulty`, `status`, `tags`). `number` is the stable display ID (`#247.` LeetCode-style) — minted at create-time, never recycled. To inspect `expectedOutput` of a specific problem, follow up with `get_problem`.
 
 **`get_problem`** — input `{ slug }`. Output is the full record including `expectedOutput` and `solutionSql`. Returns `{ found: false }` if no such slug exists; tools should treat that as a normal "not present" signal, not an error.
 
+**`update_problem`** — input `{ slug, ...fields }`, with `newSlug` for slug rename. Returns the same full shape as `get_problem`, or `{ found: false }` if the current slug does not exist.
+
 ### What's NOT in v1
 
 - **Articles.** The `create_article` / `submit_article` / `approve_article` tools are deferred to v2. Article authoring stays in the existing UI (`/me/articles` for contributors, `/admin/articles` for admins) for now.
-- **Problem updates.** `update_problem`, `archive_problem`, `publish_problem` — deferred. Edit DRAFTs in `/admin/problems` after `create_problem` lands them.
+- **Delete tools.** There is intentionally no `delete_problem`; archive with `update_problem` instead so submission history is preserved.
 - **Validation pre-flight.** A `validate_problem` tool that runs `solutionSql` against `schemaInline` and checks the produced rows match `expectedOutput` — deferred. For now, errors surface only when a learner actually runs the query.
 
 ## Tests
@@ -261,7 +287,7 @@ npm run typecheck
 
 ## Safety notes
 
-- All `create_problem` calls land as DRAFT. The `status` field is not exposed at the tool layer; it cannot be set to PUBLISHED via this server.
+- All `create_problem` calls land as DRAFT. `update_problem` can change `status`, so treat publish/archive calls as deliberate admin actions.
 - **The Bearer key authenticates with full admin scope.** The v1 tool surface restricts itself to topics/tags/schemas/problems, but the *key itself* can call any `/api/admin/*` route directly (users, role grants, API key management, article approval, etc.). Treat it as a full admin credential. If leaked, rotate immediately via `/admin/api-keys`.
 - Anyone holding the key can also read every problem's `expectedOutput` (answer key) and `solutionSql` (reference solution) via `get_problem` — they're returned in full. The `list_problems` projection deliberately excludes them.
 - Periodically check `/admin/api-keys` for unusual `lastUsedAt` activity — abnormal call volume can indicate a leaked or misused key.
