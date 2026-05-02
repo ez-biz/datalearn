@@ -43,6 +43,7 @@ Practice SQL the way LeetCode does code. Real problems. Real schemas. A real dat
 # 1. Clone, install, generate Prisma client
 git clone https://github.com/ez-biz/datalearn.git
 cd datalearn
+git checkout main            # production is the default branch (= live); main is the integration branch you want for development
 npm install                  # also runs `prisma generate`
 
 # 2. Set up local Postgres and copy .env.example -> .env
