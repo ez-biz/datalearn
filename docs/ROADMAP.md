@@ -1,17 +1,19 @@
 # 🚀 Antigravity Data Learning Platform — Long-Term Roadmap
 
-> **Last updated:** 2026-05-01
-> **Status:** Active Development
-> **Version:** 0.1.0 (Beta) → 0.1.2 pending release tag
+> **Last updated:** 2026-05-02
+> **Status:** Live — <https://datalearn-iota.vercel.app>
+> **Version:** 0.1.0 (Beta) → 0.1.2 / 0.3 deployed, release tags pending
 
 ## Recently shipped
 
-### May 2026 — merged for v0.1.2, release tag pending
+### May 2026 — first prod deploy, V7 / V8 / Daily / Postgres engine
 
+- **First production deploy** — Vercel + Neon at <https://datalearn-iota.vercel.app>. Auto-deploys from `main`; per-PR preview URLs hit the dev DB. `prisma migrate deploy` runs on every Vercel build so schema is always in sync with the code that's about to serve traffic. Health endpoint at `/api/health` pings the DB. Repo plumbing for first-time setup landed in PR #51 (`.env.example`, `prisma.config.ts` `DIRECT_URL` fallback, `scripts/bootstrap-admin.mjs`, `app/api/health/route.ts`, `docs/DEPLOY.md`).
+- **Postgres engine alongside DuckDB-WASM** (PR #49). PGlite (real Postgres compiled to WASM) loads in-browser when the learner picks Postgres. Per-problem `dialects: Dialect[]` (default `[DUCKDB, POSTGRES]`); workspace shows a single-pill toggle in the editor header that flips engines on click. Schema parser, admin form, and MCP `list_problems` projection are all dialect-aware. Seed schemas standardized on portable `DOUBLE PRECISION`.
 - **V7 — Stable problem numbers** (PR #43). `SQLProblem.number Int @unique`, minted as `MAX(number)+1` inside the existing create transaction, backfilled by `createdAt ASC`, never recycled. Surfaces the `#NNN.` prefix on the practice list, workspace header, UserHome cards, and `/profile` recents. `/practice/<n>` numeric URL redirects to the canonical slug. MCP `list_problems` projection includes `number`. Public `/practice` now sorts by `number ASC` to match the LeetCode reading order.
 - **V8 — Custom problem lists** (PR #44). LeetCode-style "My Lists" — `ProblemList` + `ProblemListItem` with composite-PK dedupe and `position` column for reorder. Caps: 100 lists/user, 1000 items/list (pagination not needed in v1). Surfaces: `/me/lists` index, `/me/lists/[id]` detail with rename, delete, drag-and-drop reorder, sort menu (manual / recently added / recently solved / unsolved first / number), and per-row "Added X · Solved Y" / "Not solved" metadata. AddToListButton popover on the workspace header for one-click bookmarking. Last-solved info comes from a single indexed `Submission(userId, status)` groupBy — cheap even at the 1000-item cap.
 - **Daily Problem v1** (PR #46). One stable UTC daily problem with auto-fill fallback and admin manual override. `/daily` resolves today and redirects to the normal practice workspace. Signed-in home, UserMenu, and mobile nav surface the daily entry point and solved-today state. Uses normal `Submission` rows, so the existing activity streak remains the only streak.
-- **Repository governance baseline** (PR #28 + Phase B `gh api`). GitHub Flow + squash-only merges, branch protection on `main` (4 required status checks, linear history, no force-push, conversation resolution), `.github/CONTRIBUTING.md` / `PULL_REQUEST_TEMPLATE.md` / `CODEOWNERS` / `dependabot.yml`. Solo-tier today; collaborator-tier toggle queued in CONTRIBUTING.
+- **Repository governance baseline** (PR #28 + Phase B `gh api`). GitHub Flow + squash-only merges, branch protection on `main`. Later relaxed in solo phase: required-checks gate dropped (PR #48 — GitHub mergeable-state bug for solo no-reviewer repos), all three merge methods re-enabled (PR #50). Re-tighten when contributor #2 lands; CONTRIBUTING has the exact `gh api` one-liners.
 
 ### April 2026 — v0.1.0 foundation
 
