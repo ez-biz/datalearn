@@ -7,12 +7,18 @@
 # Schedule: weekly on Mondays. Daily floods the PR list; monthly drifts.
 # Group: minor + patch into one PR per ecosystem (less noise). Major
 # bumps stay individual so they get real review.
+#
+# target-branch: every entry pins `main`. The repo's default branch is
+# `production` (= what's live), so without this Dependabot would target
+# production and skip the staging Preview step. Bumps must bake on main
+# first like any other change.
 
 version: 2
 updates:
   # Root: Next.js app (npm)
   - package-ecosystem: "npm"
     directory: "/"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -36,6 +42,7 @@ updates:
   # MCP server (separate package.json)
   - package-ecosystem: "npm"
     directory: "/mcp-server"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -60,6 +67,7 @@ updates:
   # GitHub Actions — keep workflow actions current
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
