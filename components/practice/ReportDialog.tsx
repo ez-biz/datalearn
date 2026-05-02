@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Flag, Loader2, X } from "lucide-react"
+import { SignInDialogButton } from "@/components/auth/SignInDialog"
 import { Button } from "@/components/ui/Button"
 import { Field, Textarea } from "@/components/ui/Input"
 import { submitProblemReport } from "@/actions/reports"
@@ -73,13 +73,13 @@ export function ReportDialog({ problemSlug, isSignedIn }: ReportDialogProps) {
 
     if (!isSignedIn) {
         return (
-            <Link
-                href={`/api/auth/signin?callbackUrl=${encodeURIComponent(pathname ?? "/practice")}`}
+            <SignInDialogButton
+                callbackPath={pathname ?? "/practice"}
                 className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-                <Flag className="h-3 w-3" />
+                <Flag aria-hidden="true" className="h-3 w-3" />
                 Sign in to report
-            </Link>
+            </SignInDialogButton>
         )
     }
 

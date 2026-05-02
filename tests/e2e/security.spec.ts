@@ -133,14 +133,14 @@ test.describe("PR #11 — critical / high security fixes", () => {
         request,
     }) => {
         // Edge middleware now redirects anonymous /admin/* to
-        // /api/auth/signin?callbackUrl=... before the layout runs.
+        // /auth/signin?callbackUrl=... before the layout runs.
         const res = await request.get("/admin/problems", {
             maxRedirects: 0,
             failOnStatusCode: false,
         })
         expect(res.status()).toBeGreaterThanOrEqual(300)
         expect(res.status()).toBeLessThan(400)
-        expect(res.headers()["location"]).toContain("/api/auth/signin")
+        expect(res.headers()["location"]).toContain("/auth/signin")
     })
 })
 

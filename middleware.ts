@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { signInPath } from "@/lib/auth-redirect"
 
 /**
  * Edge gating for the admin surface.
@@ -50,9 +51,7 @@ export default auth((req) => {
                 { status: 401 }
             )
         }
-        const url = new URL("/api/auth/signin", req.nextUrl)
-        url.searchParams.set("callbackUrl", pathname)
-        return NextResponse.redirect(url)
+        return NextResponse.redirect(new URL(signInPath(pathname), req.nextUrl))
     }
 
     if (role !== "ADMIN") {

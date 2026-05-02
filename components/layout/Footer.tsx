@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { Github } from "lucide-react"
+import { SignInDialogButton } from "@/components/auth/SignInDialog"
 import { Logo } from "@/components/ui/Logo"
 
 export function Footer() {
@@ -19,7 +20,11 @@ export function Footer() {
                     </FooterColumn>
                     <FooterColumn title="Account">
                         <FooterLink href="/profile">Profile</FooterLink>
-                        <FooterLink href="/api/auth/signin">Sign in</FooterLink>
+                        <li>
+                            <SignInDialogButton className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                                Sign in
+                            </SignInDialogButton>
+                        </li>
                     </FooterColumn>
                     <FooterColumn title="Project">
                         <FooterLink

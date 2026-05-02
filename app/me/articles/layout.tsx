@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
+import { signInPath } from "@/lib/auth-redirect"
 
 export const metadata = {
     title: "My articles",
@@ -17,7 +18,7 @@ export default async function MeArticlesLayout({
 }) {
     const session = await auth()
     if (!session?.user?.id) {
-        redirect("/api/auth/signin?callbackUrl=/me/articles")
+        redirect(signInPath("/me/articles"))
     }
     if (
         session.user.role !== "CONTRIBUTOR" &&

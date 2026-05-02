@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { ArrowRight, ListPlus } from "lucide-react"
 import { auth } from "@/lib/auth"
+import { signInPath } from "@/lib/auth-redirect"
 import { Container } from "@/components/ui/Container"
 import { Card } from "@/components/ui/Card"
 import { EmptyState } from "@/components/ui/EmptyState"
@@ -29,7 +30,7 @@ function formatRelative(date: Date): string {
 
 export default async function MyListsPage() {
     const session = await auth()
-    if (!session?.user?.id) redirect("/api/auth/signin?callbackUrl=/me/lists")
+    if (!session?.user?.id) redirect(signInPath("/me/lists"))
 
     const lists = await getMyLists()
 

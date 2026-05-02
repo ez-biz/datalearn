@@ -12,10 +12,11 @@ import {
     Trophy,
 } from "lucide-react"
 import { auth } from "@/lib/auth"
+import { signInPath } from "@/lib/auth-redirect"
 import { redirect } from "next/navigation"
 import { Container } from "@/components/ui/Container"
 import { Card, CardContent } from "@/components/ui/Card"
-import { Badge, DifficultyBadge } from "@/components/ui/Badge"
+import { DifficultyBadge } from "@/components/ui/Badge"
 import { cn } from "@/lib/utils"
 import { getProfileData } from "@/actions/profile"
 import { ActivityHeatmap } from "@/components/profile/ActivityHeatmap"
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
 export default async function ProfilePage() {
     const session = await auth()
     if (!session?.user) {
-        redirect("/api/auth/signin?callbackUrl=/profile")
+        redirect(signInPath("/profile"))
     }
     const data = await getProfileData()
     if (!data) {

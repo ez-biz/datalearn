@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { ChevronLeft } from "lucide-react"
 import { auth } from "@/lib/auth"
+import { signInPath } from "@/lib/auth-redirect"
 import { Container } from "@/components/ui/Container"
 import { getList } from "@/actions/lists"
 import { getProblems } from "@/actions/problems"
@@ -21,7 +22,7 @@ export default async function ListDetailPage({ params }: Props) {
     const { id } = await params
     const session = await auth()
     if (!session?.user?.id)
-        redirect(`/api/auth/signin?callbackUrl=/me/lists/${id}`)
+        redirect(signInPath(`/me/lists/${id}`))
 
     const [list, { data: allProblems }] = await Promise.all([
         getList(id),
