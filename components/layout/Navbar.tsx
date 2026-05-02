@@ -3,6 +3,7 @@ import { CalendarCheck2, PenSquare, Shield } from "lucide-react"
 import { getExistingDailyStatusForCurrentUser } from "@/actions/daily"
 import { getNavLinks } from "@/actions/nav"
 import { auth } from "@/lib/auth"
+import { signInPath } from "@/lib/auth-redirect"
 import { prisma } from "@/lib/prisma"
 import { Logo } from "@/components/ui/Logo"
 import { LinkButton } from "@/components/ui/Button"
@@ -39,7 +40,10 @@ export async function Navbar() {
     const navItems = [
         { href: "/learn", label: "Learn" },
         { href: "/practice", label: "Practice" },
-        ...(pages?.map((p: any) => ({ href: `/${p.slug}`, label: p.title })) ?? []),
+        ...(pages?.map((p: { slug: string; title: string }) => ({
+            href: `/${p.slug}`,
+            label: p.title,
+        })) ?? []),
     ]
 
     return (
@@ -74,7 +78,7 @@ export async function Navbar() {
                             dailySolved={menuStats?.dailySolved ?? false}
                         />
                     ) : (
-                        <LinkButton href="/api/auth/signin" size="sm" className="ml-1">
+                        <LinkButton href={signInPath()} size="sm" className="ml-1">
                             Sign in
                         </LinkButton>
                     )}
@@ -122,7 +126,7 @@ export async function Navbar() {
                                 </div>
                             ) : (
                                 <Link
-                                    href="/api/auth/signin"
+                                    href={signInPath()}
                                     className="block w-full rounded-md bg-primary px-3 py-2 text-center text-sm font-medium text-primary-foreground hover:bg-primary-hover"
                                 >
                                     Sign in

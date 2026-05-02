@@ -3,6 +3,7 @@ import { Plus } from "lucide-react"
 import type { ArticleStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { signInPath } from "@/lib/auth-redirect"
 import { redirect } from "next/navigation"
 import { Container } from "@/components/ui/Container"
 import { Card } from "@/components/ui/Card"
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic"
 
 export default async function MyArticlesPage() {
     const session = await auth()
-    if (!session?.user?.id) redirect("/api/auth/signin?callbackUrl=/me/articles")
+    if (!session?.user?.id) redirect(signInPath("/me/articles"))
 
     const articles = await prisma.article.findMany({
         where: { authorId: session.user.id },

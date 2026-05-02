@@ -14,6 +14,7 @@ import {
     removeFromList,
     type ListSummary,
 } from "@/actions/lists"
+import { signInPath } from "@/lib/auth-redirect"
 import { cn } from "@/lib/utils"
 
 interface AddToListButtonProps {
@@ -123,9 +124,7 @@ export function AddToListButton({
     if (!isSignedIn) {
         return (
             <Link
-                href={`/api/auth/signin?callbackUrl=${encodeURIComponent(
-                    pathname ?? "/practice"
-                )}`}
+                href={signInPath(pathname ?? "/practice")}
                 className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
                 <Bookmark className="h-3 w-3" />

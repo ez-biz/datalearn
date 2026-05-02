@@ -7,6 +7,7 @@ import { Flag, Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Field, Textarea } from "@/components/ui/Input"
 import { submitProblemReport } from "@/actions/reports"
+import { signInPath } from "@/lib/auth-redirect"
 
 const KINDS = [
     { value: "WRONG_ANSWER", label: "Wrong expected answer" },
@@ -74,7 +75,7 @@ export function ReportDialog({ problemSlug, isSignedIn }: ReportDialogProps) {
     if (!isSignedIn) {
         return (
             <Link
-                href={`/api/auth/signin?callbackUrl=${encodeURIComponent(pathname ?? "/practice")}`}
+                href={signInPath(pathname ?? "/practice")}
                 className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
                 <Flag className="h-3 w-3" />

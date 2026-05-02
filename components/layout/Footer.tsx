@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Github } from "lucide-react"
 import { Logo } from "@/components/ui/Logo"
+import { signInPath } from "@/lib/auth-redirect"
 
 export function Footer() {
     return (
@@ -19,7 +20,7 @@ export function Footer() {
                     </FooterColumn>
                     <FooterColumn title="Account">
                         <FooterLink href="/profile">Profile</FooterLink>
-                        <FooterLink href="/api/auth/signin">Sign in</FooterLink>
+                        <FooterLink href={signInPath()}>Sign in</FooterLink>
                     </FooterColumn>
                     <FooterColumn title="Project">
                         <FooterLink
