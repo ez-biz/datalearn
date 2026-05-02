@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import type { ReactNode } from "react"
+import { createPortal } from "react-dom"
 import { Github, ShieldCheck, X } from "lucide-react"
 import {
     providerSignInPath,
@@ -82,6 +83,97 @@ export function SignInDialogButton({
         setOpen(true)
     }
 
+    const dialog =
+        open
+            ? createPortal(
+                  <div
+                      className="fixed inset-0 z-[80] flex items-center justify-center px-4 py-6"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label={panelLabel}
+                  >
+                      <button
+                          type="button"
+                          aria-label="Close sign-in dialog"
+                          className="absolute inset-0 cursor-default bg-background/80 backdrop-blur-sm"
+                          onClick={() => setOpen(false)}
+                      />
+                      <div
+                          ref={dialogRef}
+                          data-testid="sign-in-dialog-panel"
+                          className="relative w-full max-w-md rounded-lg border border-border bg-surface p-6 text-foreground shadow-xl sm:p-7"
+                      >
+                          <button
+                              ref={closeRef}
+                              type="button"
+                              aria-label="Close sign-in dialog"
+                              onClick={() => setOpen(false)}
+                              className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+                          >
+                              <X aria-hidden="true" className="h-4 w-4" />
+                          </button>
+
+                          <div className="pr-8">
+                              <Logo />
+                              <h2 className="mt-6 text-2xl font-bold tracking-tight">
+                                  Train like the query is going live.
+                              </h2>
+                              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                                  Continue with OAuth and return to your current
+                                  workspace.
+                              </p>
+                          </div>
+
+                          <div className="mt-6 space-y-3">
+                              <ProviderAnchor
+                                  href={providerSignInPath(
+                                      "google",
+                                      resolvedCallback
+                                  )}
+                                  primary
+                                  marker="G"
+                              >
+                                  Continue with Google
+                              </ProviderAnchor>
+                              <ProviderAnchor
+                                  href={providerSignInPath(
+                                      "github",
+                                      resolvedCallback
+                                  )}
+                                  icon={
+                                      <Github
+                                          aria-hidden="true"
+                                          className="h-4 w-4"
+                                      />
+                                  }
+                              >
+                                  Continue with GitHub
+                              </ProviderAnchor>
+                          </div>
+
+                          <div className="mt-6 flex items-start gap-2 border-t border-border pt-5 text-xs leading-5 text-muted-foreground">
+                              <ShieldCheck
+                                  aria-hidden="true"
+                                  className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+                              />
+                              <p>
+                                  OAuth is handled by the provider. Data Learn
+                                  never asks for or stores provider passwords.
+                              </p>
+                          </div>
+
+                          <Link
+                              href={signInPath(resolvedCallback)}
+                              className="mt-5 inline-flex text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                              Open full sign-in page
+                          </Link>
+                      </div>
+                  </div>,
+                  document.body
+              )
+            : null
+
     return (
         <>
             <button
@@ -92,92 +184,7 @@ export function SignInDialogButton({
             >
                 {children}
             </button>
-
-            {open && (
-                <div
-                    className="fixed inset-0 z-[80] flex items-center justify-center px-4 py-6"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label={panelLabel}
-                >
-                    <button
-                        type="button"
-                        aria-label="Close sign-in dialog"
-                        className="absolute inset-0 cursor-default bg-background/80 backdrop-blur-sm"
-                        onClick={() => setOpen(false)}
-                    />
-                    <div
-                        ref={dialogRef}
-                        className="relative w-full max-w-md rounded-lg border border-border bg-surface p-6 text-foreground shadow-xl sm:p-7"
-                    >
-                        <button
-                            ref={closeRef}
-                            type="button"
-                            aria-label="Close sign-in dialog"
-                            onClick={() => setOpen(false)}
-                            className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
-                        >
-                            <X aria-hidden="true" className="h-4 w-4" />
-                        </button>
-
-                        <div className="pr-8">
-                            <Logo />
-                            <h2 className="mt-6 text-2xl font-bold tracking-tight">
-                                Train like the query is going live.
-                            </h2>
-                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                                Continue with OAuth and return to your current
-                                workspace.
-                            </p>
-                        </div>
-
-                        <div className="mt-6 space-y-3">
-                            <ProviderAnchor
-                                href={providerSignInPath(
-                                    "google",
-                                    resolvedCallback
-                                )}
-                                primary
-                                marker="G"
-                            >
-                                Continue with Google
-                            </ProviderAnchor>
-                            <ProviderAnchor
-                                href={providerSignInPath(
-                                    "github",
-                                    resolvedCallback
-                                )}
-                                icon={
-                                    <Github
-                                        aria-hidden="true"
-                                        className="h-4 w-4"
-                                    />
-                                }
-                            >
-                                Continue with GitHub
-                            </ProviderAnchor>
-                        </div>
-
-                        <div className="mt-6 flex items-start gap-2 border-t border-border pt-5 text-xs leading-5 text-muted-foreground">
-                            <ShieldCheck
-                                aria-hidden="true"
-                                className="mt-0.5 h-4 w-4 shrink-0 text-primary"
-                            />
-                            <p>
-                                OAuth is handled by the provider. Data Learn
-                                never asks for or stores provider passwords.
-                            </p>
-                        </div>
-
-                        <Link
-                            href={signInPath(resolvedCallback)}
-                            className="mt-5 inline-flex text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                            Open full sign-in page
-                        </Link>
-                    </div>
-                </div>
-            )}
+            {dialog}
         </>
     )
 }

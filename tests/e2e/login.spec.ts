@@ -1,6 +1,28 @@
 import { test, expect } from "@playwright/test"
 
 test.describe("custom sign-in flow", () => {
+    test("home navbar sign-in dialog is centered and unclipped", async ({
+        page,
+    }) => {
+        await page.setViewportSize({ width: 1440, height: 900 })
+        await page.goto("/")
+
+        await page
+            .getByRole("banner")
+            .getByRole("button", { name: "Sign in" })
+            .click()
+
+        const panel = page.getByTestId("sign-in-dialog-panel")
+        await expect(panel).toBeVisible()
+
+        const box = await panel.boundingBox()
+        if (!box) throw new Error("Sign-in dialog panel has no bounding box")
+        const viewportHeight = await page.evaluate(() => window.innerHeight)
+
+        expect(box.y).toBeGreaterThanOrEqual(24)
+        expect(box.y + box.height).toBeLessThanOrEqual(viewportHeight - 24)
+    })
+
     test("navbar sign-in opens provider dialog for current page", async ({
         page,
     }) => {
