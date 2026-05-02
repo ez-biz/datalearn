@@ -20,12 +20,14 @@ describe("buildServer", () => {
         ).toThrow()
     })
 
-    it("returns a server with all 9 tools registered", () => {
+    it("returns a server with all 11 tools registered", () => {
         const { server } = buildServer({
             apiKey: "k",
             baseUrl: "http://localhost:3000",
         })
-        const tools = (server as any)._registeredTools as Record<string, unknown>
+        const tools = (
+            server as unknown as { _registeredTools: Record<string, unknown> }
+        )._registeredTools
         const names = Object.keys(tools).sort()
         expect(names).toEqual(
             [
@@ -38,6 +40,8 @@ describe("buildServer", () => {
                 "list_schemas",
                 "list_tags",
                 "list_topics",
+                "update_problem",
+                "update_schema",
             ].sort()
         )
     })

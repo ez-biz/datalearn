@@ -2,7 +2,7 @@
 // End-to-end smoke test for the MCP server.
 // 1. Seed a temporary API key in the dev DB.
 // 2. Spawn the MCP server with that key.
-// 3. Send JSON-RPC over stdio for each of the 9 tools.
+// 3. Send JSON-RPC over stdio for each of the 11 tools.
 // 4. Revoke the key.
 
 import "dotenv/config"
@@ -17,7 +17,7 @@ const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
 const ADMIN_EMAIL = "anchitgupt2012@gmail.com"
-const BASE_URL = "http://localhost:3000"
+const BASE_URL = process.env.DATALEARN_BASE_URL ?? "http://localhost:3000"
 
 function hashApiKey(plaintext) {
     const secret = process.env.API_KEY_HASH_SECRET
@@ -165,8 +165,8 @@ async function main() {
         const tools = await mcp.request("tools/list")
         const names = tools.result?.tools?.map((t) => t.name).sort() ?? []
         console.log(`  ✓ tools: ${names.join(", ")}`)
-        if (names.length !== 9) {
-            throw new Error(`expected 9 tools, got ${names.length}`)
+        if (names.length !== 11) {
+            throw new Error(`expected 11 tools, got ${names.length}`)
         }
 
         console.log("\n[harness] read-only tools...")
@@ -234,6 +234,12 @@ async function main() {
         const schemaPayload = JSON.parse(schema.result?.content?.[0]?.text ?? "{}")
         const schemaId = schemaPayload.id
 
+        const updatedSchema = await mcp.callTool("update_schema", {
+            id: schemaId,
+            name: `MCP Schema Updated ${stamp}`,
+        })
+        passes.push(logResult("update_schema", updatedSchema))
+
         const problemSlug = `mcp-problem-${stamp}`
         const created = await mcp.callTool("create_problem", {
             title: `MCP Test Problem ${stamp}`,
@@ -270,6 +276,31 @@ async function main() {
         } else {
             console.log(
                 `  ✗ create_problem expected positive integer number, got ${createdPayload.number}`
+            )
+            passes.push(false)
+        }
+
+        const updatedProblem = await mcp.callTool("update_problem", {
+            slug: problemSlug,
+            title: `MCP Test Problem Updated ${stamp}`,
+            status: "ARCHIVED",
+            tagSlugs: [tagSlug],
+        })
+        passes.push(logResult("update_problem", updatedProblem))
+        const updatedProblemPayload = JSON.parse(
+            updatedProblem.result?.content?.[0]?.text ?? "{}"
+        )
+        if (
+            updatedProblemPayload.status === "ARCHIVED" &&
+            updatedProblemPayload.tags?.some((tag) => tag.slug === tagSlug)
+        ) {
+            console.log(
+                `  ✓ update_problem archived problem and replaced tags`
+            )
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ update_problem expected status=ARCHIVED and tag=${tagSlug}, got ${updatedProblem.result?.content?.[0]?.text}`
             )
             passes.push(false)
         }

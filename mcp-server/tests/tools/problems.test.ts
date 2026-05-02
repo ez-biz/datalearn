@@ -21,6 +21,19 @@ function makeServer() {
     return new McpServer({ name: "test", version: "0.0.0" })
 }
 
+type ToolResult = { content: Array<{ text: string }> }
+type RegisteredTool = {
+    handler: (
+        input: Record<string, unknown>,
+        extra: Record<string, unknown>
+    ) => Promise<ToolResult>
+}
+
+function registeredTools(server: McpServer): Record<string, RegisteredTool> {
+    return (server as unknown as { _registeredTools: Record<string, RegisteredTool> })
+        ._registeredTools
+}
+
 const sampleFullProblem = {
     id: "1",
     slug: "simple-select",
@@ -35,7 +48,7 @@ const sampleFullProblem = {
 }
 
 describe("problems tools", () => {
-    it("registers list_problems, get_problem, create_problem", () => {
+    it("registers list_problems, get_problem, create_problem, update_problem", () => {
         const server = makeServer()
         const client = new DataLearnClient(
             "k",
@@ -43,10 +56,11 @@ describe("problems tools", () => {
             vi.fn()
         )
         registerProblemTools(server, client)
-        const tools = (server as any)._registeredTools as Record<string, unknown>
+        const tools = registeredTools(server)
         expect(Object.keys(tools)).toContain("list_problems")
         expect(Object.keys(tools)).toContain("get_problem")
         expect(Object.keys(tools)).toContain("create_problem")
+        expect(Object.keys(tools)).toContain("update_problem")
     })
 
     it("list_problems projects fields and excludes expectedOutput/solutionSql", async () => {
@@ -60,7 +74,7 @@ describe("problems tools", () => {
             fetch
         )
         registerProblemTools(server, client)
-        const tool = (server as any)._registeredTools.list_problems
+        const tool = registeredTools(server).list_problems
         const result = await tool.handler({}, {})
         const text = result.content[0].text
         expect(text).toContain("simple-select")
@@ -85,7 +99,7 @@ describe("problems tools", () => {
             fetch
         )
         registerProblemTools(server, client)
-        const tool = (server as any)._registeredTools.list_problems
+        const tool = registeredTools(server).list_problems
         const result = await tool.handler({ difficulty: "MEDIUM" }, {})
         const parsed = JSON.parse(result.content[0].text)
         expect(parsed).toHaveLength(1)
@@ -101,7 +115,7 @@ describe("problems tools", () => {
             fetch
         )
         registerProblemTools(server, client)
-        const tool = (server as any)._registeredTools.get_problem
+        const tool = registeredTools(server).get_problem
         const result = await tool.handler({ slug: "simple-select" }, {})
         expect(fetch).toHaveBeenCalledWith(
             "http://localhost:3000/api/admin/problems/simple-select",
@@ -119,7 +133,7 @@ describe("problems tools", () => {
             fetch
         )
         registerProblemTools(server, client)
-        const tool = (server as any)._registeredTools.get_problem
+        const tool = registeredTools(server).get_problem
         const result = await tool.handler({ slug: "nope" }, {})
         expect(JSON.parse(result.content[0].text)).toEqual({ found: false })
     })
@@ -135,7 +149,7 @@ describe("problems tools", () => {
             fetch
         )
         registerProblemTools(server, client)
-        const tool = (server as any)._registeredTools.create_problem
+        const tool = registeredTools(server).create_problem
 
         // Even if status="PUBLISHED" is smuggled in, the handler's explicit
         // status: "DRAFT" override (later in spread) wins.
@@ -151,11 +165,74 @@ describe("problems tools", () => {
                 },
                 expectedOutput: "[]",
                 status: "PUBLISHED",
-            } as any,
+            },
             {}
         )
         const call = fetch.mock.calls[0]
         const body = JSON.parse(call[1].body as string)
         expect(body.status).toBe("DRAFT")
+    })
+
+    it("update_problem PATCHes only the passed fields and returns the updated problem", async () => {
+        const updated = {
+            ...sampleFullProblem,
+            title: "Updated title",
+            status: "ARCHIVED",
+            tags: [{ id: "t2", slug: "joins", name: "Joins" }],
+        }
+        const fetch = vi.fn().mockResolvedValue(ok({ data: updated }))
+        const server = makeServer()
+        const client = new DataLearnClient(
+            "k",
+            "http://localhost:3000",
+            fetch
+        )
+        registerProblemTools(server, client)
+        const tool = registeredTools(server).update_problem
+
+        const result = await tool.handler(
+            {
+                slug: "simple-select",
+                title: "Updated title",
+                status: "ARCHIVED",
+                tagSlugs: ["joins"],
+            },
+            {}
+        )
+
+        expect(fetch).toHaveBeenCalledWith(
+            "http://localhost:3000/api/admin/problems/simple-select",
+            expect.objectContaining({ method: "PATCH" })
+        )
+        const call = fetch.mock.calls[0]
+        expect(JSON.parse(call[1].body as string)).toEqual({
+            title: "Updated title",
+            status: "ARCHIVED",
+            tagSlugs: ["joins"],
+        })
+        expect(JSON.parse(result.content[0].text)).toMatchObject({
+            slug: "simple-select",
+            title: "Updated title",
+            status: "ARCHIVED",
+        })
+    })
+
+    it("update_problem returns {found:false} on 404", async () => {
+        const fetch = vi.fn().mockResolvedValue(fail("Not found", 404))
+        const server = makeServer()
+        const client = new DataLearnClient(
+            "k",
+            "http://localhost:3000",
+            fetch
+        )
+        registerProblemTools(server, client)
+        const tool = registeredTools(server).update_problem
+
+        const result = await tool.handler(
+            { slug: "missing-problem", title: "Nope" },
+            {}
+        )
+
+        expect(JSON.parse(result.content[0].text)).toEqual({ found: false })
     })
 })

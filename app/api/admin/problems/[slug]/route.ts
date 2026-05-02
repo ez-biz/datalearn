@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
+import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { withAdmin } from "@/lib/api-auth"
 import { ProblemUpdateInput } from "@/lib/admin-validation"
@@ -58,7 +59,15 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                 if (!ok) throw new Error("SCHEMA_NOT_FOUND")
             }
 
-            const data: any = {
+            if (input.slug && input.slug !== slug) {
+                const slugOwner = await tx.sQLProblem.findUnique({
+                    where: { slug: input.slug },
+                    select: { id: true },
+                })
+                if (slugOwner) throw new Error("SLUG_TAKEN")
+            }
+
+            const data: Prisma.SQLProblemUpdateInput = {
                 ...(input.title !== undefined && { title: input.title }),
                 ...(input.slug !== undefined && { slug: input.slug }),
                 ...(input.difficulty !== undefined && { difficulty: input.difficulty }),
@@ -80,18 +89,19 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
             }
 
             if (input.tagSlugs !== undefined) {
-                const tagIds: string[] = []
-                for (const tagSlug of input.tagSlugs) {
-                    const tag = await tx.tag.upsert({
-                        where: { slug: tagSlug },
-                        update: {},
-                        create: { slug: tagSlug, name: tagSlug.replace(/-/g, " ") },
-                        select: { id: true },
-                    })
-                    tagIds.push(tag.id)
+                const tags = await tx.tag.findMany({
+                    where: { slug: { in: input.tagSlugs } },
+                    select: { id: true, slug: true },
+                })
+                const found = new Set(tags.map((tag) => tag.slug))
+                const missing = input.tagSlugs.filter(
+                    (tagSlug) => !found.has(tagSlug)
+                )
+                if (missing.length > 0) {
+                    throw new Error(`TAGS_NOT_FOUND:${missing.join(",")}`)
                 }
                 data.tags = {
-                    set: tagIds.map((id) => ({ id })),
+                    set: tags.map((tag) => ({ id: tag.id })),
                 }
             }
 
@@ -99,21 +109,39 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                 where: { id: existing.id },
                 data,
                 include: {
-                    schema: { select: { id: true, name: true } },
+                    schema: { select: { id: true, name: true, sql: true } },
                     tags: { select: { id: true, name: true, slug: true } },
+                    _count: { select: { submissions: true } },
                 },
             })
             return result
         })
         return NextResponse.json({ data: updated })
-    } catch (e: any) {
-        if (e?.message === "SCHEMA_NOT_FOUND") {
+    } catch (e: unknown) {
+        const error = e as { code?: string; message?: string }
+        if (error.message === "SCHEMA_NOT_FOUND") {
             return NextResponse.json(
                 { error: "schemaId does not match any SqlSchema." },
                 { status: 400 }
             )
         }
-        if (e?.code === "P2002") {
+        if (error.message === "SLUG_TAKEN") {
+            return NextResponse.json(
+                { error: "A problem with that slug already exists." },
+                { status: 409 }
+            )
+        }
+        if (
+            typeof error.message === "string" &&
+            error.message.startsWith("TAGS_NOT_FOUND:")
+        ) {
+            const missing = error.message.slice("TAGS_NOT_FOUND:".length)
+            return NextResponse.json(
+                { error: `Unknown tag slug(s): ${missing}.` },
+                { status: 400 }
+            )
+        }
+        if (error.code === "P2002") {
             return NextResponse.json(
                 { error: "A problem with that slug already exists." },
                 { status: 409 }
@@ -132,8 +160,9 @@ export const DELETE = withAdmin(async (_req, _principal, ctx: Ctx) => {
     try {
         await prisma.sQLProblem.delete({ where: { slug } })
         return NextResponse.json({ ok: true })
-    } catch (e: any) {
-        if (e?.code === "P2025") {
+    } catch (e: unknown) {
+        const error = e as { code?: string }
+        if (error.code === "P2025") {
             return NextResponse.json({ error: "Not found." }, { status: 404 })
         }
         console.error("Delete problem failed:", e)
