@@ -8,6 +8,7 @@ import {
     Bookmark,
     CalendarCheck2,
     CheckCircle2,
+    History,
     LogOut,
     PenSquare,
     Shield,
@@ -215,6 +216,12 @@ export function UserMenu({
                             onClick={() => setOpen(false)}
                         />
                         <MenuItem
+                            href="/profile#submissions"
+                            icon={<History className="h-4 w-4" />}
+                            label="Submissions"
+                            onClick={() => setOpen(false)}
+                        />
+                        <MenuItem
                             href="/me/lists"
                             icon={<Bookmark className="h-4 w-4" />}
                             label="My lists"
@@ -235,6 +242,11 @@ export function UserMenu({
                                 icon={<Shield className="h-4 w-4" />}
                                 label="Admin"
                                 tone="accent"
+                                trailing={
+                                    <span className="ml-auto rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-accent bg-accent/10">
+                                        Staff
+                                    </span>
+                                }
                                 onClick={() => setOpen(false)}
                             />
                         )}
