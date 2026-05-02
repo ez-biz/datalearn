@@ -1,6 +1,56 @@
 import { test, expect } from "@playwright/test"
 
-test.describe("custom sign-in page", () => {
+test.describe("custom sign-in flow", () => {
+    test("navbar sign-in opens provider dialog for current page", async ({
+        page,
+    }) => {
+        await page.goto("/practice")
+
+        await page
+            .getByRole("banner")
+            .getByRole("button", { name: "Sign in" })
+            .click()
+
+        const dialog = page.getByRole("dialog", {
+            name: /sign in to data learn/i,
+        })
+        await expect(dialog).toBeVisible()
+        await expect(
+            dialog.getByRole("link", { name: /continue with google/i })
+        ).toHaveAttribute(
+            "href",
+            "/api/auth/signin/google?callbackUrl=%2Fpractice"
+        )
+        await expect(
+            dialog.getByRole("link", { name: /continue with github/i })
+        ).toHaveAttribute(
+            "href",
+            "/api/auth/signin/github?callbackUrl=%2Fpractice"
+        )
+
+        await page.keyboard.press("Escape")
+        await expect(dialog).toBeHidden()
+    })
+
+    test("inline report sign-in opens provider dialog for the practice page", async ({
+        page,
+    }) => {
+        await page.goto("/practice/simple-select")
+
+        await page.getByRole("button", { name: "Sign in to report" }).click()
+
+        const dialog = page.getByRole("dialog", {
+            name: /sign in to data learn/i,
+        })
+        await expect(dialog).toBeVisible()
+        await expect(
+            dialog.getByRole("link", { name: /continue with google/i })
+        ).toHaveAttribute(
+            "href",
+            "/api/auth/signin/google?callbackUrl=%2Fpractice%2Fsimple-select"
+        )
+    })
+
     test("renders provider actions", async ({ page }) => {
         await page.goto("/auth/signin")
 

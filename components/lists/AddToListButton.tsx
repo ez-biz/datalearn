@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useRef, useState, useTransition } from "react"
-import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Bookmark, BookmarkCheck, Check, Loader2, Plus } from "lucide-react"
+import { SignInDialogButton } from "@/components/auth/SignInDialog"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import {
@@ -14,7 +14,6 @@ import {
     removeFromList,
     type ListSummary,
 } from "@/actions/lists"
-import { signInPath } from "@/lib/auth-redirect"
 import { cn } from "@/lib/utils"
 
 interface AddToListButtonProps {
@@ -123,13 +122,13 @@ export function AddToListButton({
 
     if (!isSignedIn) {
         return (
-            <Link
-                href={signInPath(pathname ?? "/practice")}
+            <SignInDialogButton
+                callbackPath={pathname ?? "/practice"}
                 className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-                <Bookmark className="h-3 w-3" />
+                <Bookmark aria-hidden="true" className="h-3 w-3" />
                 Save to list
-            </Link>
+            </SignInDialogButton>
         )
     }
 

@@ -2,11 +2,11 @@
 
 > Date: 2026-05-02
 > Status: Approved design
-> Scope: Custom sign-in page UI using existing Auth.js provider routes
+> Scope: Hybrid sign-in dialog plus fallback page using existing Auth.js provider routes
 
 ## Goal
 
-Replace the default Auth.js sign-in experience with a polished Data Learn sign-in screen that feels like a focused SQL practice workspace. The page should make OAuth sign-in clear, fast, and trustworthy without changing the existing auth implementation.
+Replace the default Auth.js sign-in experience with a polished Data Learn sign-in flow that feels like a focused SQL practice workspace. In-app sign-in entry points should open a compact dialog so learners keep context, while `/auth/signin` remains the fallback page for server redirects, direct links, and OAuth error states. The flow should make OAuth sign-in clear, fast, and trustworthy without changing the existing auth implementation.
 
 ## Non-Goals
 
@@ -18,7 +18,7 @@ Replace the default Auth.js sign-in experience with a polished Data Learn sign-i
 
 ## Route And Auth Boundary
 
-Add a custom page at `/auth/signin`.
+Add a reusable in-app sign-in dialog and keep the custom page at `/auth/signin`.
 
 This page links to the existing provider endpoints:
 
@@ -27,7 +27,7 @@ This page links to the existing provider endpoints:
 
 Each provider link preserves a validated `callbackUrl` query parameter. A callback is valid only when it is an internal path beginning with `/` and not beginning with `//`. Invalid, missing, or external callback values fall back to `/`.
 
-Existing sign-in entry points should move from `/api/auth/signin` to `/auth/signin` where the user should see the custom page first. The underlying Auth.js route remains available for provider handoff and should not be modified.
+In-app sign-in entry points should open the dialog when JavaScript is available. Protected server redirects and direct navigation should use `/auth/signin` as the canonical fallback. The underlying Auth.js route remains available for provider handoff and should not be modified.
 
 ## Visual Direction
 
@@ -45,20 +45,20 @@ Avoid a one-note decorative gradient. Depth should come from borders, surface co
 
 ## Layout
 
-Desktop layout:
+Fallback page desktop layout:
 
 - two-column composition within the normal app shell
 - left side: training workspace visual, such as a compact SQL editor, result rows, progress/status chips, and problem context
 - right side: focused sign-in panel with the Data Learn mark, headline, provider buttons, error state, and short trust note
 
-Mobile layout:
+Fallback page mobile layout:
 
 - single column
 - sign-in action appears early in the viewport
 - workspace visual compresses below the action or becomes a smaller supporting panel
 - no horizontal scrolling at 375px width
 
-The sign-in panel can be a card. Do not nest cards inside that panel. Supporting workspace elements can be separate panels or inline blocks, but the page should not become a card-heavy layout.
+The dialog should reuse the sign-in panel content in a compact form: Data Learn mark, headline, provider buttons, optional error state, short trust note, and a small link to the fallback page. The dialog must trap focus through normal modal semantics, close on Escape/backdrop click, and restore focus to the trigger. The fallback page can keep the larger training workspace visual. Do not nest cards inside the dialog panel.
 
 ## Content
 
@@ -94,13 +94,17 @@ Unknown errors use the same general message. Do not expose internal auth details
 
 ## Integration Points
 
-Update sign-in links that currently send users directly to `/api/auth/signin` so they use `/auth/signin` instead. Known entry points include:
+Update sign-in links that currently send users directly to `/api/auth/signin` so they open the dialog when they are in an interactive client surface. Known dialog entry points include:
 
 - desktop navbar sign-in button
 - mobile navigation sign-in action
 - footer sign-in link
-- protected-page redirects where a callback should be preserved
 - inline anonymous CTAs such as report/list actions
+
+Server-only and protected route redirects should continue to use `/auth/signin` with a safe callback:
+
+- protected-page redirects where a callback should be preserved
+- middleware admin page redirects
 
 Provider handoff still uses `/api/auth/signin/<provider>`.
 
@@ -117,6 +121,8 @@ E2E or browser checks:
 - `/auth/signin` renders provider actions
 - `/auth/signin?callbackUrl=/profile` builds provider links with `/profile`
 - `/auth/signin?callbackUrl=https://example.com` falls back to `/`
+- in-app sign-in triggers open a dialog with provider links for the current path
+- Escape and close button dismiss the dialog
 - desktop viewport around 1440px has a balanced two-column layout
 - mobile viewport around 375px has no horizontal scroll and keeps the sign-in action visible
 

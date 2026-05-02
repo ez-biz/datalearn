@@ -3,10 +3,9 @@ import { CalendarCheck2, PenSquare, Shield } from "lucide-react"
 import { getExistingDailyStatusForCurrentUser } from "@/actions/daily"
 import { getNavLinks } from "@/actions/nav"
 import { auth } from "@/lib/auth"
-import { signInPath } from "@/lib/auth-redirect"
 import { prisma } from "@/lib/prisma"
+import { SignInDialogButton } from "@/components/auth/SignInDialog"
 import { Logo } from "@/components/ui/Logo"
-import { LinkButton } from "@/components/ui/Button"
 import { ThemeToggle } from "@/components/ui/ThemeToggle"
 import { NavLink } from "./NavLink"
 import { MobileNav } from "./MobileNav"
@@ -78,9 +77,9 @@ export async function Navbar() {
                             dailySolved={menuStats?.dailySolved ?? false}
                         />
                     ) : (
-                        <LinkButton href={signInPath()} size="sm" className="ml-1">
+                        <SignInDialogButton className="ml-1 inline-flex h-8 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground shadow-sm transition-[background-color,box-shadow,scale,opacity] duration-150 hover:bg-primary-hover active:scale-[0.96]">
                             Sign in
-                        </LinkButton>
+                        </SignInDialogButton>
                     )}
                     <MobileNav
                         items={navItems}
@@ -125,12 +124,12 @@ export async function Navbar() {
                                     )}
                                 </div>
                             ) : (
-                                <Link
-                                    href={signInPath()}
-                                    className="block w-full rounded-md bg-primary px-3 py-2 text-center text-sm font-medium text-primary-foreground hover:bg-primary-hover"
+                                <SignInDialogButton
+                                    className="block w-full rounded-md bg-primary px-3 py-2 text-center text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
+                                    panelLabel="Sign in from navigation"
                                 >
                                     Sign in
-                                </Link>
+                                </SignInDialogButton>
                             )
                         }
                     />

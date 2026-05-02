@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a custom Data Learn sign-in screen at `/auth/signin` while keeping the existing Auth.js API/provider logic unchanged.
+**Goal:** Build a custom Data Learn sign-in dialog for in-app actions plus a fallback screen at `/auth/signin`, while keeping the existing Auth.js API/provider logic unchanged.
 
-**Architecture:** Add one pure URL helper for callback sanitization and provider handoff URLs, then build a server-rendered sign-in page that links to the existing Auth.js provider endpoints. Update sign-in entry points to route users through `/auth/signin`; provider callbacks still go through `/api/auth/signin/<provider>`.
+**Architecture:** Add one pure URL helper for callback sanitization and provider handoff URLs, then build a server-rendered fallback sign-in page and a reusable client-side sign-in dialog. Interactive app entry points open the dialog with the current path as callback; protected server redirects still route through `/auth/signin`; provider callbacks still go through `/api/auth/signin/<provider>`.
 
 **Tech Stack:** Next.js App Router, Auth.js v5, React 19, Tailwind CSS v4 tokens, lucide-react icons, Playwright e2e tests.
 
@@ -14,10 +14,11 @@
 
 - Create `lib/auth-redirect.ts`: pure helper functions for safe internal callback URLs and sign-in/provider href construction. No Auth.js imports.
 - Create `app/auth/signin/page.tsx`: server page for the custom login UI. Reads `callbackUrl` and `error`, redirects already-signed-in users to the safe callback, and renders provider links.
-- Modify `components/layout/Navbar.tsx`: desktop and mobile anonymous sign-in links use `/auth/signin`.
-- Modify `components/layout/Footer.tsx`: footer sign-in link uses `/auth/signin`.
-- Modify `components/lists/AddToListButton.tsx`: anonymous save-to-list CTA uses `/auth/signin?callbackUrl=...`.
-- Modify `components/practice/ReportDialog.tsx`: anonymous report CTA uses `/auth/signin?callbackUrl=...`.
+- Create `components/auth/SignInDialog.tsx`: client dialog for in-app sign-in actions. Builds provider links from the current path/search and keeps `/auth/signin` as fallback link.
+- Modify `components/layout/Navbar.tsx`: desktop and mobile anonymous sign-in actions open the dialog.
+- Modify `components/layout/Footer.tsx`: footer sign-in opens the dialog.
+- Modify `components/lists/AddToListButton.tsx`: anonymous save-to-list CTA opens the dialog for the current practice path.
+- Modify `components/practice/ReportDialog.tsx`: anonymous report CTA opens the dialog for the current practice path.
 - Modify `app/profile/page.tsx`, `app/me/articles/layout.tsx`, `app/me/lists/page.tsx`, `app/me/lists/[id]/page.tsx`, and `app/me/articles/[slug]/edit/page.tsx`: protected page redirects use `/auth/signin` with safe callbacks.
 - Modify `middleware.ts`: anonymous admin-page redirects use `/auth/signin`, while anonymous admin API requests remain `401` JSON.
 - Create `tests/e2e/login.spec.ts`: route, callback, external-callback fallback, error state, and responsive smoke coverage.
@@ -312,9 +313,10 @@ git add app/auth/signin/page.tsx
 git commit -m "feat(auth): add custom sign-in page"
 ```
 
-## Task 3: Route Existing Sign-In Entry Points Through The Custom Page
+## Task 3: Route Existing Sign-In Entry Points Through The Dialog/Fallback Flow
 
 **Files:**
+- Create: `components/auth/SignInDialog.tsx`
 - Modify: `components/layout/Navbar.tsx`
 - Modify: `components/layout/Footer.tsx`
 - Modify: `components/lists/AddToListButton.tsx`
@@ -326,65 +328,32 @@ git commit -m "feat(auth): add custom sign-in page"
 - Modify: `app/me/articles/[slug]/edit/page.tsx`
 - Modify: `middleware.ts`
 
-- [ ] **Step 1: Update layout sign-in links**
+- [ ] **Step 1: Add reusable sign-in dialog**
 
-In `components/layout/Navbar.tsx`, import `signInPath`:
+Create `components/auth/SignInDialog.tsx`. It should be a `"use client"` component with:
 
-```ts
-import { signInPath } from "@/lib/auth-redirect"
-```
+- a trigger button rendered by the component
+- the current `window.location` path/search/hash captured at click time
+- an optional `callbackPath` prop for CTAs that already know the desired destination
+- provider anchors using `providerSignInPath("google", callbackPath)` and `providerSignInPath("github", callbackPath)`
+- fallback link using `signInPath(callbackPath)`
+- Escape/backdrop/close-button dismissal
+- focus restore to the trigger after close
+- 44px provider targets
 
-Replace both anonymous `href="/api/auth/signin"` values with:
+- [ ] **Step 2: Update layout sign-in actions**
 
-```tsx
-href={signInPath()}
-```
+In `components/layout/Navbar.tsx`, replace the anonymous `LinkButton`/mobile `Link` sign-in controls with `SignInDialogButton`.
 
-In `components/layout/Footer.tsx`, import `signInPath`:
+In `components/layout/Footer.tsx`, replace the account Sign in link with a footer-styled dialog trigger.
 
-```ts
-import { signInPath } from "@/lib/auth-redirect"
-```
+- [ ] **Step 3: Update client CTA actions**
 
-Replace:
+In `components/lists/AddToListButton.tsx`, replace the anonymous `Link` with `SignInDialogButton` using link-like styling and `callbackPath={pathname ?? "/practice"}`.
 
-```tsx
-<FooterLink href="/api/auth/signin">Sign in</FooterLink>
-```
+In `components/practice/ReportDialog.tsx`, replace the anonymous `Link` with `SignInDialogButton` using link-like styling and `callbackPath={pathname ?? "/practice"}`.
 
-with:
-
-```tsx
-<FooterLink href={signInPath()}>Sign in</FooterLink>
-```
-
-- [ ] **Step 2: Update client CTA links**
-
-In `components/lists/AddToListButton.tsx`, import `signInPath`:
-
-```ts
-import { signInPath } from "@/lib/auth-redirect"
-```
-
-Replace the anonymous link href with:
-
-```tsx
-href={signInPath(pathname ?? "/practice")}
-```
-
-In `components/practice/ReportDialog.tsx`, import `signInPath`:
-
-```ts
-import { signInPath } from "@/lib/auth-redirect"
-```
-
-Replace the anonymous link href with:
-
-```tsx
-href={signInPath(pathname ?? "/practice")}
-```
-
-- [ ] **Step 3: Update protected server redirects**
+- [ ] **Step 4: Update protected server redirects**
 
 In these files, import `signInPath` from `@/lib/auth-redirect` and replace direct Auth.js redirects:
 
@@ -406,7 +375,7 @@ Use the matching path in the matching file:
 
 For `app/me/articles/[slug]/edit/page.tsx`, move `const { slug } = await params` before the auth redirect so the callback includes the edit URL.
 
-- [ ] **Step 4: Update middleware admin-page redirects only**
+- [ ] **Step 5: Update middleware admin-page redirects only**
 
 In `middleware.ts`, import `signInPath`:
 
@@ -430,7 +399,7 @@ return NextResponse.redirect(new URL(signInPath(pathname), req.nextUrl))
 
 Do not change the anonymous `/api/admin/*` JSON `401` behavior.
 
-- [ ] **Step 5: Run lint/build**
+- [ ] **Step 6: Run lint/build**
 
 Run:
 
@@ -441,11 +410,11 @@ npm run build
 
 Expected: both pass.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add components/layout/Navbar.tsx components/layout/Footer.tsx components/lists/AddToListButton.tsx components/practice/ReportDialog.tsx app/profile/page.tsx app/me/articles/layout.tsx app/me/lists/page.tsx 'app/me/lists/[id]/page.tsx' 'app/me/articles/[slug]/edit/page.tsx' middleware.ts
-git commit -m "feat(auth): route sign-in entry points through custom page"
+git add components/auth/SignInDialog.tsx components/layout/Navbar.tsx components/layout/Footer.tsx components/lists/AddToListButton.tsx components/practice/ReportDialog.tsx app/profile/page.tsx app/me/articles/layout.tsx app/me/lists/page.tsx 'app/me/lists/[id]/page.tsx' 'app/me/articles/[slug]/edit/page.tsx' middleware.ts
+git commit -m "feat(auth): add in-app sign-in dialog"
 ```
 
 ## Task 4: Login E2E Coverage
@@ -579,6 +548,9 @@ Confirm:
 - the sign-in panel is not nested inside another card
 - provider buttons are visible and at least 44px tall
 - provider links point to `/api/auth/signin/google?callbackUrl=%2Fprofile` and `/api/auth/signin/github?callbackUrl=%2Fprofile`
+- navbar sign-in opens a dialog on `/practice`
+- dialog provider links point to the current path callback
+- Escape closes the dialog and returns focus to the trigger
 
 - [ ] **Step 3: Inspect mobile**
 
@@ -590,6 +562,7 @@ Confirm:
 - the sign-in buttons appear early without needing to pass a large decorative section
 - text does not overlap or overflow its containers
 - focus ring is visible when tabbing through the provider links
+- mobile navigation sign-in opens the same dialog without conflicting with the drawer
 
 - [ ] **Step 4: Run final verification**
 
@@ -627,7 +600,7 @@ feat(auth): add custom sign-in screen
 Suggested summary:
 
 ```markdown
-Adds a custom `/auth/signin` page that preserves the existing Auth.js provider API flow while replacing the default sign-in UI. Updates anonymous sign-in entry points to route through the custom page and adds Playwright coverage for callback sanitization, provider links, error state, and mobile layout.
+Adds a custom in-app sign-in dialog and `/auth/signin` fallback page that preserve the existing Auth.js provider API flow while replacing the default sign-in UI. Updates anonymous sign-in entry points to open the dialog where possible, keeps protected server redirects on the fallback page, and adds Playwright coverage for callback sanitization, provider links, error state, and mobile layout.
 ```
 
 Suggested verified section:
@@ -636,7 +609,7 @@ Suggested verified section:
 - npm run lint
 - npm run build
 - npm run test:e2e -- tests/e2e/login.spec.ts tests/e2e/middleware-and-link-guard.spec.ts tests/e2e/security.spec.ts
-- Browser QA at desktop and mobile widths for `/auth/signin?callbackUrl=/profile`
+- Browser QA at desktop and mobile widths for `/auth/signin?callbackUrl=/profile` and the in-app sign-in dialog on `/practice`
 ```
 
 Release flow after merge:
