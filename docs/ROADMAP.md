@@ -1,10 +1,18 @@
 # 🚀 Antigravity Data Learning Platform — Long-Term Roadmap
 
 > **Last updated:** 2026-05-02
-> **Status:** Live — <https://datalearn-iota.vercel.app>
-> **Version:** 0.1.0 (Beta) → 0.1.2 / 0.3 deployed, release tags pending
+> **Status:** Live — <https://www.learndatanow.com>
+> **Version:** 0.4.0 (deployed)
 
 ## Recently shipped
+
+### May 2026 — release flow + v0.4.0 (auth revamp + design system)
+
+- **Release flow established** — two-branch model: `main` is integration (Preview deploys), `production` is live (auto-deploy to Vercel). Release PR is the explicit gate: `main → production` titled `release: vX.Y.Z`, merged + tagged. Documented in `.github/CONTRIBUTING.md` (PR #53). GitHub default branch later switched to `production` (PR #58) so the "Compare & pull request" banner stops firing after every release; **trade-off**: `gh pr create` now defaults to `base: production`, so feature PRs require explicit `--base main`.
+- **v0.4.0 deployed** (PR #57, tag `v0.4.0`) — first release under the new flow. Promoted everything baking on `main` since v0.3.0:
+  - **Auth flow revamp** (PR #54). Custom Data Learn sign-in page replacing default Auth.js screens. In-app sign-in dialog used by all gated surfaces. Provider buttons go through Auth.js v5 `signIn` POST/CSRF flow. Sign-out redirects home cleanly. Hardened E2E: `tests/e2e/login.spec.ts`, middleware-and-link-guard, security.
+  - **Design-system foundations** (PR #55). Imported handoff bundle from claude.ai/design to `docs/design-system/` (brand voice, palette, typography, iconography spec + `ui_kits/web/` JSX reference for every screen). Shadow tokens (`--shadow-xs/sm/md/lg/xl/-primary`) added to `app/globals.css` for both themes. Staff badge on Admin in UserMenu. Submissions menu item with `/profile#submissions` deep-link. Footer mentions both engines (DuckDB-WASM + PGlite). Footer GitHub link → Privacy + Terms (placeholders — replace before public launch). Skip-to-main-content link for keyboard users (a11y §1).
+  - **MCP authoring write tools** (PR #56). `update_problem` and `update_schema` MCP tools — assistants can now PATCH existing content, not just create new. Backed by new `app/api/admin/schemas/[id]/route.ts`.
 
 ### May 2026 — first prod deploy, V7 / V8 / Daily / Postgres engine
 
