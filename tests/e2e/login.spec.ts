@@ -35,16 +35,24 @@ test.describe("custom sign-in page", () => {
     })
 
     test("provider links reject external callback", async ({ page }) => {
-        await page.goto(
-            "/auth/signin?callbackUrl=https%3A%2F%2Fexample.com%2Fsteal"
-        )
+        const unsafeCallbacks = [
+            "https%3A%2F%2Fexample.com%2Fsteal",
+            "%2F%2Fevil.example",
+            "%2F%5C%5Cevil.example",
+            "%2F%0A%2Fevil.example",
+            "%2F%5C%ZZ",
+        ]
 
-        await expect(
-            page.getByRole("link", { name: /continue with google/i })
-        ).toHaveAttribute("href", "/api/auth/signin/google?callbackUrl=%2F")
-        await expect(
-            page.getByRole("link", { name: /continue with github/i })
-        ).toHaveAttribute("href", "/api/auth/signin/github?callbackUrl=%2F")
+        for (const callbackUrl of unsafeCallbacks) {
+            await page.goto(`/auth/signin?callbackUrl=${callbackUrl}`)
+
+            await expect(
+                page.getByRole("link", { name: /continue with google/i })
+            ).toHaveAttribute("href", "/api/auth/signin/google?callbackUrl=%2F")
+            await expect(
+                page.getByRole("link", { name: /continue with github/i })
+            ).toHaveAttribute("href", "/api/auth/signin/github?callbackUrl=%2F")
+        }
     })
 
     test("renders generic error state", async ({ page }) => {

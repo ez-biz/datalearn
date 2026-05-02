@@ -41,7 +41,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
     const session = await auth()
 
     if (session?.user) {
-        redirect(callbackUrl)
+        redirect(callbackUrl === "/auth/signin" ? "/" : callbackUrl)
     }
 
     const showError = Boolean(firstParam(params.error))
