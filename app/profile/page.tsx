@@ -142,7 +142,7 @@ export default async function ProfilePage() {
                     </Card>
 
                     {/* Recent activity */}
-                    <Card>
+                    <Card id="submissions" className="scroll-mt-20">
                         <CardContent className="p-6">
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-base font-semibold tracking-tight flex items-center gap-2">

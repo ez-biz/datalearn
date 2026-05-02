@@ -38,8 +38,11 @@ export function Footer() {
                 <div className="mt-10 pt-6 border-t border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-muted-foreground">
                     <p>© {new Date().getFullYear()} Data Learn. All rights reserved.</p>
                     <p>
-                        Powered by <span className="font-medium text-foreground">DuckDB-WASM</span>{" "}
-                        in your browser.
+                        Powered by{" "}
+                        <span className="font-medium text-foreground">DuckDB-WASM</span>
+                        {" "}and{" "}
+                        <span className="font-medium text-foreground">PGlite</span>
+                        , in your browser.
                     </p>
                 </div>
             </div>

@@ -8,6 +8,7 @@ import {
     Bookmark,
     CalendarCheck2,
     CheckCircle2,
+    History,
     LogOut,
     PenSquare,
     Shield,
@@ -212,6 +213,12 @@ export function UserMenu({
                             href="/profile"
                             icon={<UserIcon className="h-4 w-4" />}
                             label="Profile"
+                            onClick={() => setOpen(false)}
+                        />
+                        <MenuItem
+                            href="/profile#submissions"
+                            icon={<History className="h-4 w-4" />}
+                            label="Submissions"
                             onClick={() => setOpen(false)}
                         />
                         <MenuItem
