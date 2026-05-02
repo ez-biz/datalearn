@@ -1,4 +1,14 @@
 import { test, expect } from "@playwright/test"
+import { deleteUser, prisma, seedUser, sessionCookie } from "./fixtures/db"
+
+const BASE_URL =
+    process.env.E2E_BASE_URL ?? `http://localhost:${process.env.E2E_PORT ?? "3100"}`
+const SIGN_OUT_EMAIL = "e2e-sign-out@example.test"
+
+test.afterAll(async () => {
+    await deleteUser(SIGN_OUT_EMAIL)
+    await prisma.$disconnect()
+})
 
 test.describe("custom sign-in flow", () => {
     test("home navbar sign-in dialog is centered and unclipped", async ({
@@ -150,5 +160,28 @@ test.describe("custom sign-in flow", () => {
                 document.documentElement.clientWidth
         )
         expect(overflow).toBe(false)
+    })
+
+    test("user menu sign-out redirects home without opening the auth page", async ({
+        page,
+    }) => {
+        const user = await seedUser({
+            email: SIGN_OUT_EMAIL,
+            name: "Sign Out Test",
+        })
+        await page.context().addCookies([
+            sessionCookie(user.sessionToken, BASE_URL),
+        ])
+
+        await page.goto("/profile")
+        await page.getByRole("button", { name: "Open account menu" }).click()
+        await page.getByRole("menuitem", { name: "Sign out" }).click()
+
+        await expect(page).toHaveURL("/")
+        await expect(
+            page
+                .getByRole("banner")
+                .getByRole("button", { name: "Sign in" })
+        ).toBeVisible()
     })
 })

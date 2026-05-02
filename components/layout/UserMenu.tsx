@@ -3,6 +3,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
+import { signOut } from "next-auth/react"
 import {
     Bookmark,
     CalendarCheck2,
@@ -50,6 +51,7 @@ export function UserMenu({
     dailySolved,
 }: UserMenuProps) {
     const [open, setOpen] = useState(false)
+    const [signingOut, setSigningOut] = useState(false)
     const containerRef = useRef<HTMLDivElement>(null)
     const triggerRef = useRef<HTMLButtonElement>(null)
 
@@ -84,6 +86,16 @@ export function UserMenu({
     const pct = Math.min(100, (solved / safeTotal) * 100)
     const isContributor = role === "CONTRIBUTOR" || role === "ADMIN"
     const isAdmin = role === "ADMIN"
+
+    async function handleSignOut() {
+        setSigningOut(true)
+        setOpen(false)
+        try {
+            await signOut({ redirectTo: "/" })
+        } finally {
+            setSigningOut(false)
+        }
+    }
 
     return (
         <div className="relative" ref={containerRef}>
@@ -229,15 +241,16 @@ export function UserMenu({
                     </ul>
 
                     <div className="border-t border-border py-1.5">
-                        <a
-                            href="/api/auth/signout"
+                        <button
+                            type="button"
                             role="menuitem"
-                            className="flex items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:bg-surface-muted hover:text-foreground transition-colors"
-                            onClick={() => setOpen(false)}
+                            disabled={signingOut}
+                            className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground disabled:cursor-wait disabled:opacity-70"
+                            onClick={handleSignOut}
                         >
-                            <LogOut className="h-4 w-4" />
-                            Sign out
-                        </a>
+                            <LogOut aria-hidden="true" className="h-4 w-4" />
+                            {signingOut ? "Signing out..." : "Sign out"}
+                        </button>
                     </div>
                 </div>
             )}
