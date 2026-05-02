@@ -34,12 +34,12 @@ test.describe("Edge gating (middleware.ts)", () => {
             maxRedirects: 0,
             failOnStatusCode: false,
         })
-        // Middleware redirects with status 307 to /api/auth/signin?callbackUrl=...
+        // Middleware redirects with status 307 to /auth/signin?callbackUrl=...
         expect(res.status()).toBeGreaterThanOrEqual(300)
         expect(res.status()).toBeLessThan(400)
         const location = res.headers()["location"]
         expect(location).toBeTruthy()
-        expect(location).toContain("/api/auth/signin")
+        expect(location).toContain("/auth/signin")
         expect(location).toContain("callbackUrl=%2Fadmin%2Farticles")
     })
 
