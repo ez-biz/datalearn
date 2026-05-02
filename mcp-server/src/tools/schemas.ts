@@ -1,12 +1,21 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { SqlSchemaCreateInput } from "../../../lib/admin-validation"
-import { DataLearnClient } from "../client.js"
+import { z } from "zod"
+import {
+    SqlSchemaCreateInput,
+    SqlSchemaUpdateInput,
+} from "../../../lib/admin-validation"
+import { ApiError, DataLearnClient } from "../client.js"
 import { toMcpError } from "../errors.js"
 
 type SqlSchema = {
     id: string
     name: string
     sql: string
+}
+
+const McpSchemaUpdateInputShape = {
+    id: z.string().min(1),
+    ...SqlSchemaUpdateInput.shape,
 }
 
 function ok(payload: unknown) {
@@ -54,6 +63,27 @@ export function registerSchemaTools(
                 )
                 return ok(created)
             } catch (err) {
+                throw toMcpError(err)
+            }
+        }
+    )
+
+    server.tool(
+        "update_schema",
+        "Update an existing SQL schema by id. Only the fields you pass will be changed. Returns the updated schema or {found: false}.",
+        McpSchemaUpdateInputShape,
+        async ({ id, ...updates }) => {
+            try {
+                const updated = await client.request<SqlSchema>(
+                    "PATCH",
+                    `/api/admin/schemas/${encodeURIComponent(id)}`,
+                    updates
+                )
+                return ok(updated)
+            } catch (err) {
+                if (err instanceof ApiError && err.status === 404) {
+                    return ok({ found: false })
+                }
                 throw toMcpError(err)
             }
         }

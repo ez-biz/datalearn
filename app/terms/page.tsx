@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 import { Container } from "@/components/ui/Container"
 
 export const metadata: Metadata = {
@@ -66,7 +67,7 @@ export default function TermsPage() {
                 <h2>Termination</h2>
                 <p>
                     You can delete your account at any time (see{" "}
-                    <a href="/privacy">Privacy policy</a>). We reserve the
+                    <Link href="/privacy">Privacy policy</Link>). We reserve the
                     right to suspend accounts that violate these terms.
                 </p>
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 import { Container } from "@/components/ui/Container"
 
 export const metadata: Metadata = {
@@ -71,7 +72,7 @@ export default function PrivacyPage() {
                 <h2>Contact</h2>
                 <p>
                     Questions about this policy? See the email in our{" "}
-                    <a href="/terms">Terms</a>.
+                    <Link href="/terms">Terms</Link>.
                 </p>
             </div>
         </Container>
