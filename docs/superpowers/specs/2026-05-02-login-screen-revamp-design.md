@@ -20,12 +20,12 @@ Replace the default Auth.js sign-in experience with a polished Data Learn sign-i
 
 Add a reusable in-app sign-in dialog and keep the custom page at `/auth/signin`.
 
-This page links to the existing provider endpoints:
+Provider buttons must call the Auth.js v5 sign-in helper for the chosen provider:
 
-- `/api/auth/signin/google`
-- `/api/auth/signin/github`
+- `signIn("google", { redirectTo: safeCallback })`
+- `signIn("github", { redirectTo: safeCallback })`
 
-Each provider link preserves a validated `callbackUrl` query parameter. A callback is valid only when it is an internal path beginning with `/` and not beginning with `//`. Invalid, missing, or external callback values fall back to `/`.
+Auth.js then POSTs to the existing provider endpoints with CSRF protection. Do not link directly to `GET /api/auth/signin/<provider>`; Auth.js v5 treats that as the built-in sign-in page route and rejects provider-specific GET requests. Each provider action preserves a validated callback path. A callback is valid only when it is an internal path beginning with `/` and not beginning with `//`. Invalid, missing, or external callback values fall back to `/`.
 
 In-app sign-in entry points should open the dialog when JavaScript is available. Protected server redirects and direct navigation should use `/auth/signin` as the canonical fallback. The underlying Auth.js route remains available for provider handoff and should not be modified.
 
@@ -114,14 +114,14 @@ Unit or focused tests:
 
 - callback URL sanitizer accepts internal paths such as `/profile`
 - callback URL sanitizer rejects external URLs and protocol-relative URLs
-- provider hrefs include the sanitized callback URL
+- provider actions submit through Auth.js with the sanitized callback URL
 
 E2E or browser checks:
 
 - `/auth/signin` renders provider actions
-- `/auth/signin?callbackUrl=/profile` builds provider links with `/profile`
+- `/auth/signin?callbackUrl=/profile` submits provider actions with `/profile`
 - `/auth/signin?callbackUrl=https://example.com` falls back to `/`
-- in-app sign-in triggers open a dialog with provider links for the current path
+- in-app sign-in triggers open a dialog with provider actions for the current path
 - Escape and close button dismiss the dialog
 - desktop viewport around 1440px has a balanced two-column layout
 - mobile viewport around 375px has no horizontal scroll and keeps the sign-in action visible

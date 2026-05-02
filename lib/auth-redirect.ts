@@ -46,8 +46,3 @@ export function signInPath(callbackUrl?: string | null): string {
     if (safeCallback === DEFAULT_CALLBACK_PATH) return "/auth/signin"
     return `/auth/signin?callbackUrl=${encodeURIComponent(safeCallback)}`
 }
-
-export function providerSignInPath(provider: AuthProvider, callbackUrl?: string | null): string {
-    const safeCallback = sanitizeAuthCallbackPath(callbackUrl)
-    return `/api/auth/signin/${provider}?callbackUrl=${encodeURIComponent(safeCallback)}`
-}

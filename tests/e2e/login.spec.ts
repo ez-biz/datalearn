@@ -1,14 +1,58 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, type Page, type Request } from "@playwright/test"
 import { deleteUser, prisma, seedUser, sessionCookie } from "./fixtures/db"
 
 const BASE_URL =
     process.env.E2E_BASE_URL ?? `http://localhost:${process.env.E2E_PORT ?? "3100"}`
 const SIGN_OUT_EMAIL = "e2e-sign-out@example.test"
+type AuthProvider = "google" | "github"
 
 test.afterAll(async () => {
     await deleteUser(SIGN_OUT_EMAIL)
     await prisma.$disconnect()
 })
+
+async function mockProviderSignIn(page: Page) {
+    await page.route("**/api/auth/providers", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+                google: { id: "google", name: "Google", type: "oauth" },
+                github: { id: "github", name: "GitHub", type: "oauth" },
+            }),
+        })
+    })
+    await page.route("**/api/auth/csrf", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ csrfToken: "test-csrf-token" }),
+        })
+    })
+    await page.route("**/api/auth/signin/*", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ url: "/" }),
+        })
+    })
+}
+
+function waitForProviderPost(page: Page, provider: AuthProvider) {
+    return page.waitForRequest((request: Request) => {
+        const url = new URL(request.url())
+        return (
+            request.method() === "POST" &&
+            url.pathname === `/api/auth/signin/${provider}`
+        )
+    })
+}
+
+function expectProviderPost(request: Request, callbackUrl: string) {
+    const body = new URLSearchParams(request.postData() ?? "")
+    expect(body.get("callbackUrl")).toBe(callbackUrl)
+    expect(body.get("csrfToken")).toBe("test-csrf-token")
+}
 
 test.describe("custom sign-in flow", () => {
     test("home navbar sign-in dialog is centered and unclipped", async ({
@@ -48,17 +92,11 @@ test.describe("custom sign-in flow", () => {
         })
         await expect(dialog).toBeVisible()
         await expect(
-            dialog.getByRole("link", { name: /continue with google/i })
-        ).toHaveAttribute(
-            "href",
-            "/api/auth/signin/google?callbackUrl=%2Fpractice"
-        )
+            dialog.getByRole("button", { name: /continue with google/i })
+        ).toBeVisible()
         await expect(
-            dialog.getByRole("link", { name: /continue with github/i })
-        ).toHaveAttribute(
-            "href",
-            "/api/auth/signin/github?callbackUrl=%2Fpractice"
-        )
+            dialog.getByRole("button", { name: /continue with github/i })
+        ).toBeVisible()
 
         await page.keyboard.press("Escape")
         await expect(dialog).toBeHidden()
@@ -76,10 +114,26 @@ test.describe("custom sign-in flow", () => {
         })
         await expect(dialog).toBeVisible()
         await expect(
-            dialog.getByRole("link", { name: /continue with google/i })
-        ).toHaveAttribute(
-            "href",
-            "/api/auth/signin/google?callbackUrl=%2Fpractice%2Fsimple-select"
+            dialog.getByRole("button", { name: /continue with google/i })
+        ).toBeVisible()
+    })
+
+    test("dialog provider action posts through Auth.js with the current callback", async ({
+        page,
+    }) => {
+        await mockProviderSignIn(page)
+        await page.goto("/practice/simple-select")
+
+        await page.getByRole("button", { name: "Sign in to report" }).click()
+        const providerPost = waitForProviderPost(page, "google")
+        await page
+            .getByRole("dialog", { name: /sign in to data learn/i })
+            .getByRole("button", { name: /continue with google/i })
+            .click()
+
+        expectProviderPost(
+            await providerPost,
+            "/practice/simple-select"
         )
     })
 
@@ -92,31 +146,27 @@ test.describe("custom sign-in flow", () => {
             })
         ).toBeVisible()
         await expect(
-            page.getByRole("link", { name: /continue with google/i })
+            page.getByRole("button", { name: /continue with google/i })
         ).toBeVisible()
         await expect(
-            page.getByRole("link", { name: /continue with github/i })
+            page.getByRole("button", { name: /continue with github/i })
         ).toBeVisible()
     })
 
-    test("provider links preserve safe internal callback", async ({ page }) => {
+    test("provider actions preserve safe internal callback", async ({ page }) => {
+        await mockProviderSignIn(page)
         await page.goto("/auth/signin?callbackUrl=/profile")
 
-        await expect(
-            page.getByRole("link", { name: /continue with google/i })
-        ).toHaveAttribute(
-            "href",
-            "/api/auth/signin/google?callbackUrl=%2Fprofile"
-        )
-        await expect(
-            page.getByRole("link", { name: /continue with github/i })
-        ).toHaveAttribute(
-            "href",
-            "/api/auth/signin/github?callbackUrl=%2Fprofile"
-        )
+        const providerPost = waitForProviderPost(page, "google")
+        await page
+            .getByRole("button", { name: /continue with google/i })
+            .click()
+
+        expectProviderPost(await providerPost, "/profile")
     })
 
-    test("provider links reject external callback", async ({ page }) => {
+    test("provider actions reject external callback", async ({ page }) => {
+        await mockProviderSignIn(page)
         const unsafeCallbacks = [
             "https%3A%2F%2Fexample.com%2Fsteal",
             "%2F%2Fevil.example",
@@ -128,12 +178,13 @@ test.describe("custom sign-in flow", () => {
         for (const callbackUrl of unsafeCallbacks) {
             await page.goto(`/auth/signin?callbackUrl=${callbackUrl}`)
 
-            await expect(
-                page.getByRole("link", { name: /continue with google/i })
-            ).toHaveAttribute("href", "/api/auth/signin/google?callbackUrl=%2F")
-            await expect(
-                page.getByRole("link", { name: /continue with github/i })
-            ).toHaveAttribute("href", "/api/auth/signin/github?callbackUrl=%2F")
+            const providerPost = waitForProviderPost(page, "google")
+            await page
+                .getByRole("button", { name: /continue with google/i })
+                .click()
+
+            expectProviderPost(await providerPost, "/")
+            await expect(page).toHaveURL("/")
         }
     })
 
@@ -152,7 +203,7 @@ test.describe("custom sign-in flow", () => {
         await page.goto("/auth/signin?callbackUrl=/me/lists")
 
         await expect(
-            page.getByRole("link", { name: /continue with google/i })
+            page.getByRole("button", { name: /continue with google/i })
         ).toBeVisible()
         const overflow = await page.evaluate(
             () =>

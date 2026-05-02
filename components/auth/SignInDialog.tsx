@@ -4,12 +4,9 @@ import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import { createPortal } from "react-dom"
-import { Github, ShieldCheck, X } from "lucide-react"
-import {
-    providerSignInPath,
-    signInPath,
-    sanitizeAuthCallbackPath,
-} from "@/lib/auth-redirect"
+import { ShieldCheck, X } from "lucide-react"
+import { signInPath, sanitizeAuthCallbackPath } from "@/lib/auth-redirect"
+import { ProviderSignInActions } from "@/components/auth/ProviderSignInActions"
 import { Logo } from "@/components/ui/Logo"
 import { cn } from "@/lib/utils"
 
@@ -124,31 +121,10 @@ export function SignInDialogButton({
                               </p>
                           </div>
 
-                          <div className="mt-6 space-y-3">
-                              <ProviderAnchor
-                                  href={providerSignInPath(
-                                      "google",
-                                      resolvedCallback
-                                  )}
-                                  primary
-                                  marker="G"
-                              >
-                                  Continue with Google
-                              </ProviderAnchor>
-                              <ProviderAnchor
-                                  href={providerSignInPath(
-                                      "github",
-                                      resolvedCallback
-                                  )}
-                                  icon={
-                                      <Github
-                                          aria-hidden="true"
-                                          className="h-4 w-4"
-                                      />
-                                  }
-                              >
-                                  Continue with GitHub
-                              </ProviderAnchor>
+                          <div className="mt-6">
+                              <ProviderSignInActions
+                                  callbackPath={resolvedCallback}
+                              />
                           </div>
 
                           <div className="mt-6 flex items-start gap-2 border-t border-border pt-5 text-xs leading-5 text-muted-foreground">
@@ -186,42 +162,5 @@ export function SignInDialogButton({
             </button>
             {dialog}
         </>
-    )
-}
-
-function ProviderAnchor({
-    href,
-    children,
-    icon,
-    marker,
-    primary,
-}: {
-    href: string
-    children: ReactNode
-    icon?: ReactNode
-    marker?: string
-    primary?: boolean
-}) {
-    return (
-        <a
-            href={href}
-            className={cn(
-                "inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition-[background-color,border-color,box-shadow,scale] duration-150 active:scale-[0.98]",
-                primary
-                    ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover"
-                    : "border border-border bg-surface-muted text-foreground hover:border-border-strong hover:bg-surface-elevated"
-            )}
-        >
-            {icon}
-            {marker && (
-                <span
-                    aria-hidden="true"
-                    className="flex h-5 w-5 items-center justify-center rounded-full bg-background text-xs font-bold text-foreground"
-                >
-                    {marker}
-                </span>
-            )}
-            {children}
-        </a>
     )
 }

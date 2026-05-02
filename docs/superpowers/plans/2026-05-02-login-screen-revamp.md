@@ -4,7 +4,7 @@
 
 **Goal:** Build a custom Data Learn sign-in dialog for in-app actions plus a fallback screen at `/auth/signin`, while keeping the existing Auth.js API/provider logic unchanged.
 
-**Architecture:** Add one pure URL helper for callback sanitization and provider handoff URLs, then build a server-rendered fallback sign-in page and a reusable client-side sign-in dialog. Interactive app entry points open the dialog with the current path as callback; protected server redirects still route through `/auth/signin`; provider callbacks still go through `/api/auth/signin/<provider>`.
+**Architecture:** Add one pure URL helper for callback sanitization, then build a server-rendered fallback sign-in page and reusable client-side provider actions/dialog. Interactive app entry points open the dialog with the current path as callback; protected server redirects still route through `/auth/signin`; provider handoff uses Auth.js v5 `signIn(provider, { redirectTo })`, which POSTs to `/api/auth/signin/<provider>` with CSRF protection.
 
 **Tech Stack:** Next.js App Router, Auth.js v5, React 19, Tailwind CSS v4 tokens, lucide-react icons, Playwright e2e tests.
 
@@ -12,9 +12,10 @@
 
 ## File Structure
 
-- Create `lib/auth-redirect.ts`: pure helper functions for safe internal callback URLs and sign-in/provider href construction. No Auth.js imports.
-- Create `app/auth/signin/page.tsx`: server page for the custom login UI. Reads `callbackUrl` and `error`, redirects already-signed-in users to the safe callback, and renders provider links.
-- Create `components/auth/SignInDialog.tsx`: client dialog for in-app sign-in actions. Builds provider links from the current path/search and keeps `/auth/signin` as fallback link.
+- Create `lib/auth-redirect.ts`: pure helper functions for safe internal callback URLs and the fallback sign-in path. No Auth.js imports.
+- Create `components/auth/ProviderSignInActions.tsx`: client provider buttons that call Auth.js `signIn("google" | "github", { redirectTo })`.
+- Create `app/auth/signin/page.tsx`: server page for the custom login UI. Reads `callbackUrl` and `error`, redirects already-signed-in users to the safe callback, and renders provider actions.
+- Create `components/auth/SignInDialog.tsx`: client dialog for in-app sign-in actions. Captures the current path/search, renders provider actions, and keeps `/auth/signin` as fallback link.
 - Modify `components/layout/Navbar.tsx`: desktop and mobile anonymous sign-in actions open the dialog.
 - Modify `components/layout/Footer.tsx`: footer sign-in opens the dialog.
 - Modify `components/lists/AddToListButton.tsx`: anonymous save-to-list CTA opens the dialog for the current practice path.
@@ -63,10 +64,6 @@ export function signInPath(callbackUrl?: string | null): string {
     return `/auth/signin?callbackUrl=${encodeURIComponent(safeCallback)}`
 }
 
-export function providerSignInPath(provider: AuthProvider, callbackUrl?: string | null): string {
-    const safeCallback = sanitizeAuthCallbackPath(callbackUrl)
-    return `/api/auth/signin/${provider}?callbackUrl=${encodeURIComponent(safeCallback)}`
-}
 ```
 
 - [ ] **Step 2: Run lint/build for the helper**
@@ -101,12 +98,10 @@ Create `app/auth/signin/page.tsx`:
 import type { Metadata } from "next"
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { AlertCircle, ArrowRight, Database, Github, Play, ShieldCheck, TerminalSquare } from "lucide-react"
+import { AlertCircle, ArrowRight, Database, Play, ShieldCheck, TerminalSquare } from "lucide-react"
 import { auth } from "@/lib/auth"
-import {
-    providerSignInPath,
-    sanitizeAuthCallbackPath,
-} from "@/lib/auth-redirect"
+import { sanitizeAuthCallbackPath } from "@/lib/auth-redirect"
+import { ProviderSignInActions } from "@/components/auth/ProviderSignInActions"
 import { Card } from "@/components/ui/Card"
 import { Logo } from "@/components/ui/Logo"
 
@@ -219,19 +214,7 @@ LIMIT 5;`}
                             </div>
                         )}
 
-                        <div className="space-y-3">
-                            <ProviderLink
-                                href={providerSignInPath("google", callbackUrl)}
-                                label="Continue with Google"
-                                marker="G"
-                                primary
-                            />
-                            <ProviderLink
-                                href={providerSignInPath("github", callbackUrl)}
-                                label="Continue with GitHub"
-                                icon={<Github className="h-4 w-4" />}
-                            />
-                        </div>
+                        <ProviderSignInActions callbackPath={callbackUrl} />
 
                         <div className="mt-6 flex items-start gap-2 border-t border-border pt-5 text-xs leading-5 text-muted-foreground">
                             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -335,7 +318,7 @@ Create `components/auth/SignInDialog.tsx`. It should be a `"use client"` compone
 - a trigger button rendered by the component
 - the current `window.location` path/search/hash captured at click time
 - an optional `callbackPath` prop for CTAs that already know the desired destination
-- provider anchors using `providerSignInPath("google", callbackPath)` and `providerSignInPath("github", callbackPath)`
+- provider actions using the shared `ProviderSignInActions` component, which calls Auth.js `signIn(provider, { redirectTo: callbackPath })`
 - fallback link using `signInPath(callbackPath)`
 - Escape/backdrop/close-button dismissal
 - focus restore to the trigger after close
@@ -436,30 +419,22 @@ test.describe("custom sign-in page", () => {
         await page.goto("/auth/signin")
 
         await expect(page.getByRole("heading", { name: /train like the query is going live/i })).toBeVisible()
-        await expect(page.getByRole("link", { name: /continue with google/i })).toBeVisible()
-        await expect(page.getByRole("link", { name: /continue with github/i })).toBeVisible()
+        await expect(page.getByRole("button", { name: /continue with google/i })).toBeVisible()
+        await expect(page.getByRole("button", { name: /continue with github/i })).toBeVisible()
     })
 
-    test("provider links preserve safe internal callback", async ({ page }) => {
+    test("provider actions preserve safe internal callback", async ({ page }) => {
         await page.goto("/auth/signin?callbackUrl=/profile")
 
-        await expect(page.getByRole("link", { name: /continue with google/i })).toHaveAttribute(
-            "href",
-            "/api/auth/signin/google?callbackUrl=%2Fprofile"
-        )
-        await expect(page.getByRole("link", { name: /continue with github/i })).toHaveAttribute(
-            "href",
-            "/api/auth/signin/github?callbackUrl=%2Fprofile"
-        )
+        // Mock Auth.js providers/csrf, click Google, and assert the POST body
+        // contains callbackUrl=/profile.
     })
 
-    test("provider links reject external callback", async ({ page }) => {
+    test("provider actions reject external callback", async ({ page }) => {
         await page.goto("/auth/signin?callbackUrl=https%3A%2F%2Fexample.com%2Fsteal")
 
-        await expect(page.getByRole("link", { name: /continue with google/i })).toHaveAttribute(
-            "href",
-            "/api/auth/signin/google?callbackUrl=%2F"
-        )
+        // Mock Auth.js providers/csrf, click Google, and assert the POST body
+        // falls back to callbackUrl=/.
     })
 
     test("renders generic error state", async ({ page }) => {
@@ -472,7 +447,7 @@ test.describe("custom sign-in page", () => {
         await page.setViewportSize({ width: 375, height: 812 })
         await page.goto("/auth/signin?callbackUrl=/me/lists")
 
-        await expect(page.getByRole("link", { name: /continue with google/i })).toBeVisible()
+        await expect(page.getByRole("button", { name: /continue with google/i })).toBeVisible()
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
         expect(overflow).toBe(false)
     })
@@ -547,9 +522,9 @@ Confirm:
 - the page has a balanced two-column layout
 - the sign-in panel is not nested inside another card
 - provider buttons are visible and at least 44px tall
-- provider links point to `/api/auth/signin/google?callbackUrl=%2Fprofile` and `/api/auth/signin/github?callbackUrl=%2Fprofile`
+- provider actions POST to Auth.js with callback `/profile`
 - navbar sign-in opens a dialog on `/practice`
-- dialog provider links point to the current path callback
+- dialog provider actions post with the current path callback
 - Escape closes the dialog and returns focus to the trigger
 
 - [ ] **Step 3: Inspect mobile**
@@ -561,7 +536,7 @@ Confirm:
 - no horizontal scrolling
 - the sign-in buttons appear early without needing to pass a large decorative section
 - text does not overlap or overflow its containers
-- focus ring is visible when tabbing through the provider links
+- focus ring is visible when tabbing through the provider buttons
 - mobile navigation sign-in opens the same dialog without conflicting with the drawer
 
 - [ ] **Step 4: Run final verification**
@@ -600,7 +575,7 @@ feat(auth): add custom sign-in screen
 Suggested summary:
 
 ```markdown
-Adds a custom in-app sign-in dialog and `/auth/signin` fallback page that preserve the existing Auth.js provider API flow while replacing the default sign-in UI. Updates anonymous sign-in entry points to open the dialog where possible, keeps protected server redirects on the fallback page, and adds Playwright coverage for callback sanitization, provider links, error state, and mobile layout.
+Adds a custom in-app sign-in dialog and `/auth/signin` fallback page that preserve the existing Auth.js provider API flow while replacing the default sign-in UI. Updates anonymous sign-in entry points to open the dialog where possible, keeps protected server redirects on the fallback page, and adds Playwright coverage for callback sanitization, provider actions, error state, and mobile layout.
 ```
 
 Suggested verified section:

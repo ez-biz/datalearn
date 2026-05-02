@@ -1,21 +1,17 @@
 import type { Metadata } from "next"
-import type { ReactNode } from "react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import {
     AlertCircle,
     ArrowRight,
     Database,
-    Github,
     Play,
     ShieldCheck,
     TerminalSquare,
 } from "lucide-react"
 import { auth } from "@/lib/auth"
-import {
-    providerSignInPath,
-    sanitizeAuthCallbackPath,
-} from "@/lib/auth-redirect"
+import { sanitizeAuthCallbackPath } from "@/lib/auth-redirect"
+import { ProviderSignInActions } from "@/components/auth/ProviderSignInActions"
 import { Card } from "@/components/ui/Card"
 import { Logo } from "@/components/ui/Logo"
 
@@ -156,24 +152,7 @@ LIMIT 5;`}</code></pre>
                             </div>
                         )}
 
-                        <div className="space-y-3">
-                            <ProviderLink
-                                href={providerSignInPath("google", callbackUrl)}
-                                label="Continue with Google"
-                                marker="G"
-                                primary
-                            />
-                            <ProviderLink
-                                href={providerSignInPath("github", callbackUrl)}
-                                label="Continue with GitHub"
-                                icon={
-                                    <Github
-                                        aria-hidden="true"
-                                        className="h-4 w-4"
-                                    />
-                                }
-                            />
-                        </div>
+                        <ProviderSignInActions callbackPath={callbackUrl} />
 
                         <div className="mt-6 flex items-start gap-2 border-t border-border pt-5 text-xs leading-5 text-muted-foreground">
                             <ShieldCheck
@@ -211,38 +190,5 @@ function Metric({ label, value }: { label: string; value: string }) {
                 {value}
             </div>
         </div>
-    )
-}
-
-function ProviderLink({
-    href,
-    label,
-    icon,
-    marker,
-    primary,
-}: {
-    href: string
-    label: string
-    icon?: ReactNode
-    marker?: string
-    primary?: boolean
-}) {
-    const className = primary
-        ? "inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition-[background-color,box-shadow,scale] duration-150 hover:bg-primary-hover active:scale-[0.98]"
-        : "inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface-muted px-4 text-sm font-semibold text-foreground transition-[background-color,border-color,scale] duration-150 hover:border-border-strong hover:bg-surface-elevated active:scale-[0.98]"
-
-    return (
-        <a href={href} className={className}>
-            {icon}
-            {marker && (
-                <span
-                    aria-hidden="true"
-                    className="flex h-5 w-5 items-center justify-center rounded-full bg-background text-xs font-bold text-foreground"
-                >
-                    {marker}
-                </span>
-            )}
-            {label}
-        </a>
     )
 }
