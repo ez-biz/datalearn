@@ -47,7 +47,7 @@ export const POST = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
         where: {
             id: commentId,
             problem: { slug, status: "PUBLISHED" },
-            status: { in: ["VISIBLE", "DELETED"] },
+            status: "VISIBLE",
         },
         select: {
             id: true,
@@ -88,18 +88,13 @@ export const POST = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
                     message: parsed.data.message.trim(),
                 },
             })
-            const reportCount = await tx.discussionReport.count({
-                where: {
-                    commentId: comment.id,
-                    status: "OPEN",
-                },
-            })
-            await tx.discussionComment.update({
+            const updated = await tx.discussionComment.update({
                 where: { id: comment.id },
-                data: { reportCount },
+                data: { reportCount: { increment: 1 } },
+                select: { reportCount: true },
             })
 
-            return { report, reportCount }
+            return { report, reportCount: updated.reportCount }
         })
 
         return NextResponse.json({ data: result }, { status: 201 })

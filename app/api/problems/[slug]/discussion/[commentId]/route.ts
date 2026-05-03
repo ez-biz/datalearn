@@ -95,6 +95,21 @@ export const DELETE = withDiscussionAuth(async (_req, principal, ctx: Ctx) => {
         return NextResponse.json({ error: "Comment not found." }, { status: 404 })
     }
 
+    if (comment.status === "DELETED") {
+        const deleted = await prisma.discussionComment.findUniqueOrThrow({
+            where: { id: comment.id },
+            include: publicCommentInclude(principal.userId),
+        })
+        return NextResponse.json({ data: shapePublicComment(deleted) })
+    }
+
+    if (comment.status !== "VISIBLE") {
+        return NextResponse.json(
+            { error: "Only visible comments can be deleted." },
+            { status: 409 }
+        )
+    }
+
     const updated = await prisma.discussionComment.update({
         where: { id: comment.id },
         data: {

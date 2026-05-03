@@ -13,31 +13,36 @@ function assertSameOriginWrite(req: Request) {
     if (req.method === "GET" || req.method === "HEAD") return
 
     const origin = req.headers.get("origin")
-    const reqHost = req.headers.get("host")
-    if (!origin || !reqHost) {
+    if (!origin) {
         throw new AuthFailure(403, {
             error: "Missing Origin header on a write request.",
         })
     }
 
-    const allowedHosts = new Set<string>([reqHost])
+    const allowedOrigins = new Set<string>()
+    try {
+        allowedOrigins.add(new URL(req.url).origin)
+    } catch {
+        throw new AuthFailure(403, { error: "Malformed request URL." })
+    }
+
     for (const env of [process.env.NEXTAUTH_URL, process.env.AUTH_URL]) {
         if (!env) continue
         try {
-            allowedHosts.add(new URL(env).host)
+            allowedOrigins.add(new URL(env).origin)
         } catch {
             /* ignore malformed env */
         }
     }
 
-    let originHost: string
+    let requestOrigin: string
     try {
-        originHost = new URL(origin).host
+        requestOrigin = new URL(origin).origin
     } catch {
         throw new AuthFailure(403, { error: "Malformed Origin header." })
     }
 
-    if (!allowedHosts.has(originHost)) {
+    if (!allowedOrigins.has(requestOrigin)) {
         throw new AuthFailure(403, { error: "Cross-origin request rejected." })
     }
 }

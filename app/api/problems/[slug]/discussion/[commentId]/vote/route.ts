@@ -3,7 +3,6 @@ import { z } from "zod"
 import type {
     DiscussionVoteValue,
     Prisma,
-    UserReputationEventKind,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { DiscussionVoteInput } from "@/lib/admin-validation"
@@ -14,10 +13,12 @@ import { getDiscussionSettings } from "@/lib/discussions/settings"
 
 type Ctx = { params: Promise<{ slug: string; commentId: string }> }
 
-type ReputationDelta = {
-    kind: UserReputationEventKind
-    points: number
-    sourceId: string
+const VOTE_CHURN_COOLDOWN_SECONDS = 5
+
+type VoteCounterDelta = {
+    upvotes: number
+    downvotes: number
+    score: number
 }
 
 async function readJson(req: Request): Promise<unknown | null> {
@@ -28,109 +29,91 @@ async function readJson(req: Request): Promise<unknown | null> {
     }
 }
 
-function isPrismaCode(error: unknown, code: string): boolean {
-    return (
-        typeof error === "object" &&
-        error !== null &&
-        "code" in error &&
-        error.code === code
-    )
-}
-
-function reputationDeltas(
-    commentId: string,
-    voterId: string,
+function voteCounterDelta(
     previous: DiscussionVoteValue | null,
     next: DiscussionVoteValue | null
-): ReputationDelta[] {
-    if (previous === next) return []
-
-    const prefix = `vote:${commentId}:${voterId}`
+): VoteCounterDelta {
+    if (previous === next) return { upvotes: 0, downvotes: 0, score: 0 }
     if (previous === null && next === "UP") {
-        return [
-            {
-                kind: "COMMENT_UPVOTE_RECEIVED",
-                points: 1,
-                sourceId: `${prefix}:up`,
-            },
-        ]
+        return { upvotes: 1, downvotes: 0, score: 1 }
     }
     if (previous === null && next === "DOWN") {
-        return [
-            {
-                kind: "COMMENT_DOWNVOTE_RECEIVED",
-                points: -1,
-                sourceId: `${prefix}:down`,
-            },
-        ]
+        return { upvotes: 0, downvotes: 1, score: -1 }
     }
     if (previous === "UP" && next === null) {
-        return [
-            {
-                kind: "COMMENT_UPVOTE_RECEIVED",
-                points: -1,
-                sourceId: `${prefix}:up:removed`,
-            },
-        ]
+        return { upvotes: -1, downvotes: 0, score: -1 }
     }
     if (previous === "DOWN" && next === null) {
-        return [
-            {
-                kind: "COMMENT_DOWNVOTE_RECEIVED",
-                points: 1,
-                sourceId: `${prefix}:down:removed`,
-            },
-        ]
+        return { upvotes: 0, downvotes: -1, score: 1 }
     }
     if (previous === "UP" && next === "DOWN") {
-        return [
-            {
-                kind: "COMMENT_UPVOTE_RECEIVED",
-                points: -1,
-                sourceId: `${prefix}:up:switched-to-down`,
-            },
-            {
-                kind: "COMMENT_DOWNVOTE_RECEIVED",
-                points: -1,
-                sourceId: `${prefix}:down:switched-from-up`,
-            },
-        ]
+        return { upvotes: -1, downvotes: 1, score: -2 }
     }
     if (previous === "DOWN" && next === "UP") {
-        return [
-            {
-                kind: "COMMENT_DOWNVOTE_RECEIVED",
-                points: 1,
-                sourceId: `${prefix}:down:switched-to-up`,
-            },
-            {
-                kind: "COMMENT_UPVOTE_RECEIVED",
-                points: 1,
-                sourceId: `${prefix}:up:switched-from-down`,
-            },
-        ]
+        return { upvotes: 1, downvotes: -1, score: 2 }
     }
 
-    return []
+    return { upvotes: 0, downvotes: 0, score: 0 }
 }
 
-async function createReputationEvent(input: {
-    userId: string
-    delta: ReputationDelta
+async function syncVoteReputation(input: {
+    authorId: string
+    commentId: string
+    voterId: string
+    value: DiscussionVoteValue | null
     tx: Prisma.TransactionClient
 }) {
-    try {
-        await input.tx.userReputationEvent.create({
-            data: {
-                userId: input.userId,
-                kind: input.delta.kind,
-                points: input.delta.points,
-                sourceId: input.delta.sourceId,
+    const prefix = `vote:${input.commentId}:${input.voterId}`
+    const upSourceId = `${prefix}:up-current`
+    const downSourceId = `${prefix}:down-current`
+
+    await input.tx.userReputationEvent.deleteMany({
+        where: {
+            userId: input.authorId,
+            sourceId: {
+                startsWith: `${prefix}:`,
+                notIn: [upSourceId, downSourceId],
             },
-        })
-    } catch (error) {
-        if (!isPrismaCode(error, "P2002")) throw error
-    }
+        },
+    })
+
+    await input.tx.userReputationEvent.upsert({
+        where: {
+            userId_kind_sourceId: {
+                userId: input.authorId,
+                kind: "COMMENT_UPVOTE_RECEIVED",
+                sourceId: upSourceId,
+            },
+        },
+        create: {
+            userId: input.authorId,
+            kind: "COMMENT_UPVOTE_RECEIVED",
+            sourceId: upSourceId,
+            points: input.value === "UP" ? 1 : 0,
+        },
+        update: {
+            points: input.value === "UP" ? 1 : 0,
+        },
+    })
+
+    await input.tx.userReputationEvent.upsert({
+        where: {
+            userId_kind_sourceId: {
+                userId: input.authorId,
+                kind: "COMMENT_DOWNVOTE_RECEIVED",
+                sourceId: downSourceId,
+            },
+        },
+        create: {
+            userId: input.authorId,
+            kind: "COMMENT_DOWNVOTE_RECEIVED",
+            sourceId: downSourceId,
+            points: input.value === "DOWN" ? -1 : 0,
+        },
+        update: {
+            points: input.value === "DOWN" ? -1 : 0,
+        },
+    })
 }
 
 export const PUT = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
@@ -156,7 +139,7 @@ export const PUT = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
         where: {
             id: commentId,
             problem: { slug, status: "PUBLISHED" },
-            status: { in: ["VISIBLE", "DELETED"] },
+            status: "VISIBLE",
         },
         select: {
             id: true,
@@ -189,19 +172,41 @@ export const PUT = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
     }
 
     const value = parsed.data.value
-    if (value !== null) {
-        const reputation = await getUserReputation(principal.userId, settings)
-        const limit = await checkDiscussionLimit({
-            userId: principal.userId,
-            problemId: comment.problemId,
-            action: "VOTE",
-            tier: reputation.tier,
-            settings,
-        })
+    const currentVote = await prisma.discussionVote.findUnique({
+        where: {
+            commentId_userId: {
+                commentId: comment.id,
+                userId: principal.userId,
+            },
+        },
+        select: { updatedAt: true },
+    })
 
-        if (!limit.ok) {
-            return NextResponse.json({ error: limit.error }, { status: 429 })
-        }
+    // The schema stores only current votes, so removing a vote deletes the
+    // hourly evidence. Until a dedicated vote-action table exists, combine the
+    // current-row hourly cap with a short same-comment churn guard.
+    if (
+        currentVote &&
+        Date.now() - currentVote.updatedAt.getTime() <
+            VOTE_CHURN_COOLDOWN_SECONDS * 1000
+    ) {
+        return NextResponse.json(
+            { error: "You are voting too quickly. Try again shortly." },
+            { status: 429 }
+        )
+    }
+
+    const reputation = await getUserReputation(principal.userId, settings)
+    const limit = await checkDiscussionLimit({
+        userId: principal.userId,
+        problemId: comment.problemId,
+        action: "VOTE",
+        tier: reputation.tier,
+        settings,
+    })
+
+    if (!limit.ok) {
+        return NextResponse.json({ error: limit.error }, { status: 429 })
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -215,6 +220,7 @@ export const PUT = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
             select: { value: true },
         })
         const previousValue = previousVote?.value ?? null
+        const delta = voteCounterDelta(previousValue, value)
 
         if (value === null) {
             if (previousVote) {
@@ -244,38 +250,46 @@ export const PUT = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
             })
         }
 
-        const voteCounts = await tx.discussionVote.groupBy({
-            by: ["value"],
-            where: { commentId: comment.id },
-            _count: { value: true },
-        })
-        const upvotes =
-            voteCounts.find((row) => row.value === "UP")?._count.value ?? 0
-        const downvotes =
-            voteCounts.find((row) => row.value === "DOWN")?._count.value ?? 0
-        const score = upvotes - downvotes
-
-        await tx.discussionComment.update({
-            where: { id: comment.id },
-            data: { upvotes, downvotes, score },
-        })
+        const updated =
+            delta.upvotes === 0 && delta.downvotes === 0 && delta.score === 0
+                ? await tx.discussionComment.findUniqueOrThrow({
+                      where: { id: comment.id },
+                      select: {
+                          upvotes: true,
+                          downvotes: true,
+                          score: true,
+                      },
+                  })
+                : await tx.discussionComment.update({
+                      where: { id: comment.id },
+                      data: {
+                          upvotes: { increment: delta.upvotes },
+                          downvotes: { increment: delta.downvotes },
+                          score: { increment: delta.score },
+                      },
+                      select: {
+                          upvotes: true,
+                          downvotes: true,
+                          score: true,
+                      },
+                  })
 
         if (comment.userId) {
-            for (const delta of reputationDeltas(
-                comment.id,
-                principal.userId,
-                previousValue,
-                value
-            )) {
-                await createReputationEvent({
-                    userId: comment.userId,
-                    delta,
-                    tx,
-                })
-            }
+            await syncVoteReputation({
+                authorId: comment.userId,
+                commentId: comment.id,
+                voterId: principal.userId,
+                value,
+                tx,
+            })
         }
 
-        return { value, upvotes, downvotes, score }
+        return {
+            value,
+            upvotes: updated.upvotes,
+            downvotes: updated.downvotes,
+            score: updated.score,
+        }
     })
 
     return NextResponse.json({ data: result })
