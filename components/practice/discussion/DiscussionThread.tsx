@@ -28,8 +28,12 @@ export function DiscussionThread({
         return (
             <EmptyState
                 icon={<MessagesSquare className="h-5 w-5" />}
-                title="No discussion yet"
-                description="Start with a question, edge case, or a short explanation of your approach."
+                title={mode === "LOCKED" ? "No comments yet" : "No discussion yet"}
+                description={
+                    mode === "LOCKED"
+                        ? "This discussion is locked, so no new comments can be added."
+                        : "Start with a question, edge case, or a short explanation of your approach."
+                }
             />
         )
     }

@@ -39,9 +39,27 @@ async function findOwnedComment(slug: string, commentId: string, userId: string)
     })
 }
 
+function openPublishedProblemWhere(slug: string) {
+    return {
+        slug,
+        status: "PUBLISHED" as const,
+        OR: [
+            { discussionState: null },
+            { discussionState: { mode: "OPEN" as const } },
+        ],
+    }
+}
+
 export const PATCH = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
     const { slug, commentId } = await ctx.params
     const settings = await getDiscussionSettings()
+
+    if (!settings.globalEnabled) {
+        return NextResponse.json(
+            { error: "Discussions are disabled." },
+            { status: 403 }
+        )
+    }
 
     const parsed = DiscussionCommentEditInput.safeParse(await readJson(req))
     if (!parsed.success) {
@@ -61,39 +79,47 @@ export const PATCH = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
         )
     }
 
-    const comment = await findOwnedComment(slug, commentId, principal.userId)
-    if (!comment) {
-        return NextResponse.json({ error: "Comment not found." }, { status: 404 })
-    }
-
-    if ((comment.problem.discussionState?.mode ?? "OPEN") !== "OPEN") {
-        return NextResponse.json(
-            { error: "Discussion is not open." },
-            { status: 403 }
-        )
-    }
-
-    if (comment.status !== "VISIBLE") {
-        return NextResponse.json(
-            { error: "Only visible comments can be edited." },
-            { status: 409 }
-        )
-    }
-
     const editWindowMs = settings.editWindowMinutes * 60 * 1000
-    if (Date.now() - comment.createdAt.getTime() > editWindowMs) {
+    const editSince = new Date(Date.now() - editWindowMs)
+    const result = await prisma.discussionComment.updateMany({
+        where: {
+            id: commentId,
+            userId: principal.userId,
+            status: "VISIBLE",
+            createdAt: { gte: editSince },
+            problem: openPublishedProblemWhere(slug),
+        },
+        data: {
+            bodyMarkdown,
+            editedAt: new Date(),
+        },
+    })
+
+    if (result.count === 0) {
+        const comment = await findOwnedComment(slug, commentId, principal.userId)
+        if (!comment) {
+            return NextResponse.json({ error: "Comment not found." }, { status: 404 })
+        }
+        if ((comment.problem.discussionState?.mode ?? "OPEN") !== "OPEN") {
+            return NextResponse.json(
+                { error: "Discussion is not open." },
+                { status: 403 }
+            )
+        }
+        if (comment.status !== "VISIBLE") {
+            return NextResponse.json(
+                { error: "Only visible comments can be edited." },
+                { status: 409 }
+            )
+        }
         return NextResponse.json(
             { error: "The edit window for this comment has expired." },
             { status: 403 }
         )
     }
 
-    const updated = await prisma.discussionComment.update({
-        where: { id: comment.id },
-        data: {
-            bodyMarkdown,
-            editedAt: new Date(),
-        },
+    const updated = await prisma.discussionComment.findUniqueOrThrow({
+        where: { id: commentId },
         include: publicCommentInclude(principal.userId),
     })
 
@@ -102,40 +128,55 @@ export const PATCH = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
 
 export const DELETE = withDiscussionAuth(async (_req, principal, ctx: Ctx) => {
     const { slug, commentId } = await ctx.params
-    const comment = await findOwnedComment(slug, commentId, principal.userId)
-    if (!comment) {
-        return NextResponse.json({ error: "Comment not found." }, { status: 404 })
-    }
+    const settings = await getDiscussionSettings()
 
-    if ((comment.problem.discussionState?.mode ?? "OPEN") !== "OPEN") {
+    if (!settings.globalEnabled) {
         return NextResponse.json(
-            { error: "Discussion is not open." },
+            { error: "Discussions are disabled." },
             { status: 403 }
         )
     }
 
-    if (comment.status === "DELETED") {
-        const deleted = await prisma.discussionComment.findUniqueOrThrow({
-            where: { id: comment.id },
-            include: publicCommentInclude(principal.userId),
-        })
-        return NextResponse.json({ data: shapePublicComment(deleted) })
-    }
+    const result = await prisma.discussionComment.updateMany({
+        where: {
+            id: commentId,
+            userId: principal.userId,
+            status: "VISIBLE",
+            problem: openPublishedProblemWhere(slug),
+        },
+        data: {
+            status: "DELETED",
+            bodyMarkdown: "",
+            deletedAt: new Date(),
+        },
+    })
 
-    if (comment.status !== "VISIBLE") {
+    if (result.count === 0) {
+        const comment = await findOwnedComment(slug, commentId, principal.userId)
+        if (!comment) {
+            return NextResponse.json({ error: "Comment not found." }, { status: 404 })
+        }
+        if ((comment.problem.discussionState?.mode ?? "OPEN") !== "OPEN") {
+            return NextResponse.json(
+                { error: "Discussion is not open." },
+                { status: 403 }
+            )
+        }
+        if (comment.status === "DELETED") {
+            const deleted = await prisma.discussionComment.findUniqueOrThrow({
+                where: { id: comment.id },
+                include: publicCommentInclude(principal.userId),
+            })
+            return NextResponse.json({ data: shapePublicComment(deleted) })
+        }
         return NextResponse.json(
             { error: "Only visible comments can be deleted." },
             { status: 409 }
         )
     }
 
-    const updated = await prisma.discussionComment.update({
-        where: { id: comment.id },
-        data: {
-            status: "DELETED",
-            bodyMarkdown: "",
-            deletedAt: new Date(),
-        },
+    const updated = await prisma.discussionComment.findUniqueOrThrow({
+        where: { id: commentId },
         include: publicCommentInclude(principal.userId),
     })
 
