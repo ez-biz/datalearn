@@ -234,7 +234,7 @@ User ──┐
 
 - **User** — id, email, name, image, role (`USER` / `CONTRIBUTOR` / `ADMIN`), accounts, sessions, submissions, authored articles, created API keys.
 - **Session** — NextAuth-managed; database session strategy.
-- **SQLProblem** — `number` (stable display ID, `Int @unique`, minted as `MAX(number)+1` in the create transaction; never recycled), slug, title, difficulty, status (`DRAFT` / `BETA` / `PUBLISHED` / `ARCHIVED`), description, schemaDescription, ordered, hints[], expectedOutput (JSON-stringified array of row objects), solutionSql (admin-only reference), schemaId, tags M:N.
+- **SQLProblem** — `number` (stable display ID, `Int @unique`, minted as `MAX(number)+1` in the create transaction; never recycled), slug, title, difficulty, status (`DRAFT` / `BETA` / `PUBLISHED` / `ARCHIVED`), description, schemaDescription, ordered, hints[], `dialects[]` (engines this problem can be solved in — typically `[DUCKDB, POSTGRES]`), `solutions Json` (per-dialect canonical SQL, keyed by `Dialect`; v0.4.2+), `expectedOutputs Json` (per-dialect expected rows as JSON-stringified arrays; v0.4.2+), legacy `expectedOutput` and `solutionSql` (kept until the cleanup release that drops them), schemaId, tags M:N.
 - **SqlSchema** — name, sql (CREATE TABLE + INSERT VALUES — **not** stored as separate DDL/seed columns).
 - **Submission** — userId, problemId, status (`ACCEPTED` / `WRONG_ANSWER`), code, reason, createdAt.
 - **Tag** — slug, name; M:N to Problem and to Article.
@@ -247,7 +247,8 @@ User ──┐
 
 ### Design decisions
 
-- **`expectedOutput` is a JSON-stringified array** of row objects. Validated by Zod refinements at the API boundary (`ProblemCreateInput`).
+- **`expectedOutputs` is per-dialect JSON-stringified arrays** of row objects (`{ "DUCKDB": "[{...}]", "POSTGRES": "[{...}]" }`). The legacy single `expectedOutput` field is preserved until the cleanup release. Validated at the API boundary by `ProblemCreateInput` / `ProblemUpdateInput` Zod refines: keys must subset `dialects[]`, every value must parse as an array, and PUBLISHED requires a non-empty entry for every listed dialect.
+- **`validateSubmission(slug, userResult, dialect)`** reads `expectedOutputs[dialect]` first, falling back to the legacy `expectedOutput` when the per-dialect entry is missing. The `dialect` param is what the workspace toggle is currently set to; the same query against different engines can serialize differently (most notably for `DATE` columns), and the per-dialect path keeps validation correct against each engine's semantics.
 - **Submissions are append-only.** No edit, no delete from user surfaces. Acceptance rate is a derived metric.
 - **Status state machine on Article**: `DRAFT → SUBMITTED → PUBLISHED → ARCHIVED`. Approve/reject are explicit verbs; publish triggers an `ArticleVersion` snapshot.
 - **Tag is shared between Problems and Articles** via two M:N relations (`ProblemTags`, `ArticleTags`) so cross-linking is explicit, not tag-similarity-heuristic.

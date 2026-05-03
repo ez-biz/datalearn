@@ -1,6 +1,6 @@
 # Per-dialect solutions & expectedOutputs (Option 3)
 
-> **Status**: in flight on `feat/per-dialect-solutions`. Targets `v0.5.0` (additive) + `v0.5.1` (cleanup).
+> **Status**: shipped as `v0.4.2` (PR #65 + #66). The cleanup pass that drops legacy `solutionSql` / `expectedOutput` columns is a future patch release. The body below preserves the original `v0.5.0` / `v0.5.1` version targets for historical context — the release version differed because we treated this as a polish on top of `v0.4.1` rather than a feature minor bump.
 
 ## Goal
 

@@ -97,7 +97,7 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
             // back-compat. When only legacy fields are provided,
             // replicate them across the existing dialects[] into the
             // new maps. This keeps old and new columns in sync until
-            // v0.5.1 drops the legacy columns.
+            // the cleanup release drops the legacy columns.
             const effectiveDialects = input.dialects ?? existing.dialects
             const existingSolutions =
                 (existing.solutions as Record<string, string>) ?? {}
