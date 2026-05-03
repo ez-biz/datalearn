@@ -205,16 +205,39 @@ export const ProblemCreateInput = ProblemCreateInputBase
     // PUBLISHED problems must have a non-empty solution + expectedOutput
     // for every dialect they advertise. DRAFT/BETA/ARCHIVED tolerate
     // partial population (legacy data, in-progress authoring).
+    //
+    // We synthesize the per-dialect maps from legacy fields (the same
+    // fan-out the API layer applies before writing) so create-time
+    // gate matches what's actually persisted.
     .refine(
         (v) => {
             if (v.status !== "PUBLISHED") return true
-            for (const d of v.dialects) {
-                const sol = v.solutions?.[d] ?? v.solutionSql
-                const exp = v.expectedOutputs?.[d] ?? v.expectedOutput
-                if (!sol || sol.trim().length === 0) return false
-                if (!exp || exp.trim().length === 0) return false
+            const synthesizedSolutions: Record<string, string> = {
+                ...(v.solutions ?? {}),
             }
-            return true
+            const synthesizedExpectedOutputs: Record<string, string> = {
+                ...(v.expectedOutputs ?? {}),
+            }
+            if (v.solutionSql !== undefined && v.solutionSql !== null) {
+                for (const d of v.dialects) {
+                    if (synthesizedSolutions[d] === undefined)
+                        synthesizedSolutions[d] = v.solutionSql
+                }
+            }
+            if (v.expectedOutput !== undefined) {
+                for (const d of v.dialects) {
+                    if (synthesizedExpectedOutputs[d] === undefined)
+                        synthesizedExpectedOutputs[d] = v.expectedOutput
+                }
+            }
+            return (
+                getMissingPublishedDialectMapEntries({
+                    status: "PUBLISHED",
+                    dialects: v.dialects,
+                    solutions: synthesizedSolutions,
+                    expectedOutputs: synthesizedExpectedOutputs,
+                }).length === 0
+            )
         },
         {
             message:
