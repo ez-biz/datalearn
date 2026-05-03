@@ -15,6 +15,16 @@ export const SlugSchema = z
 export const Difficulty = z.enum(["EASY", "MEDIUM", "HARD"])
 export const ProblemStatus = z.enum(["DRAFT", "BETA", "PUBLISHED", "ARCHIVED"])
 export const Dialect = z.enum(["DUCKDB", "POSTGRES"])
+export const ModeratorPermission = z.enum([
+    "VIEW_DISCUSSION_QUEUE",
+    "HIDE_COMMENT",
+    "RESTORE_COMMENT",
+    "DISMISS_REPORT",
+    "MARK_SPAM",
+    "LOCK_PROBLEM_DISCUSSION",
+    "HIDE_PROBLEM_DISCUSSION",
+])
+export const ProblemDiscussionMode = z.enum(["OPEN", "LOCKED", "HIDDEN"])
 export const ProblemReportKind = z.enum([
     "WRONG_ANSWER",
     "UNCLEAR_DESCRIPTION",
@@ -383,7 +393,75 @@ export const ProblemReportCreateInput = z.object({
     message: z.string().min(1).max(4_000),
 })
 
-export const UserRoleSchema = z.enum(["USER", "CONTRIBUTOR", "ADMIN"])
+export const DiscussionSettingsUpdateInput = z
+    .object({
+        globalEnabled: z.boolean().optional(),
+        reportThreshold: z.number().int().min(1).max(100).optional(),
+        editWindowMinutes: z.number().int().min(1).max(1440).optional(),
+        duplicateCooldownSeconds: z.number().int().min(0).max(86_400).optional(),
+        bodyMaxChars: z.number().int().min(100).max(20_000).optional(),
+        trustedMinReputation: z.number().int().min(0).max(1_000_000).optional(),
+        highTrustMinReputation: z
+            .number()
+            .int()
+            .min(0)
+            .max(1_000_000)
+            .optional(),
+        newTopLevelPerHour: z.number().int().min(0).max(1_000).optional(),
+        newRepliesPerHour: z.number().int().min(0).max(1_000).optional(),
+        newPerProblemPerDay: z.number().int().min(0).max(1_000).optional(),
+        newMinSecondsBetween: z.number().int().min(0).max(86_400).optional(),
+        newVotesPerHour: z.number().int().min(0).max(10_000).optional(),
+        trustedTopLevelPerHour: z.number().int().min(0).max(1_000).optional(),
+        trustedRepliesPerHour: z.number().int().min(0).max(1_000).optional(),
+        trustedPerProblemPerDay: z.number().int().min(0).max(1_000).optional(),
+        trustedMinSecondsBetween: z.number().int().min(0).max(86_400).optional(),
+        trustedVotesPerHour: z.number().int().min(0).max(10_000).optional(),
+        highTopLevelPerHour: z.number().int().min(0).max(1_000).optional(),
+        highRepliesPerHour: z.number().int().min(0).max(1_000).optional(),
+        highPerProblemPerDay: z.number().int().min(0).max(1_000).optional(),
+        highMinSecondsBetween: z.number().int().min(0).max(86_400).optional(),
+        highVotesPerHour: z.number().int().min(0).max(10_000).optional(),
+    })
+    .refine(
+        (v) =>
+            v.highTrustMinReputation === undefined ||
+            v.trustedMinReputation === undefined ||
+            v.highTrustMinReputation >= v.trustedMinReputation,
+        {
+            path: ["highTrustMinReputation"],
+            message:
+                "High-trust threshold must be greater than or equal to trusted threshold.",
+        }
+    )
+
+export const DiscussionCommentCreateInput = z.object({
+    bodyMarkdown: z.string().min(1).max(20_000),
+})
+
+export const DiscussionCommentEditInput = z.object({
+    bodyMarkdown: z.string().min(1).max(20_000),
+})
+
+export const DiscussionVoteInput = z.object({
+    value: z.enum(["UP", "DOWN"]).nullable(),
+})
+
+export const DiscussionReportInput = z.object({
+    reason: z.enum(["SPAM", "ABUSE", "SPOILER", "OFF_TOPIC", "OTHER"]),
+    message: z.string().max(2_000).default(""),
+})
+
+export const ModeratorPermissionUpdateInput = z.object({
+    permissions: z.array(ModeratorPermission).max(10),
+})
+
+export const UserRoleSchema = z.enum([
+    "USER",
+    "CONTRIBUTOR",
+    "MODERATOR",
+    "ADMIN",
+])
 
 export const UserRoleUpdateInput = z.object({
     role: UserRoleSchema,
