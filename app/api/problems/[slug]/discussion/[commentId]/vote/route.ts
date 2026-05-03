@@ -1,25 +1,18 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import type {
-    DiscussionVoteValue,
-    Prisma,
-} from "@prisma/client"
+import { Prisma, type DiscussionVoteValue } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { DiscussionVoteInput } from "@/lib/admin-validation"
 import { withDiscussionAuth } from "@/lib/discussions/api-auth"
-import { checkDiscussionLimit } from "@/lib/discussions/rate-limit"
+import { checkVoteLimit } from "@/lib/discussions/rate-limit"
 import { getUserReputation } from "@/lib/discussions/reputation"
 import { getDiscussionSettings } from "@/lib/discussions/settings"
+import {
+    VOTE_CHURN_COOLDOWN_SECONDS,
+    voteCounterDelta,
+} from "@/lib/discussions/votes"
 
 type Ctx = { params: Promise<{ slug: string; commentId: string }> }
-
-const VOTE_CHURN_COOLDOWN_SECONDS = 5
-
-type VoteCounterDelta = {
-    upvotes: number
-    downvotes: number
-    score: number
-}
 
 async function readJson(req: Request): Promise<unknown | null> {
     try {
@@ -27,33 +20,6 @@ async function readJson(req: Request): Promise<unknown | null> {
     } catch {
         return null
     }
-}
-
-function voteCounterDelta(
-    previous: DiscussionVoteValue | null,
-    next: DiscussionVoteValue | null
-): VoteCounterDelta {
-    if (previous === next) return { upvotes: 0, downvotes: 0, score: 0 }
-    if (previous === null && next === "UP") {
-        return { upvotes: 1, downvotes: 0, score: 1 }
-    }
-    if (previous === null && next === "DOWN") {
-        return { upvotes: 0, downvotes: 1, score: -1 }
-    }
-    if (previous === "UP" && next === null) {
-        return { upvotes: -1, downvotes: 0, score: -1 }
-    }
-    if (previous === "DOWN" && next === null) {
-        return { upvotes: 0, downvotes: -1, score: 1 }
-    }
-    if (previous === "UP" && next === "DOWN") {
-        return { upvotes: -1, downvotes: 1, score: -2 }
-    }
-    if (previous === "DOWN" && next === "UP") {
-        return { upvotes: 1, downvotes: -1, score: 2 }
-    }
-
-    return { upvotes: 0, downvotes: 0, score: 0 }
 }
 
 async function syncVoteReputation(input: {
@@ -172,44 +138,46 @@ export const PUT = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
     }
 
     const value = parsed.data.value
-    const currentVote = await prisma.discussionVote.findUnique({
-        where: {
-            commentId_userId: {
+    const reputation = await getUserReputation(principal.userId, settings)
+
+    const result = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw(Prisma.sql`
+            SELECT "id" FROM "User" WHERE "id" = ${principal.userId} FOR UPDATE
+        `)
+        await tx.$queryRaw(Prisma.sql`
+            SELECT "id" FROM "DiscussionComment" WHERE "id" = ${comment.id} FOR UPDATE
+        `)
+
+        const limit = await checkVoteLimit({
+            userId: principal.userId,
+            tier: reputation.tier,
+            settings,
+            client: tx,
+        })
+        if (!limit.ok) {
+            return { ok: false as const, error: limit.error, status: 429 }
+        }
+
+        const lastAction = await tx.discussionVoteAction.findFirst({
+            where: {
                 commentId: comment.id,
                 userId: principal.userId,
             },
-        },
-        select: { updatedAt: true },
-    })
+            orderBy: { createdAt: "desc" },
+            select: { createdAt: true },
+        })
+        if (
+            lastAction &&
+            Date.now() - lastAction.createdAt.getTime() <
+                VOTE_CHURN_COOLDOWN_SECONDS * 1000
+        ) {
+            return {
+                ok: false as const,
+                error: "You are voting too quickly. Try again shortly.",
+                status: 429,
+            }
+        }
 
-    // The schema stores only current votes, so removing a vote deletes the
-    // hourly evidence. Until a dedicated vote-action table exists, combine the
-    // current-row hourly cap with a short same-comment churn guard.
-    if (
-        currentVote &&
-        Date.now() - currentVote.updatedAt.getTime() <
-            VOTE_CHURN_COOLDOWN_SECONDS * 1000
-    ) {
-        return NextResponse.json(
-            { error: "You are voting too quickly. Try again shortly." },
-            { status: 429 }
-        )
-    }
-
-    const reputation = await getUserReputation(principal.userId, settings)
-    const limit = await checkDiscussionLimit({
-        userId: principal.userId,
-        problemId: comment.problemId,
-        action: "VOTE",
-        tier: reputation.tier,
-        settings,
-    })
-
-    if (!limit.ok) {
-        return NextResponse.json({ error: limit.error }, { status: 429 })
-    }
-
-    const result = await prisma.$transaction(async (tx) => {
         const previousVote = await tx.discussionVote.findUnique({
             where: {
                 commentId_userId: {
@@ -250,6 +218,14 @@ export const PUT = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
             })
         }
 
+        await tx.discussionVoteAction.create({
+            data: {
+                commentId: comment.id,
+                userId: principal.userId,
+                value,
+            },
+        })
+
         const updated =
             delta.upvotes === 0 && delta.downvotes === 0 && delta.score === 0
                 ? await tx.discussionComment.findUniqueOrThrow({
@@ -285,12 +261,22 @@ export const PUT = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
         }
 
         return {
-            value,
-            upvotes: updated.upvotes,
-            downvotes: updated.downvotes,
-            score: updated.score,
+            ok: true as const,
+            data: {
+                value,
+                upvotes: updated.upvotes,
+                downvotes: updated.downvotes,
+                score: updated.score,
+            },
         }
     })
 
-    return NextResponse.json({ data: result })
+    if (!result.ok) {
+        return NextResponse.json(
+            { error: result.error },
+            { status: result.status }
+        )
+    }
+
+    return NextResponse.json({ data: result.data })
 })

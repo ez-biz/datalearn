@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import type { DiscussionSettings } from "@prisma/client"
+import type { DiscussionSettings, Prisma } from "@prisma/client"
 import type { ReputationTier } from "./constants"
 
 type DiscussionLimitAction = "COMMENT" | "REPLY" | "VOTE"
@@ -13,6 +13,8 @@ type TierLimits = {
     minSecondsBetween: number
     votesPerHour: number
 }
+
+type VoteLimitClient = Pick<Prisma.TransactionClient, "discussionVoteAction">
 
 function tierLimits(
     settings: DiscussionSettings,
@@ -47,6 +49,29 @@ function tierLimits(
     }
 }
 
+export async function checkVoteLimit(input: {
+    userId: string
+    tier: ReputationTier
+    settings: DiscussionSettings
+    client?: VoteLimitClient
+}): Promise<DiscussionLimitResult> {
+    const limits = tierLimits(input.settings, input.tier)
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+    const client = input.client ?? prisma
+    const votes = await client.discussionVoteAction.count({
+        where: {
+            userId: input.userId,
+            createdAt: { gte: oneHourAgo },
+        },
+    })
+
+    if (votes >= limits.votesPerHour) {
+        return { ok: false, error: "Too many votes. Try again later." }
+    }
+
+    return { ok: true }
+}
+
 export async function checkDiscussionLimit(input: {
     userId: string
     problemId: string
@@ -55,26 +80,15 @@ export async function checkDiscussionLimit(input: {
     tier: ReputationTier
     settings: DiscussionSettings
 }): Promise<DiscussionLimitResult> {
-    const limits = tierLimits(input.settings, input.tier)
     const now = Date.now()
     const oneHourAgo = new Date(now - 60 * 60 * 1000)
-    const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000)
 
     if (input.action === "VOTE") {
-        const votes = await prisma.discussionVote.count({
-            where: {
-                userId: input.userId,
-                updatedAt: { gte: oneHourAgo },
-            },
-        })
-
-        if (votes >= limits.votesPerHour) {
-            return { ok: false, error: "Too many votes. Try again later." }
-        }
-
-        return { ok: true }
+        return checkVoteLimit(input)
     }
 
+    const limits = tierLimits(input.settings, input.tier)
+    const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000)
     const hourlyLimit =
         input.action === "REPLY"
             ? limits.repliesPerHour

@@ -23,6 +23,7 @@ model User {
   lists         ProblemList[]
   discussionComments DiscussionComment[] @relation("DiscussionCommentAuthor")
   discussionVotes DiscussionVote[]
+  discussionVoteActions DiscussionVoteAction[]
   discussionReports DiscussionReport[] @relation("DiscussionReportReporter")
   resolvedDiscussionReports DiscussionReport[] @relation("DiscussionReportResolver")
   hiddenDiscussionComments DiscussionComment[] @relation("DiscussionCommentHiddenBy")
@@ -438,6 +439,7 @@ model DiscussionComment {
   score       Int                     @default(0)
   reportCount Int                     @default(0)
   votes       DiscussionVote[]
+  voteActions DiscussionVoteAction[]
   reports     DiscussionReport[]
   createdAt   DateTime                @default(now())
   updatedAt   DateTime                @updatedAt
@@ -464,6 +466,19 @@ model DiscussionVote {
 
   @@id([commentId, userId])
   @@index([userId, updatedAt])
+}
+
+model DiscussionVoteAction {
+  id        String               @id @default(cuid())
+  commentId String
+  comment   DiscussionComment    @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  value     DiscussionVoteValue?
+  createdAt DateTime             @default(now())
+
+  @@index([userId, createdAt])
+  @@index([commentId, userId, createdAt])
 }
 
 model DiscussionReport {

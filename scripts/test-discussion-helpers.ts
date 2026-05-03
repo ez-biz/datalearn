@@ -6,6 +6,7 @@ import {
     validateDiscussionSettingsUpdate,
 } from "../lib/admin-validation"
 import { tierForScore } from "../lib/discussions/reputation"
+import { voteCounterDelta } from "../lib/discussions/votes"
 
 const settings = {
     trustedMinReputation: 20,
@@ -69,5 +70,26 @@ assert.equal(
     DiscussionCommentEditInput.safeParse({ bodyMarkdown: "   \n\t" }).success,
     false
 )
+
+assert.deepEqual(voteCounterDelta(null, "UP"), {
+    upvotes: 1,
+    downvotes: 0,
+    score: 1,
+})
+assert.deepEqual(voteCounterDelta("UP", "DOWN"), {
+    upvotes: -1,
+    downvotes: 1,
+    score: -2,
+})
+assert.deepEqual(voteCounterDelta("DOWN", null), {
+    upvotes: 0,
+    downvotes: -1,
+    score: 1,
+})
+assert.deepEqual(voteCounterDelta("UP", "UP"), {
+    upvotes: 0,
+    downvotes: 0,
+    score: 0,
+})
 
 console.log("discussion helper tests passed")
