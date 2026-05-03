@@ -426,10 +426,10 @@ model DiscussionComment {
   id          String                  @id @default(cuid())
   problemId   String
   problem     SQLProblem              @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User                    @relation("DiscussionCommentAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?                   @relation("DiscussionCommentAuthor", fields: [userId], references: [id], onDelete: SetNull)
   parentId    String?
-  parent      DiscussionComment?      @relation("DiscussionReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  parent      DiscussionComment?      @relation("DiscussionReplies", fields: [parentId], references: [id], onDelete: Restrict)
   replies     DiscussionComment[]     @relation("DiscussionReplies")
   bodyMarkdown String                 @db.Text
   status      DiscussionCommentStatus @default(VISIBLE)
@@ -482,10 +482,11 @@ model DiscussionReport {
 
   @@unique([commentId, userId])
   @@index([commentId, status])
-  @@index([commentId, userId])
   @@index([status, createdAt])
 }
 
+/// Singleton row. The database enforces `id = 'global'` through a manual
+/// migration check constraint because Prisma cannot model check constraints.
 model DiscussionSettings {
   id                       String   @id @default("global")
   globalEnabled            Boolean  @default(false)
@@ -532,7 +533,7 @@ model UserReputationEvent {
   createdAt DateTime                @default(now())
 
   @@index([userId, createdAt])
-  @@index([userId, kind, sourceId])
+  @@unique([userId, kind, sourceId])
 }
 
 model ModeratorPermission {
@@ -544,7 +545,6 @@ model ModeratorPermission {
   createdAt   DateTime               @default(now())
 
   @@id([userId, permission])
-  @@index([userId, permission])
 }
 
 model DiscussionModerationLog {

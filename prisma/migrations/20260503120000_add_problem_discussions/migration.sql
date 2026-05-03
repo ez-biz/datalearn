@@ -1,5 +1,5 @@
 -- AlterEnum
-ALTER TYPE "UserRole" ADD VALUE 'MODERATOR' BEFORE 'ADMIN';
+ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'MODERATOR' BEFORE 'ADMIN';
 
 -- CreateEnum
 CREATE TYPE "DiscussionCommentStatus" AS ENUM ('VISIBLE', 'HIDDEN', 'DELETED', 'SPAM');
@@ -29,7 +29,7 @@ CREATE TYPE "DiscussionModerationActionKind" AS ENUM ('HIDE_COMMENT', 'RESTORE_C
 CREATE TABLE "DiscussionComment" (
     "id" TEXT NOT NULL,
     "problemId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
+    "userId" TEXT,
     "parentId" TEXT,
     "bodyMarkdown" TEXT NOT NULL,
     "status" "DiscussionCommentStatus" NOT NULL DEFAULT 'VISIBLE',
@@ -101,6 +101,7 @@ CREATE TABLE "DiscussionSettings" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "updatedById" TEXT,
 
+    CONSTRAINT "DiscussionSettings_id_global_check" CHECK ("id" = 'global'),
     CONSTRAINT "DiscussionSettings_pkey" PRIMARY KEY ("id")
 );
 
@@ -171,19 +172,13 @@ CREATE UNIQUE INDEX "DiscussionReport_commentId_userId_key" ON "DiscussionReport
 CREATE INDEX "DiscussionReport_commentId_status_idx" ON "DiscussionReport"("commentId", "status");
 
 -- CreateIndex
-CREATE INDEX "DiscussionReport_commentId_userId_idx" ON "DiscussionReport"("commentId", "userId");
-
--- CreateIndex
 CREATE INDEX "DiscussionReport_status_createdAt_idx" ON "DiscussionReport"("status", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "UserReputationEvent_userId_createdAt_idx" ON "UserReputationEvent"("userId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "UserReputationEvent_userId_kind_sourceId_idx" ON "UserReputationEvent"("userId", "kind", "sourceId");
-
--- CreateIndex
-CREATE INDEX "ModeratorPermission_userId_permission_idx" ON "ModeratorPermission"("userId", "permission");
+CREATE UNIQUE INDEX "UserReputationEvent_userId_kind_sourceId_key" ON "UserReputationEvent"("userId", "kind", "sourceId");
 
 -- CreateIndex
 CREATE INDEX "DiscussionModerationLog_actorId_createdAt_idx" ON "DiscussionModerationLog"("actorId", "createdAt");
@@ -195,10 +190,10 @@ CREATE INDEX "DiscussionModerationLog_targetType_targetId_createdAt_idx" ON "Dis
 ALTER TABLE "DiscussionComment" ADD CONSTRAINT "DiscussionComment_problemId_fkey" FOREIGN KEY ("problemId") REFERENCES "SQLProblem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "DiscussionComment" ADD CONSTRAINT "DiscussionComment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "DiscussionComment" ADD CONSTRAINT "DiscussionComment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "DiscussionComment" ADD CONSTRAINT "DiscussionComment_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "DiscussionComment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "DiscussionComment" ADD CONSTRAINT "DiscussionComment_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "DiscussionComment"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "DiscussionComment" ADD CONSTRAINT "DiscussionComment_hiddenById_fkey" FOREIGN KEY ("hiddenById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
