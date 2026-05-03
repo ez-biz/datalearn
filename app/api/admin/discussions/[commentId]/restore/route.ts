@@ -31,7 +31,7 @@ export async function POST(req: Request, ctx: Ctx) {
             }
 
             const transition = await tx.discussionComment.updateMany({
-                where: { id: comment.id, status: { in: ["HIDDEN", "SPAM"] } },
+                where: { id: comment.id, status: comment.status },
                 data: {
                     status: "VISIBLE",
                     hiddenAt: null,
