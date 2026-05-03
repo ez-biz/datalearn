@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
+import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { DiscussionReportInput } from "@/lib/admin-validation"
 import { withDiscussionAuth } from "@/lib/discussions/api-auth"
@@ -80,6 +81,21 @@ export const POST = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
 
     try {
         const result = await prisma.$transaction(async (tx) => {
+            const lockedComment = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+                SELECT "id"
+                FROM "DiscussionComment"
+                WHERE "id" = ${comment.id}
+                  AND "status" = 'VISIBLE'::"DiscussionCommentStatus"
+                FOR UPDATE
+            `)
+            if (lockedComment.length === 0) {
+                return {
+                    ok: false as const,
+                    error: "Comment is no longer visible.",
+                    status: 409,
+                }
+            }
+
             const report = await tx.discussionReport.create({
                 data: {
                     commentId: comment.id,
@@ -94,10 +110,20 @@ export const POST = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
                 select: { reportCount: true },
             })
 
-            return { report, reportCount: updated.reportCount }
+            return {
+                ok: true as const,
+                data: { report, reportCount: updated.reportCount },
+            }
         })
 
-        return NextResponse.json({ data: result }, { status: 201 })
+        if (!result.ok) {
+            return NextResponse.json(
+                { error: result.error },
+                { status: result.status }
+            )
+        }
+
+        return NextResponse.json({ data: result.data }, { status: 201 })
     } catch (error) {
         if (isPrismaCode(error, "P2002")) {
             return NextResponse.json(

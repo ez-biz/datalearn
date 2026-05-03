@@ -144,9 +144,20 @@ export const PUT = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
         await tx.$queryRaw(Prisma.sql`
             SELECT "id" FROM "User" WHERE "id" = ${principal.userId} FOR UPDATE
         `)
-        await tx.$queryRaw(Prisma.sql`
-            SELECT "id" FROM "DiscussionComment" WHERE "id" = ${comment.id} FOR UPDATE
+        const lockedComment = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            SELECT "id"
+            FROM "DiscussionComment"
+            WHERE "id" = ${comment.id}
+              AND "status" = 'VISIBLE'::"DiscussionCommentStatus"
+            FOR UPDATE
         `)
+        if (lockedComment.length === 0) {
+            return {
+                ok: false as const,
+                error: "Comment is no longer visible.",
+                status: 409,
+            }
+        }
 
         const limit = await checkVoteLimit({
             userId: principal.userId,
