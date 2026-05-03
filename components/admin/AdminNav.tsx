@@ -12,6 +12,7 @@ import {
     Key,
     LayoutDashboard,
     MessageSquareText,
+    ShieldCheck,
     Tag,
     Users,
 } from "lucide-react"
@@ -61,6 +62,12 @@ const items: {
         icon: MessageSquareText,
         badgeKey: "discussionQueue",
         requiresDiscussionQueuePermission: true,
+    },
+    {
+        href: "/admin/moderators",
+        label: "Moderators",
+        icon: ShieldCheck,
+        adminOnly: true,
     },
     { href: "/admin/contributors", label: "Contributors", icon: Users, adminOnly: true },
     { href: "/admin/api-keys", label: "API keys", icon: Key, adminOnly: true },

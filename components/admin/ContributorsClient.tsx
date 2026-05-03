@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { Loader2, Search, Shield, ShieldOff, UserPlus } from "lucide-react"
+import Link from "next/link"
+import { Loader2, Search, ShieldCheck, ShieldOff, UserPlus } from "lucide-react"
 import { Badge } from "@/components/ui/Badge"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -15,16 +16,17 @@ interface UserRow {
     email: string | null
     name: string | null
     image: string | null
-    role: "USER" | "CONTRIBUTOR" | "ADMIN"
+    role: "USER" | "CONTRIBUTOR" | "MODERATOR" | "ADMIN"
     createdAt: Date | string
     _count: { articles: number }
 }
 
-type FilterRole = "ALL" | "USER" | "CONTRIBUTOR" | "ADMIN"
+type FilterRole = "ALL" | "USER" | "CONTRIBUTOR" | "MODERATOR" | "ADMIN"
 
 const FILTERS: { value: FilterRole; label: string }[] = [
     { value: "ALL", label: "All" },
     { value: "ADMIN", label: "Admins" },
+    { value: "MODERATOR", label: "Moderators" },
     { value: "CONTRIBUTOR", label: "Contributors" },
     { value: "USER", label: "Users" },
 ]
@@ -191,6 +193,12 @@ function RoleBadge({ role }: { role: UserRow["role"] }) {
                 Contributor
             </Badge>
         )
+    if (role === "MODERATOR")
+        return (
+            <Badge variant="accent" className="normal-case tracking-normal">
+                Moderator
+            </Badge>
+        )
     return (
         <Badge variant="secondary" className="normal-case tracking-normal">
             User
@@ -214,6 +222,17 @@ function RoleActions({
             <span className="text-xs text-muted-foreground italic">
                 Manage via DB
             </span>
+        )
+    }
+    if (role === "MODERATOR") {
+        return (
+            <Link
+                href="/admin/moderators"
+                className="inline-flex h-8 items-center justify-center gap-2 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Permissions
+            </Link>
         )
     }
     if (role === "CONTRIBUTOR") {
