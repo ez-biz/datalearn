@@ -73,6 +73,19 @@ async function restoreProblemMode() {
     })
 }
 
+async function restoreDiscussionSettings() {
+    if (originalSettings) {
+        await prisma.discussionSettings.update({
+            where: { id: "global" },
+            data: originalSettings,
+        })
+        return
+    }
+    await prisma.discussionSettings.deleteMany({
+        where: { id: "global" },
+    })
+}
+
 async function createComment(input: { userId: string; bodyMarkdown: string }) {
     if (!problem) throw new Error(`${PROBLEM_SLUG} problem is not seeded`)
     const comment = await prisma.discussionComment.create({
@@ -141,12 +154,7 @@ test.afterAll(async () => {
         where: { code: { startsWith: PREFIX } },
     })
     await restoreProblemMode()
-    if (originalSettings) {
-        await prisma.discussionSettings.update({
-            where: { id: "global" },
-            data: originalSettings,
-        })
-    }
+    await restoreDiscussionSettings()
     for (const email of emails) {
         await deleteUser(email)
     }
