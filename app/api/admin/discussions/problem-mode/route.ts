@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
+import type { Prisma } from "@prisma/client"
 import { AuthFailure } from "@/lib/api-auth"
 import { ProblemDiscussionMode, SlugSchema } from "@/lib/admin-validation"
 import { prisma } from "@/lib/prisma"
@@ -39,30 +40,9 @@ export async function PATCH(req: Request) {
         }
 
         const { problemSlug, mode } = parsed.data
-        if (principal.role !== "ADMIN") {
-            if (principal.role !== "MODERATOR") {
-                return NextResponse.json(
-                    { error: "Moderator access required." },
-                    { status: 403 }
-                )
-            }
-            const allowed = await canSetProblemMode(
-                { userId: principal.userId, role: "MODERATOR" },
-                mode
-            )
-            if (!allowed) {
-                return NextResponse.json(
-                    { error: "Permission denied." },
-                    { status: 403 }
-                )
-            }
-        }
 
         const result = await prisma.$transaction(async (tx) => {
-            const problem = await tx.sQLProblem.findUnique({
-                where: { slug: problemSlug },
-                select: { id: true, slug: true },
-            })
+            const problem = await lockProblemBySlug(tx, problemSlug)
             if (!problem) {
                 return {
                     ok: false as const,
@@ -76,6 +56,28 @@ export async function PATCH(req: Request) {
                 select: { mode: true },
             })
             const oldMode = currentState?.mode ?? "OPEN"
+
+            if (principal.role !== "ADMIN") {
+                if (principal.role !== "MODERATOR") {
+                    return {
+                        ok: false as const,
+                        status: 403,
+                        error: "Moderator access required.",
+                    }
+                }
+                const allowed = await canSetProblemMode(
+                    { userId: principal.userId, role: "MODERATOR" },
+                    mode,
+                    oldMode
+                )
+                if (!allowed) {
+                    return {
+                        ok: false as const,
+                        status: 403,
+                        error: "Permission denied.",
+                    }
+                }
+            }
 
             const state = await tx.problemDiscussionState.upsert({
                 where: { problemId: problem.id },
@@ -138,7 +140,8 @@ export async function PATCH(req: Request) {
 
 async function canSetProblemMode(
     principal: { userId: string; role: "MODERATOR" },
-    mode: ProblemMode
+    mode: ProblemMode,
+    oldMode: ProblemMode
 ) {
     if (mode === "LOCKED") {
         return userHasDiscussionPermission(
@@ -152,16 +155,29 @@ async function canSetProblemMode(
             "HIDE_PROBLEM_DISCUSSION"
         )
     }
-
-    const [canLock, canHide] = await Promise.all([
-        userHasDiscussionPermission(
+    if (oldMode === "OPEN") return true
+    if (oldMode === "LOCKED") {
+        return userHasDiscussionPermission(
             { id: principal.userId, role: principal.role },
             "LOCK_PROBLEM_DISCUSSION"
-        ),
-        userHasDiscussionPermission(
+        )
+    }
+    if (oldMode === "HIDDEN") {
+        return userHasDiscussionPermission(
             { id: principal.userId, role: principal.role },
             "HIDE_PROBLEM_DISCUSSION"
-        ),
-    ])
-    return canLock || canHide
+        )
+    }
+
+    return false
+}
+
+async function lockProblemBySlug(tx: Prisma.TransactionClient, slug: string) {
+    const rows = await tx.$queryRaw<Array<{ id: string; slug: string }>>`
+        SELECT "id", "slug"
+        FROM "SQLProblem"
+        WHERE "slug" = ${slug}
+        FOR UPDATE
+    `
+    return rows[0] ?? null
 }

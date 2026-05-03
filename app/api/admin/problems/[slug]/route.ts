@@ -91,6 +91,9 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                 if (slugOwner) throw new Error("SLUG_TAKEN")
             }
 
+            const lockedProblem = await lockProblemById(tx, existing.id)
+            if (!lockedProblem) throw new Error("PROBLEM_NOT_FOUND")
+
             const data: Prisma.SQLProblemUpdateInput = {
                 ...(input.title !== undefined && { title: input.title }),
                 ...(input.slug !== undefined && { slug: input.slug }),
@@ -193,7 +196,7 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
             }
 
             const result = await tx.sQLProblem.update({
-                where: { id: existing.id },
+                where: { id: lockedProblem.id },
                 data,
                 include: {
                     schema: { select: { id: true, name: true, sql: true } },
@@ -252,6 +255,9 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                 { status: 409 }
             )
         }
+        if (error.message === "PROBLEM_NOT_FOUND") {
+            return NextResponse.json({ error: "Not found." }, { status: 404 })
+        }
         if (
             typeof error.message === "string" &&
             error.message.startsWith("TAGS_NOT_FOUND:")
@@ -309,3 +315,13 @@ export const DELETE = withAdmin(async (_req, _principal, ctx: Ctx) => {
         )
     }
 })
+
+async function lockProblemById(tx: Prisma.TransactionClient, id: string) {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT "id"
+        FROM "SQLProblem"
+        WHERE "id" = ${id}
+        FOR UPDATE
+    `
+    return rows[0] ?? null
+}

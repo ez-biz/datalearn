@@ -533,7 +533,9 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                                 }
                                 className="block w-full h-10 px-3 text-sm rounded-md border border-border bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
-                                <option value="OPEN">Open</option>
+                                <option value="OPEN">
+                                    Open - visible and writable
+                                </option>
                                 <option value="LOCKED">
                                     Locked - visible, read-only
                                 </option>
