@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
+import { Prisma } from "@prisma/client"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { DiscussionCommentCreateInput } from "@/lib/admin-validation"
 import { withDiscussionAuth } from "@/lib/discussions/api-auth"
 import { checkDiscussionLimit } from "@/lib/discussions/rate-limit"
 import {
+    BEST_RECENCY_WINDOW_SECONDS,
     discussionOrderBy,
     parseDiscussionSort,
     publicCommentInclude,
@@ -35,6 +37,35 @@ async function readJson(req: Request): Promise<unknown | null> {
     } catch {
         return null
     }
+}
+
+async function findBestCommentIds(input: {
+    problemId: string
+    skip: number
+    take: number
+}): Promise<string[]> {
+    const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT "id"
+        FROM "DiscussionComment"
+        WHERE "problemId" = ${input.problemId}
+          AND "parentId" IS NULL
+          AND "status" IN ('VISIBLE'::"DiscussionCommentStatus", 'DELETED'::"DiscussionCommentStatus")
+        ORDER BY (
+            "score" + GREATEST(
+                0,
+                1 - (
+                    EXTRACT(EPOCH FROM ((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - "createdAt")) /
+                    ${BEST_RECENCY_WINDOW_SECONDS}
+                )
+            )
+        ) DESC,
+        "createdAt" DESC,
+        "id" ASC
+        OFFSET ${input.skip}
+        LIMIT ${input.take}
+    `)
+
+    return rows.map((row) => row.id)
 }
 
 export async function GET(req: Request, ctx: Ctx) {
@@ -75,16 +106,33 @@ export async function GET(req: Request, ctx: Ctx) {
 
     const viewerUserId = session?.user?.id ?? null
     const where = publicCommentWhere(problem.id)
-    const [comments, total] = await Promise.all([
-        prisma.discussionComment.findMany({
-            where,
-            orderBy: discussionOrderBy(sort),
-            skip,
-            take: pageSize,
-            include: publicCommentInclude(viewerUserId),
-        }),
-        prisma.discussionComment.count({ where }),
-    ])
+    const totalPromise = prisma.discussionComment.count({ where })
+    const commentsPromise =
+        sort === "best"
+            ? findBestCommentIds({
+                  problemId: problem.id,
+                  skip,
+                  take: pageSize,
+              }).then(async (ids) => {
+                  if (ids.length === 0) return []
+                  const rows = await prisma.discussionComment.findMany({
+                      where: { id: { in: ids } },
+                      include: publicCommentInclude(viewerUserId),
+                  })
+                  const byId = new Map(rows.map((row) => [row.id, row]))
+                  return ids.flatMap((id) => {
+                      const row = byId.get(id)
+                      return row ? [row] : []
+                  })
+              })
+            : prisma.discussionComment.findMany({
+                  where,
+                  orderBy: discussionOrderBy(sort),
+                  skip,
+                  take: pageSize,
+                  include: publicCommentInclude(viewerUserId),
+              })
+    const [comments, total] = await Promise.all([commentsPromise, totalPromise])
 
     return NextResponse.json({
         data: {

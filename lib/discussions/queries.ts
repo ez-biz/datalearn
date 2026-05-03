@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client"
 
 const PUBLIC_COMMENT_STATUSES = ["VISIBLE", "DELETED"] as const
 const ANONYMOUS_VIEWER_ID = "__anonymous_viewer__"
+export const BEST_RECENCY_WINDOW_SECONDS = 7 * 24 * 60 * 60
 
 export type DiscussionSort = "best" | "votes" | "latest"
 
@@ -65,6 +66,8 @@ export function discussionOrderBy(
     sort: DiscussionSort
 ): Prisma.DiscussionCommentOrderByWithRelationInput[] {
     if (sort === "latest") return [{ createdAt: "desc" }]
+    // Exact Best ordering adds a small recency boost in the read route,
+    // because Prisma orderBy cannot express score + age decay directly.
     return [{ score: "desc" }, { createdAt: "desc" }]
 }
 
