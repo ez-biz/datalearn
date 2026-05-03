@@ -100,8 +100,27 @@ export async function validateSubmission(input: unknown): Promise<ValidationResu
                     reason: result.ok ? null : result.reason ?? null,
                 },
             })
+
+            if (result.ok) {
+                await prisma.userReputationEvent.upsert({
+                    where: {
+                        userId_kind_sourceId: {
+                            userId: session.user.id,
+                            kind: "ACCEPTED_SOLVE",
+                            sourceId: `problem:${problem.id}`,
+                        },
+                    },
+                    update: { points: 2 },
+                    create: {
+                        userId: session.user.id,
+                        kind: "ACCEPTED_SOLVE",
+                        points: 2,
+                        sourceId: `problem:${problem.id}`,
+                    },
+                })
+            }
         } catch (e) {
-            console.error("Failed to persist submission:", e)
+            console.error("Failed to persist submission or reputation event:", e)
         }
     }
 
