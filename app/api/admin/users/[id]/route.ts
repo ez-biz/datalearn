@@ -12,6 +12,8 @@ type Ctx = { params: Promise<{ id: string }> }
  * - You cannot promote-to or demote-from ADMIN through this endpoint.
  *   Use psql for that — done deliberately so an admin can't lock themselves
  *   out via the UI.
+ * - You cannot promote-to or demote-from MODERATOR through this endpoint.
+ *   The dedicated moderator admin flow owns that role.
  *
  * Allowed transitions: USER ↔ CONTRIBUTOR.
  */
@@ -38,6 +40,12 @@ export const PATCH = withAdmin(async (req, principal, ctx: Ctx) => {
             { status: 403 }
         )
     }
+    if (newRole === "MODERATOR") {
+        return NextResponse.json(
+            { error: "Manage MODERATOR role via the moderators admin flow." },
+            { status: 403 }
+        )
+    }
 
     const target = await prisma.user.findUnique({
         where: { id },
@@ -49,6 +57,12 @@ export const PATCH = withAdmin(async (req, principal, ctx: Ctx) => {
     if (target.role === "ADMIN") {
         return NextResponse.json(
             { error: "Demote ADMINs via the database, not the UI." },
+            { status: 403 }
+        )
+    }
+    if (target.role === "MODERATOR") {
+        return NextResponse.json(
+            { error: "Manage MODERATOR role via the moderators admin flow." },
             { status: 403 }
         )
     }
