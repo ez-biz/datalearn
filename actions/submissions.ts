@@ -28,6 +28,19 @@ export async function validateSubmission(input: unknown): Promise<ValidationResu
 
     const { problemSlug, userResult, code, dialect } = parsed.data
 
+    // Submit is gated on sign-in. Run executes client-side in the
+    // browser so anonymous users can still try problems freely; only
+    // Submit writes to the DB and counts toward stats. Fail closed
+    // here so a hand-crafted POST bypassing the UI guard still won't
+    // record a submission.
+    const sessionForGate = await auth()
+    if (!sessionForGate?.user?.id) {
+        return {
+            ok: false,
+            reason: "Sign in to submit your solution.",
+        }
+    }
+
     const problem = await prisma.sQLProblem.findUnique({
         where: { slug: problemSlug },
         select: {
@@ -60,7 +73,9 @@ export async function validateSubmission(input: unknown): Promise<ValidationResu
         }
     }
 
-    const session = await auth()
+    // Reuse the session fetched at the gate above — auth() is non-trivial
+    // (DB query + cookie parse), so don't call it twice on the hot path.
+    const session = sessionForGate
 
     if (session?.user?.id) {
         // Per-user rate limit. Cheap query (uses existing
