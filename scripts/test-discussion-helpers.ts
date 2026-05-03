@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import {
     DiscussionCommentCreateInput,
+    DiscussionCommentEditInput,
     ModeratorPermissionUpdateInput,
     validateDiscussionSettingsUpdate,
 } from "../lib/admin-validation"
@@ -41,8 +42,31 @@ assert.equal(
     false
 )
 
+const overCapPermissions = ModeratorPermissionUpdateInput.safeParse({
+    permissions: [
+        "VIEW_DISCUSSION_QUEUE",
+        "HIDE_COMMENT",
+        "RESTORE_COMMENT",
+        "DISMISS_REPORT",
+        "MARK_SPAM",
+        "LOCK_PROBLEM_DISCUSSION",
+        "HIDE_PROBLEM_DISCUSSION",
+        "HIDE_COMMENT",
+    ],
+})
+assert.equal(overCapPermissions.success, false)
+assert.equal(
+    !overCapPermissions.success &&
+        overCapPermissions.error.issues.some((issue) => issue.code === "too_big"),
+    true
+)
+
 assert.equal(
     DiscussionCommentCreateInput.safeParse({ bodyMarkdown: "   \n\t" }).success,
+    false
+)
+assert.equal(
+    DiscussionCommentEditInput.safeParse({ bodyMarkdown: "   \n\t" }).success,
     false
 )
 
