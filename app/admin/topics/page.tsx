@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { prisma } from "@/lib/prisma"
+import { requireAdminPage } from "@/lib/admin-page-auth"
 import { Container } from "@/components/ui/Container"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Badge } from "@/components/ui/Badge"
@@ -14,6 +15,8 @@ export const metadata = {
 export const dynamic = "force-dynamic"
 
 export default async function TopicsPage() {
+    await requireAdminPage()
+
     const topics = await prisma.topic.findMany({
         orderBy: { name: "asc" },
         include: { _count: { select: { articles: true } } },

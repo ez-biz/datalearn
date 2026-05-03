@@ -16,7 +16,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-type Role = "USER" | "CONTRIBUTOR" | "ADMIN"
+type Role = "USER" | "CONTRIBUTOR" | "MODERATOR" | "ADMIN"
 
 interface UserMenuProps {
     name: string | null
@@ -33,12 +33,14 @@ interface UserMenuProps {
 const ROLE_LABEL: Record<Role, string> = {
     USER: "Member",
     CONTRIBUTOR: "Contributor",
+    MODERATOR: "Moderator",
     ADMIN: "Admin",
 }
 
 const ROLE_PILL: Record<Role, string> = {
     USER: "bg-surface-muted text-muted-foreground",
     CONTRIBUTOR: "bg-primary/15 text-primary",
+    MODERATOR: "bg-accent/15 text-accent",
     ADMIN: "bg-accent/15 text-accent",
 }
 

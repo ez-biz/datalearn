@@ -18,7 +18,7 @@ How to author SQL problems on Data Learn from end to end.
 Navigate to `/admin` for the overview, or use the nav strip at the top of every admin page:
 
 ```
-Overview · Problems · Schemas · Tags · API keys
+Overview · Problems · Schemas · Tags · Discussions · Moderators · API keys
 ```
 
 Everything you do here is plumbed through the REST API at `/api/admin/*`. See [`docs/API.md`](./API.md) for the full reference.
@@ -104,6 +104,16 @@ Click a selected chip to remove it. Tag updates **replace** the existing tag set
 
 If the request fails, an error banner appears at the top with the server-reported reason. Validation details are logged to the console (`F12`).
 
+### 7. Discussion mode
+
+Edit mode includes a **Discussion** card. It controls only the learner-facing discussion tab for that problem:
+
+- **Open** — default. Learners can read and signed-in learners can comment, reply, vote, and report.
+- **Locked** — existing discussion remains readable, but new discussion mutations are blocked.
+- **Hidden** — removes the Discussion tab from the practice page.
+
+Global discussion availability is controlled separately in `/admin/discussions/settings`. A globally disabled discussion system hides the tab everywhere, even if a problem mode is `OPEN`.
+
 ---
 
 ## Editing or deleting a problem
@@ -133,6 +143,60 @@ curl -X POST http://localhost:3000/api/admin/schemas \
 ## Tags page
 
 `/admin/tags` shows every tag with its usage count. Tags are created via the problem editor or `POST /api/admin/tags`. There's no rename / merge UI yet — to clean up, edit problems that use a stale tag and write the canonical slug.
+
+---
+
+## Discussion moderation
+
+`/admin/discussions` is the moderation queue for problem discussions.
+
+Queue buckets:
+
+- **Needs review** — visible comments whose OPEN report count is at or above the configured threshold.
+- **Hidden** — comments manually hidden from public discussion.
+- **Dismissed reports** — comments whose reports were reviewed and dismissed.
+- **Spam** — comments confirmed as spam.
+
+Actions:
+
+- **Hide** removes a visible comment from learner-facing discussion.
+- **Restore** makes a hidden or spam comment visible again.
+- **Dismiss reports** closes OPEN reports without hiding the comment.
+- **Mark spam** confirms reports, moves the comment to spam, and records the moderation event.
+
+Reports do not auto-hide comments. The threshold only controls when a comment enters the queue.
+
+### Discussion settings
+
+`/admin/discussions/settings` is admin-only. It edits the singleton `DiscussionSettings` row:
+
+- global enable/disable
+- report threshold
+- edit window
+- duplicate-comment cooldown
+- body length cap
+- per-tier hourly comment/reply/vote limits
+- per-problem daily comment limits
+- minimum seconds between comments
+- reputation thresholds for trusted tiers
+
+Discussions are enabled by default for fresh installs. Use the global toggle to pause all learner-facing discussion actions, or set individual problem mode to `LOCKED`/`HIDDEN` when only one problem needs intervention.
+
+### Moderators
+
+`/admin/moderators` is admin-only. Admins can search existing `USER` accounts, promote one to `MODERATOR`, and assign a permission set. Moderator powers are not all-or-nothing:
+
+- `VIEW_DISCUSSION_QUEUE`
+- `HIDE_COMMENT`
+- `RESTORE_COMMENT`
+- `DISMISS_REPORT`
+- `MARK_SPAM`
+- `LOCK_PROBLEM_DISCUSSION`
+- `HIDE_PROBLEM_DISCUSSION`
+
+Moderators can enter only discussion moderation surfaces. They cannot access problem CRUD, schema/tag management, API keys, global settings, or moderator management unless they are promoted to `ADMIN`.
+
+Every moderation action, settings change, problem mode change, and moderator permission grant/revoke writes a `DiscussionModerationLog` row.
 
 ---
 

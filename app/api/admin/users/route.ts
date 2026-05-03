@@ -3,7 +3,12 @@ import type { UserRole } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { withAdmin } from "@/lib/api-auth"
 
-const ROLE_VALUES = new Set<UserRole>(["USER", "CONTRIBUTOR", "ADMIN"])
+const ROLE_VALUES = new Set<UserRole>([
+    "USER",
+    "CONTRIBUTOR",
+    "MODERATOR",
+    "ADMIN",
+])
 
 export const GET = withAdmin(async (req) => {
     const url = new URL(req.url)

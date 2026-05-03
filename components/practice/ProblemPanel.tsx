@@ -8,11 +8,16 @@ import {
     History as HistoryIcon,
     Lightbulb,
     Loader2,
+    MessagesSquare,
 } from "lucide-react"
 import { DifficultyBadge, Badge } from "@/components/ui/Badge"
 import { cn } from "@/lib/utils"
 import { HistoryPanel } from "./HistoryPanel"
 import { RelatedArticlesPanel } from "./RelatedArticlesPanel"
+import {
+    DiscussionPanel,
+    type DiscussionMode,
+} from "./discussion/DiscussionPanel"
 import type { ProblemHistoryEntry } from "@/actions/submissions"
 
 export type RelatedArticle = {
@@ -24,7 +29,7 @@ export type RelatedArticle = {
     topic: { slug: string }
 }
 
-type Tab = "description" | "hints" | "history"
+type Tab = "description" | "hints" | "history" | "discussion"
 
 export type TableInfo = {
     name: string
@@ -47,6 +52,14 @@ interface ProblemPanelProps {
     isSolved: boolean
     relatedArticles: RelatedArticle[]
     onLoadCode: (code: string) => void
+    onShareApproach?: (code: string) => void
+    slug: string
+    isSignedIn: boolean
+    viewerUserId: string | null
+    discussionMode: DiscussionMode
+    discussionEnabled: boolean
+    discussionPrefill: string | null
+    onDiscussionPrefillConsumed: () => void
 }
 
 export function ProblemPanel({
@@ -64,9 +77,25 @@ export function ProblemPanel({
     isSolved,
     relatedArticles,
     onLoadCode,
+    onShareApproach,
+    slug,
+    isSignedIn,
+    viewerUserId,
+    discussionMode,
+    discussionEnabled,
+    discussionPrefill,
+    onDiscussionPrefillConsumed,
 }: ProblemPanelProps) {
     const [tab, setTab] = useState<Tab>("description")
     const hasHints = hints.length > 0
+    const showDiscussion = discussionEnabled && discussionMode !== "HIDDEN"
+    const activeTab = tab === "discussion" && !showDiscussion ? "description" : tab
+    const shareApproach = (code: string) => {
+        if (showDiscussion) {
+            setTab("discussion")
+        }
+        onShareApproach?.(code)
+    }
 
     return (
         <div className="h-full flex flex-col bg-surface">
@@ -95,14 +124,14 @@ export function ProblemPanel({
             <div className="border-b border-border px-2 overflow-x-auto scrollbar-thin">
                 <div className="flex gap-1">
                     <TabBtn
-                        active={tab === "description"}
+                        active={activeTab === "description"}
                         onClick={() => setTab("description")}
                         icon={<FileText className="h-3.5 w-3.5" />}
                         label="Description"
                     />
                     {hasHints && (
                         <TabBtn
-                            active={tab === "hints"}
+                            active={activeTab === "hints"}
                             onClick={() => setTab("hints")}
                             icon={<Lightbulb className="h-3.5 w-3.5" />}
                             label="Hints"
@@ -110,16 +139,24 @@ export function ProblemPanel({
                         />
                     )}
                     <TabBtn
-                        active={tab === "history"}
+                        active={activeTab === "history"}
                         onClick={() => setTab("history")}
                         icon={<HistoryIcon className="h-3.5 w-3.5" />}
                         label="History"
                         count={history.length || undefined}
                     />
+                    {showDiscussion && (
+                        <TabBtn
+                            active={activeTab === "discussion"}
+                            onClick={() => setTab("discussion")}
+                            icon={<MessagesSquare className="h-3.5 w-3.5" />}
+                            label="Discussion"
+                        />
+                    )}
                 </div>
             </div>
             <div className="flex-1 overflow-y-auto scrollbar-thin">
-                {tab === "description" && (
+                {activeTab === "description" && (
                     <DescriptionTab
                         description={description}
                         schemaDescription={schemaDescription}
@@ -130,9 +167,24 @@ export function ProblemPanel({
                         relatedArticles={relatedArticles}
                     />
                 )}
-                {tab === "hints" && hasHints && <HintsTab hints={hints} />}
-                {tab === "history" && (
-                    <HistoryPanel history={history} onLoadCode={onLoadCode} />
+                {activeTab === "hints" && hasHints && <HintsTab hints={hints} />}
+                {activeTab === "history" && (
+                    <HistoryPanel
+                        history={history}
+                        onLoadCode={onLoadCode}
+                        onShareApproach={shareApproach}
+                    />
+                )}
+                {activeTab === "discussion" && showDiscussion && (
+                    <DiscussionPanel
+                        problemSlug={slug}
+                        isSignedIn={isSignedIn}
+                        viewerUserId={viewerUserId}
+                        discussionMode={discussionMode}
+                        discussionEnabled={discussionEnabled}
+                        prefillMarkdown={discussionPrefill}
+                        onPrefillConsumed={onDiscussionPrefillConsumed}
+                    />
                 )}
             </div>
         </div>

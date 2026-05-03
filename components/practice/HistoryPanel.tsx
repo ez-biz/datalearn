@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { CheckCircle2, ChevronDown, ChevronRight, History, XCircle } from "lucide-react"
-import { Badge } from "@/components/ui/Badge"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { cn } from "@/lib/utils"
 import type { ProblemHistoryEntry } from "@/actions/submissions"
@@ -10,9 +9,14 @@ import type { ProblemHistoryEntry } from "@/actions/submissions"
 interface HistoryPanelProps {
     history: ProblemHistoryEntry[]
     onLoadCode?: (code: string) => void
+    onShareApproach?: (code: string) => void
 }
 
-export function HistoryPanel({ history, onLoadCode }: HistoryPanelProps) {
+export function HistoryPanel({
+    history,
+    onLoadCode,
+    onShareApproach,
+}: HistoryPanelProps) {
     const [openId, setOpenId] = useState<string | null>(null)
 
     if (history.length === 0) {
@@ -78,15 +82,29 @@ export function HistoryPanel({ history, onLoadCode }: HistoryPanelProps) {
                                         <pre className="rounded-md border border-border bg-surface-muted p-2.5 font-mono text-[12px] leading-relaxed overflow-x-auto scrollbar-thin max-h-64">
                                             <code>{s.code}</code>
                                         </pre>
-                                        {onLoadCode && (
-                                            <button
-                                                type="button"
-                                                onClick={() => onLoadCode(s.code)}
-                                                className="text-xs font-medium text-primary hover:text-primary-hover cursor-pointer"
-                                            >
-                                                Load this code into editor →
-                                            </button>
-                                        )}
+                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                            {onLoadCode && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onLoadCode(s.code)}
+                                                    className="text-xs font-medium text-primary transition-colors hover:text-primary-hover active:scale-[0.96] cursor-pointer"
+                                                >
+                                                    Load this code into editor →
+                                                </button>
+                                            )}
+                                            {onShareApproach &&
+                                                s.status === "ACCEPTED" && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            onShareApproach(s.code)
+                                                        }
+                                                        className="text-xs font-medium text-primary transition-colors hover:text-primary-hover active:scale-[0.96] cursor-pointer"
+                                                    >
+                                                        Share approach →
+                                                    </button>
+                                                )}
+                                        </div>
                                     </>
                                 ) : (
                                     <p className="text-xs text-muted-foreground italic">

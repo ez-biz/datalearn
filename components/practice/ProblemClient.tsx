@@ -6,6 +6,7 @@ import { validateSubmission } from "@/actions/submissions"
 import type { ValidationResult } from "@/lib/sql-validator"
 import type { ProblemHistoryEntry } from "@/actions/submissions"
 import { ProblemPanel, type TableInfo } from "./ProblemPanel"
+import type { DiscussionMode } from "./discussion/DiscussionPanel"
 import {
     extractTableNames,
     useProblemDB,
@@ -34,6 +35,10 @@ interface ProblemClientProps {
     expectedColumns: string[] | null
     initialHistory: ProblemHistoryEntry[]
     isSolved: boolean
+    isSignedIn: boolean
+    viewerUserId: string | null
+    discussionEnabled: boolean
+    discussionMode: DiscussionMode
     /**
      * Pre-computed table info from the server-side schema parser. When
      * present, the Schema tab + INPUT example previews render at first
@@ -69,6 +74,10 @@ export function ProblemClient({
     expectedColumns,
     initialHistory,
     isSolved,
+    isSignedIn,
+    viewerUserId,
+    discussionEnabled,
+    discussionMode,
     initialTableInfos,
     relatedArticles,
 }: ProblemClientProps) {
@@ -76,6 +85,7 @@ export function ProblemClient({
     const [hydrated, setHydrated] = useState(false)
     const [history, setHistory] = useState(initialHistory)
     const [solved, setSolved] = useState(isSolved)
+    const [discussionPrefill, setDiscussionPrefill] = useState<string | null>(null)
     const [tableInfos, setTableInfos] = useState<TableInfo[] | null>(
         initialTableInfos
     )
@@ -208,6 +218,12 @@ export function ProblemClient({
         setQuery(code)
     }, [])
 
+    const shareApproach = useCallback((code: string) => {
+        const trimmed = code.trim()
+        if (!trimmed) return
+        setDiscussionPrefill(`Here is my approach:\n\n\`\`\`sql\n${trimmed}\n\`\`\`\n`)
+    }, [])
+
     const handleSubmit = useCallback(
         async (userResult: unknown[]): Promise<ValidationResult> => {
             const outcome = await validateSubmission({
@@ -229,7 +245,7 @@ export function ProblemClient({
             ])
             return outcome
         },
-        [slug, query]
+        [slug, query, dialect]
     )
 
     return (
@@ -250,6 +266,14 @@ export function ProblemClient({
                     isSolved={solved}
                     relatedArticles={relatedArticles}
                     onLoadCode={loadCode}
+                    onShareApproach={shareApproach}
+                    slug={slug}
+                    isSignedIn={isSignedIn}
+                    viewerUserId={viewerUserId}
+                    discussionMode={discussionMode}
+                    discussionEnabled={discussionEnabled}
+                    discussionPrefill={discussionPrefill}
+                    onDiscussionPrefillConsumed={() => setDiscussionPrefill(null)}
                 />
             </aside>
             <section className="flex-1 min-h-0 p-3 sm:p-4 bg-background">

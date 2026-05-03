@@ -253,6 +253,156 @@ Partial update. Both fields are optional; omitted fields are left unchanged.
 
 ---
 
+## Problem discussions
+
+Problem discussions have a public learner-facing API under `/api/problems/*` and privileged moderation APIs under `/api/admin/*`.
+
+### `GET /api/problems/{slug}/discussion`
+
+List public discussion comments for a published problem.
+
+Query parameters:
+
+| Param | Values | Default |
+|---|---|---|
+| `sort` | `best`, `votes`, `latest` | `best` |
+| `page` | positive integer | `1` |
+| `limit` | `1` to `50` | `20` |
+
+If discussions are disabled globally or the problem mode is `HIDDEN`, the response is still `200` with `enabled: false`.
+
+```json
+{
+  "data": {
+    "enabled": true,
+    "mode": "OPEN",
+    "sort": "best",
+    "page": 1,
+    "pageSize": 20,
+    "total": 12,
+    "comments": [
+      {
+        "id": "cuid…",
+        "bodyMarkdown": "Use a window function here.",
+        "status": "VISIBLE",
+        "score": 4,
+        "upvotes": 5,
+        "downvotes": 1,
+        "viewerVote": "UP",
+        "replyCount": 2,
+        "replies": [],
+        "author": { "id": "cuid…", "name": "Ava", "image": null },
+        "createdAt": "2026-05-03T12:00:00.000Z",
+        "updatedAt": "2026-05-03T12:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+### `POST /api/problems/{slug}/discussion`
+
+Create a top-level comment. Requires a signed-in session.
+
+```jsonc
+{ "bodyMarkdown": "I solved it with `ROW_NUMBER()`." }
+```
+
+Returns `201 { "data": <comment> }`. Possible errors include:
+
+- `403` discussions disabled or problem not `OPEN`
+- `429` rate limit, duplicate cooldown, or per-problem limit reached
+- `400` invalid body or body length above settings cap
+
+### Comment mutations
+
+All require a signed-in session and an `OPEN` problem discussion.
+
+| Endpoint | Method | Body | Notes |
+|---|---|---|---|
+| `/api/problems/{slug}/discussion/{commentId}` | `PATCH` | `{ "bodyMarkdown": "…" }` | Author-only, visible comments only, inside edit window. |
+| `/api/problems/{slug}/discussion/{commentId}` | `DELETE` | none | Author-only soft delete. Body is cleared; reply context is preserved. |
+| `/api/problems/{slug}/discussion/{commentId}/replies` | `POST` | `{ "bodyMarkdown": "…" }` | One-level replies only. |
+| `/api/problems/{slug}/discussion/{commentId}/vote` | `PUT` | `{ "value": "UP" }`, `{ "value": "DOWN" }`, or `{ "value": null }` | One active vote per user/comment; vote actions feed rate limiting. |
+| `/api/problems/{slug}/discussion/{commentId}/report` | `POST` | `{ "reason": "SPAM", "message": "…" }` | One report per user/comment; users cannot report their own comments. |
+
+Report reasons: `SPAM`, `ABUSE`, `SPOILER`, `OFF_TOPIC`, `OTHER`.
+
+### Admin/moderator queue: `GET /api/admin/discussions`
+
+Requires `ADMIN` or a `MODERATOR` with `VIEW_DISCUSSION_QUEUE`.
+
+```json
+{
+  "data": {
+    "needsReview": [],
+    "hidden": [],
+    "dismissedReports": [],
+    "spam": []
+  },
+  "settings": { "reportThreshold": 3 }
+}
+```
+
+Needs-review membership is computed from OPEN reports. Reports that have been dismissed or confirmed no longer count toward the threshold.
+
+### Admin/moderator comment actions
+
+| Endpoint | Method | Permission |
+|---|---|---|
+| `/api/admin/discussions/{commentId}/hide` | `PATCH` | `HIDE_COMMENT` |
+| `/api/admin/discussions/{commentId}/restore` | `PATCH` | `RESTORE_COMMENT` |
+| `/api/admin/discussions/{commentId}/dismiss-reports` | `PATCH` | `DISMISS_REPORT` |
+| `/api/admin/discussions/{commentId}/mark-spam` | `PATCH` | `MARK_SPAM` |
+
+Admins bypass explicit moderator permissions. Each successful action writes `DiscussionModerationLog`.
+
+### Discussion settings: `/api/admin/discussions/settings`
+
+Admin-only.
+
+- `GET` returns the singleton `DiscussionSettings` row.
+- `PATCH` partially updates it and writes an `UPDATE_SETTINGS` moderation log.
+
+Patchable fields include `globalEnabled`, `reportThreshold`, `editWindowMinutes`, `duplicateCooldownSeconds`, `bodyMaxChars`, reputation thresholds, per-tier hourly comment/reply/vote limits, per-problem daily limits, and minimum seconds between comments.
+
+### Problem discussion mode
+
+`PATCH /api/admin/discussions/problem-mode`
+
+```jsonc
+{
+  "problemSlug": "top-customers-by-revenue",
+  "mode": "LOCKED" // OPEN | LOCKED | HIDDEN
+}
+```
+
+Admins can set any mode. Moderators need permissions matching the transition:
+
+- entering or leaving `LOCKED` requires `LOCK_PROBLEM_DISCUSSION`
+- entering or leaving `HIDDEN` requires `HIDE_PROBLEM_DISCUSSION`
+- `HIDDEN` <-> `LOCKED` requires both
+
+The admin problem edit route also accepts `discussionMode` on `PATCH /api/admin/problems/{slug}` for full admins.
+
+### Moderators: `/api/admin/moderators`
+
+Admin-only.
+
+- `GET /api/admin/moderators?q=<search>` returns existing moderators and, when `q` is provided, candidate `USER` accounts.
+- `POST /api/admin/moderators` promotes a `USER` to `MODERATOR` and replaces the full permission set.
+
+```jsonc
+{
+  "userId": "cuid…",
+  "permissions": ["VIEW_DISCUSSION_QUEUE", "HIDE_COMMENT"]
+}
+```
+
+`PATCH /api/admin/moderators/{id}` replaces a moderator's permission set. `DELETE /api/admin/moderators/{id}` removes moderator permissions and returns the user to `USER`.
+
+---
+
 ## Tags
 
 ### `GET /api/admin/tags`

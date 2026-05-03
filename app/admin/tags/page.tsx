@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { requireAdminPage } from "@/lib/admin-page-auth"
 import { Container } from "@/components/ui/Container"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Badge } from "@/components/ui/Badge"
@@ -8,6 +9,8 @@ export const metadata = { title: "Tags", robots: { index: false, follow: false }
 export const dynamic = "force-dynamic"
 
 export default async function TagsPage() {
+    await requireAdminPage()
+
     const tags = await prisma.tag.findMany({
         orderBy: { name: "asc" },
         include: { _count: { select: { problems: true } } },

@@ -14,7 +14,7 @@ export type ProfileData = {
         name: string | null
         email: string | null
         image: string | null
-        role: "USER" | "CONTRIBUTOR" | "ADMIN"
+        role: "USER" | "CONTRIBUTOR" | "MODERATOR" | "ADMIN"
         joinedAt: Date
     }
     totals: {

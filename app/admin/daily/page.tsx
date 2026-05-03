@@ -2,6 +2,7 @@ import { CalendarCheck2 } from "lucide-react"
 import { redirect } from "next/navigation"
 import { setManualDailyProblem, listDailyProblems, toDailyKey } from "@/actions/daily"
 import { prisma } from "@/lib/prisma"
+import { requireAdminPage } from "@/lib/admin-page-auth"
 import { Container } from "@/components/ui/Container"
 import { Card } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
@@ -40,6 +41,8 @@ export default async function AdminDailyPage({
 }: {
     searchParams: Promise<{ saved?: string; error?: string }>
 }) {
+    await requireAdminPage()
+
     const sp = await searchParams
     const [rows, problems] = await Promise.all([
         listDailyProblems(),

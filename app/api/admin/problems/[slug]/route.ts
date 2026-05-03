@@ -5,10 +5,18 @@ import { prisma } from "@/lib/prisma"
 import { withAdmin } from "@/lib/api-auth"
 import {
     getMissingPublishedDialectMapEntries,
+    ProblemDiscussionMode,
     ProblemUpdateInput,
 } from "@/lib/admin-validation"
 
 type Ctx = { params: Promise<{ slug: string }> }
+type LockedProblem = {
+    id: string
+    status: "DRAFT" | "BETA" | "PUBLISHED" | "ARCHIVED"
+    dialects: Array<"DUCKDB" | "POSTGRES">
+    solutions: Prisma.JsonValue
+    expectedOutputs: Prisma.JsonValue
+}
 
 export const GET = withAdmin(async (_req, _principal, ctx: Ctx) => {
     const { slug } = await ctx.params
@@ -35,6 +43,19 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
         return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 })
     }
 
+    const discussionModeParsed = z
+        .object({ discussionMode: ProblemDiscussionMode.optional() })
+        .safeParse(body)
+    if (!discussionModeParsed.success) {
+        return NextResponse.json(
+            {
+                error: "Validation failed",
+                details: z.treeifyError(discussionModeParsed.error),
+            },
+            { status: 400 }
+        )
+    }
+
     const parsed = ProblemUpdateInput.safeParse(body)
     if (!parsed.success) {
         return NextResponse.json(
@@ -43,23 +64,13 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
         )
     }
     const input = parsed.data
-
-    const existing = await prisma.sQLProblem.findUnique({
-        where: { slug },
-        select: {
-            id: true,
-            status: true,
-            dialects: true,
-            solutions: true,
-            expectedOutputs: true,
-        },
-    })
-    if (!existing) {
-        return NextResponse.json({ error: "Not found." }, { status: 404 })
-    }
+    const discussionMode = discussionModeParsed.data.discussionMode
 
     try {
         const updated = await prisma.$transaction(async (tx) => {
+            const lockedProblem = await lockProblemBySlug(tx, slug)
+            if (!lockedProblem) throw new Error("PROBLEM_NOT_FOUND")
+
             if (input.schemaId) {
                 const ok = await tx.sqlSchema.findUnique({
                     where: { id: input.schemaId },
@@ -98,11 +109,11 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
             // replicate them across the existing dialects[] into the
             // new maps. This keeps old and new columns in sync until
             // the cleanup release drops the legacy columns.
-            const effectiveDialects = input.dialects ?? existing.dialects
+            const effectiveDialects = input.dialects ?? lockedProblem.dialects
             const existingSolutions =
-                (existing.solutions as Record<string, string>) ?? {}
+                (lockedProblem.solutions as Record<string, string>) ?? {}
             const existingExpectedOutputs =
-                (existing.expectedOutputs as Record<string, string>) ?? {}
+                (lockedProblem.expectedOutputs as Record<string, string>) ?? {}
             let finalSolutions = existingSolutions
             let finalExpectedOutputs = existingExpectedOutputs
 
@@ -149,7 +160,7 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
 
             const missingPublishedEntries =
                 getMissingPublishedDialectMapEntries({
-                    status: input.status ?? existing.status,
+                    status: input.status ?? lockedProblem.status,
                     dialects: effectiveDialects,
                     solutions: finalSolutions,
                     expectedOutputs: finalExpectedOutputs,
@@ -178,7 +189,7 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
             }
 
             const result = await tx.sQLProblem.update({
-                where: { id: existing.id },
+                where: { id: lockedProblem.id },
                 data,
                 include: {
                     schema: { select: { id: true, name: true, sql: true } },
@@ -186,6 +197,40 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                     _count: { select: { submissions: true } },
                 },
             })
+
+            if (discussionMode !== undefined) {
+                const currentState = await tx.problemDiscussionState.findUnique({
+                    where: { problemId: result.id },
+                    select: { mode: true },
+                })
+                const oldMode = currentState?.mode ?? "OPEN"
+
+                await tx.problemDiscussionState.upsert({
+                    where: { problemId: result.id },
+                    update: {
+                        mode: discussionMode,
+                        updatedById: _principal.userId,
+                    },
+                    create: {
+                        problemId: result.id,
+                        mode: discussionMode,
+                        updatedById: _principal.userId,
+                    },
+                })
+
+                if (oldMode !== discussionMode) {
+                    await tx.discussionModerationLog.create({
+                        data: {
+                            actorId: _principal.userId,
+                            action: "SET_PROBLEM_MODE",
+                            targetType: "PROBLEM",
+                            targetId: result.id,
+                            note: `Problem discussion mode changed from ${oldMode} to ${discussionMode}.`,
+                        },
+                    })
+                }
+            }
+
             return result
         })
         return NextResponse.json({ data: updated })
@@ -202,6 +247,9 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                 { error: "A problem with that slug already exists." },
                 { status: 409 }
             )
+        }
+        if (error.message === "PROBLEM_NOT_FOUND") {
+            return NextResponse.json({ error: "Not found." }, { status: 404 })
         }
         if (
             typeof error.message === "string" &&
@@ -260,3 +308,13 @@ export const DELETE = withAdmin(async (_req, _principal, ctx: Ctx) => {
         )
     }
 })
+
+async function lockProblemBySlug(tx: Prisma.TransactionClient, slug: string) {
+    const rows = await tx.$queryRaw<LockedProblem[]>`
+        SELECT "id", "status", to_json("dialects") AS "dialects", "solutions", "expectedOutputs"
+        FROM "SQLProblem"
+        WHERE "slug" = ${slug}
+        FOR UPDATE
+    `
+    return rows[0] ?? null
+}
