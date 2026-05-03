@@ -11,7 +11,7 @@
     "vercel-build": "prisma migrate deploy && next build --webpack",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "audit:postgres": "tsx scripts/audit-postgres-compatibility.ts",
+    "audit:dialects": "tsx scripts/audit-all-dialects.ts",
     "validate:problem": "tsx scripts/validate-problem.ts"
   },
   "dependencies": {

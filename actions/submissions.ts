@@ -9,6 +9,12 @@ const SubmitSchema = z.object({
     problemSlug: z.string().min(1).max(200),
     userResult: z.array(z.record(z.string(), z.unknown())),
     code: z.string().max(20_000).optional(),
+    /**
+     * Engine the learner ran the query against. Optional for back-compat
+     * with older client builds that don't pass it; falls back to the
+     * legacy single `expectedOutput` column when missing.
+     */
+    dialect: z.enum(["DUCKDB", "POSTGRES"]).optional(),
 })
 
 export async function validateSubmission(input: unknown): Promise<ValidationResult> {
@@ -20,20 +26,33 @@ export async function validateSubmission(input: unknown): Promise<ValidationResu
         }
     }
 
-    const { problemSlug, userResult, code } = parsed.data
+    const { problemSlug, userResult, code, dialect } = parsed.data
 
     const problem = await prisma.sQLProblem.findUnique({
         where: { slug: problemSlug },
-        select: { id: true, expectedOutput: true, ordered: true },
+        select: {
+            id: true,
+            expectedOutput: true,
+            expectedOutputs: true,
+            ordered: true,
+        },
     })
 
     if (!problem) {
         return { ok: false, reason: "Problem not found." }
     }
 
+    // Pick the per-dialect expectedOutput when available; fall back to
+    // the legacy single field. v0.5.1 will drop the fallback.
+    const expectedOutputs =
+        (problem.expectedOutputs as Record<string, string>) ?? {}
+    const rawExpected =
+        (dialect && expectedOutputs[dialect]) ||
+        problem.expectedOutput
+
     let expected: unknown
     try {
-        expected = JSON.parse(problem.expectedOutput)
+        expected = JSON.parse(rawExpected)
     } catch {
         return {
             ok: false,

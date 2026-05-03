@@ -43,7 +43,7 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
 
     const existing = await prisma.sQLProblem.findUnique({
         where: { slug },
-        select: { id: true },
+        select: { id: true, dialects: true, solutions: true, expectedOutputs: true },
     })
     if (!existing) {
         return NextResponse.json({ error: "Not found." }, { status: 404 })
@@ -77,15 +77,59 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                     schemaDescription: input.schemaDescription,
                 }),
                 ...(input.schemaId !== undefined && { schemaId: input.schemaId }),
-                ...(input.expectedOutput !== undefined && {
-                    expectedOutput: input.expectedOutput,
-                }),
-                ...(input.solutionSql !== undefined && {
-                    solutionSql: input.solutionSql,
-                }),
                 ...(input.ordered !== undefined && { ordered: input.ordered }),
                 ...(input.dialects !== undefined && { dialects: input.dialects }),
                 ...(input.hints !== undefined && { hints: input.hints }),
+            }
+
+            // ── Solutions / expectedOutputs back-compat ─────────────
+            // When the new per-dialect maps are provided, write them
+            // directly AND derive the legacy single fields for read-
+            // back-compat. When only legacy fields are provided,
+            // replicate them across the existing dialects[] into the
+            // new maps. This keeps old and new columns in sync until
+            // v0.5.1 drops the legacy columns.
+            const effectiveDialects = input.dialects ?? existing.dialects
+            const existingSolutions =
+                (existing.solutions as Record<string, string>) ?? {}
+            const existingExpectedOutputs =
+                (existing.expectedOutputs as Record<string, string>) ?? {}
+
+            if (input.solutions !== undefined) {
+                data.solutions = input.solutions
+                // Sync legacy field from the first listed dialect.
+                const firstDialect = effectiveDialects[0]
+                if (firstDialect && input.solutions[firstDialect] !== undefined) {
+                    data.solutionSql = input.solutions[firstDialect]
+                }
+            } else if (input.solutionSql !== undefined) {
+                data.solutionSql = input.solutionSql
+                // Replicate legacy → per-dialect across current dialects.
+                if (input.solutionSql !== null) {
+                    const merged = { ...existingSolutions }
+                    for (const d of effectiveDialects) {
+                        merged[d] = input.solutionSql
+                    }
+                    data.solutions = merged
+                }
+            }
+
+            if (input.expectedOutputs !== undefined) {
+                data.expectedOutputs = input.expectedOutputs
+                const firstDialect = effectiveDialects[0]
+                if (
+                    firstDialect &&
+                    input.expectedOutputs[firstDialect] !== undefined
+                ) {
+                    data.expectedOutput = input.expectedOutputs[firstDialect]
+                }
+            } else if (input.expectedOutput !== undefined) {
+                data.expectedOutput = input.expectedOutput
+                const merged = { ...existingExpectedOutputs }
+                for (const d of effectiveDialects) {
+                    merged[d] = input.expectedOutput
+                }
+                data.expectedOutputs = merged
             }
 
             if (input.tagSlugs !== undefined) {

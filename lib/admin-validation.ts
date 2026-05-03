@@ -44,6 +44,19 @@ export const TagCreateInput = z.object({
  * without losing typing — `.refine()` produces a `ZodEffects`, which
  * doesn't expose those.
  */
+/**
+ * Per-dialect record schemas. `solutions` keys must match `dialects[]`;
+ * each value is the canonical SQL for that engine. `expectedOutputs`
+ * mirrors the shape with JSON-stringified row arrays. Both are
+ * v0.5.0+ — the legacy single-field `solutionSql` / `expectedOutput`
+ * remain accepted during the transition window.
+ */
+const SolutionsRecord = z.record(Dialect, z.string().max(20_000))
+const ExpectedOutputsRecord = z.record(
+    Dialect,
+    z.string().min(2).max(2_000_000)
+)
+
 export const ProblemCreateInputBase = z.object({
     title: z.string().min(1).max(200),
     slug: SlugSchema,
@@ -63,7 +76,20 @@ export const ProblemCreateInputBase = z.object({
     tagSlugs: z.array(SlugSchema).max(10).default([]),
     schemaId: z.string().min(1).optional(),
     schemaInline: SqlSchemaCreateInput.optional(),
+    /**
+     * v0.5.0+ canonical shape: per-dialect map of SQL solutions.
+     * Either this OR the legacy `solutionSql` must be provided.
+     */
+    solutions: SolutionsRecord.optional(),
+    /**
+     * v0.5.0+ canonical shape: per-dialect map of expectedOutput JSON
+     * strings. Either this OR the legacy `expectedOutput` must be
+     * provided. Each value must parse as a JSON array.
+     */
+    expectedOutputs: ExpectedOutputsRecord.optional(),
+    /** @deprecated v0.5.0 — use `expectedOutputs`. Removed in v0.5.1. */
     expectedOutput: z.string().min(2).max(2_000_000).optional(),
+    /** @deprecated v0.5.0 — use `solutions`. Removed in v0.5.1. */
     solutionSql: z.string().max(20_000).optional(),
 })
 
@@ -75,16 +101,25 @@ export const ProblemCreateInput = ProblemCreateInputBase
             path: ["schemaId"],
         }
     )
-    .refine((v) => Boolean(v.expectedOutput), {
-        message: "expectedOutput JSON is required.",
-        path: ["expectedOutput"],
-    })
+    // Either the new per-dialect map OR the legacy single field must
+    // be present. The API layer synthesizes one from the other before
+    // writing to the DB.
+    .refine(
+        (v) =>
+            Boolean(v.expectedOutput) ||
+            (v.expectedOutputs && Object.keys(v.expectedOutputs).length > 0),
+        {
+            message:
+                "expectedOutput (legacy) or expectedOutputs (per-dialect) is required.",
+            path: ["expectedOutputs"],
+        }
+    )
+    // If the legacy field is given, it must parse as an array.
     .refine(
         (v) => {
             if (!v.expectedOutput) return true
             try {
-                const parsed = JSON.parse(v.expectedOutput)
-                return Array.isArray(parsed)
+                return Array.isArray(JSON.parse(v.expectedOutput))
             } catch {
                 return false
             }
@@ -94,8 +129,83 @@ export const ProblemCreateInput = ProblemCreateInputBase
             path: ["expectedOutput"],
         }
     )
+    // If the new map is given, every value must parse as an array.
+    .refine(
+        (v) => {
+            if (!v.expectedOutputs) return true
+            for (const [, val] of Object.entries(v.expectedOutputs)) {
+                try {
+                    if (!Array.isArray(JSON.parse(val))) return false
+                } catch {
+                    return false
+                }
+            }
+            return true
+        },
+        {
+            message:
+                "Every value in expectedOutputs must be a JSON array of row objects.",
+            path: ["expectedOutputs"],
+        }
+    )
+    // If `dialects` is provided alongside per-dialect maps, every key
+    // in the maps must be a listed dialect. Extra keys (e.g.
+    // `solutions.MYSQL` when MYSQL isn't in `dialects`) are rejected
+    // to keep the data shape clean.
+    .refine(
+        (v) => {
+            if (!v.solutions) return true
+            return Object.keys(v.solutions).every((d) =>
+                v.dialects.includes(d as z.infer<typeof Dialect>)
+            )
+        },
+        {
+            message:
+                "solutions has a key that is not in dialects[]. Add the dialect to dialects[] or drop the key.",
+            path: ["solutions"],
+        }
+    )
+    .refine(
+        (v) => {
+            if (!v.expectedOutputs) return true
+            return Object.keys(v.expectedOutputs).every((d) =>
+                v.dialects.includes(d as z.infer<typeof Dialect>)
+            )
+        },
+        {
+            message:
+                "expectedOutputs has a key that is not in dialects[].",
+            path: ["expectedOutputs"],
+        }
+    )
+    // PUBLISHED problems must have a non-empty solution + expectedOutput
+    // for every dialect they advertise. DRAFT/BETA/ARCHIVED tolerate
+    // partial population (legacy data, in-progress authoring).
+    .refine(
+        (v) => {
+            if (v.status !== "PUBLISHED") return true
+            for (const d of v.dialects) {
+                const sol = v.solutions?.[d] ?? v.solutionSql
+                const exp = v.expectedOutputs?.[d] ?? v.expectedOutput
+                if (!sol || sol.trim().length === 0) return false
+                if (!exp || exp.trim().length === 0) return false
+            }
+            return true
+        },
+        {
+            message:
+                "PUBLISHED requires a non-empty solution + expectedOutput for every dialect listed in dialects[].",
+            path: ["status"],
+        }
+    )
 
-export const ProblemUpdateInput = z.object({
+/**
+ * Bare ZodObject for ProblemUpdateInput so MCP tools can `.shape` /
+ * `.pick()` individual fields. The refined version lives in
+ * `ProblemUpdateInput` below — same fields, plus the cross-field
+ * refines.
+ */
+export const ProblemUpdateInputBase = z.object({
     title: z.string().min(1).max(200).optional(),
     slug: SlugSchema.optional(),
     difficulty: Difficulty.optional(),
@@ -107,6 +217,11 @@ export const ProblemUpdateInput = z.object({
     hints: z.array(z.string().min(1).max(2_000)).max(10).optional(),
     tagSlugs: z.array(SlugSchema).max(10).optional(),
     schemaId: z.string().min(1).optional(),
+    /** v0.5.0+ canonical shape; PATCH replaces the whole map. */
+    solutions: SolutionsRecord.optional(),
+    /** v0.5.0+ canonical shape; PATCH replaces the whole map. */
+    expectedOutputs: ExpectedOutputsRecord.optional(),
+    /** @deprecated v0.5.0 — use `expectedOutputs`. */
     expectedOutput: z
         .string()
         .min(2)
@@ -122,8 +237,93 @@ export const ProblemUpdateInput = z.object({
             { message: "expectedOutput must be a JSON array." }
         )
         .optional(),
+    /** @deprecated v0.5.0 — use `solutions`. */
     solutionSql: z.string().max(20_000).optional().nullable(),
 })
+
+export const ProblemUpdateInput = ProblemUpdateInputBase
+    .refine(
+        (v) => {
+            if (!v.expectedOutputs) return true
+            for (const [, val] of Object.entries(v.expectedOutputs)) {
+                try {
+                    if (!Array.isArray(JSON.parse(val))) return false
+                } catch {
+                    return false
+                }
+            }
+            return true
+        },
+        {
+            message:
+                "Every value in expectedOutputs must be a JSON array of row objects.",
+            path: ["expectedOutputs"],
+        }
+    )
+
+/**
+ * Reconcile legacy single-field and v0.5.0 per-dialect-map inputs into
+ * BOTH shapes so we can write to both columns during the transition.
+ *
+ * - `solutions` map: the source of truth going forward. Keys = dialects.
+ * - `expectedOutputs` map: same shape, JSON-stringified row arrays.
+ * - `legacySolution`: a single string written to the legacy `solutionSql`
+ *   column. Picked from the per-dialect map (first listed dialect) when
+ *   author provides only the new shape.
+ * - `legacyExpected`: same idea for the legacy `expectedOutput` column.
+ *
+ * Cleanup pass in v0.5.1 will drop both legacy fields and this helper
+ * collapses to "use the maps directly."
+ */
+export function synthesizeBothShapes(input: {
+    dialects: ("DUCKDB" | "POSTGRES")[]
+    solutions?: Record<string, string>
+    expectedOutputs?: Record<string, string>
+    solutionSql?: string | null
+    expectedOutput?: string
+}): {
+    solutions: Record<string, string>
+    expectedOutputs: Record<string, string>
+    legacySolution: string | null
+    legacyExpected: string
+} {
+    const solutions: Record<string, string> = { ...(input.solutions ?? {}) }
+    const expectedOutputs: Record<string, string> = {
+        ...(input.expectedOutputs ?? {}),
+    }
+
+    // Fill missing per-dialect entries from the legacy single fields.
+    if (input.solutionSql !== undefined && input.solutionSql !== null) {
+        for (const d of input.dialects) {
+            if (solutions[d] === undefined) solutions[d] = input.solutionSql
+        }
+    }
+    if (input.expectedOutput !== undefined) {
+        for (const d of input.dialects) {
+            if (expectedOutputs[d] === undefined)
+                expectedOutputs[d] = input.expectedOutput
+        }
+    }
+
+    // Pick a representative legacy value (preferring the input's
+    // explicit legacy field, falling back to the first listed dialect's
+    // entry from the new map).
+    const firstDialect = input.dialects[0]
+    const legacySolution: string | null =
+        input.solutionSql !== undefined && input.solutionSql !== null
+            ? input.solutionSql
+            : firstDialect && solutions[firstDialect]
+                ? solutions[firstDialect]
+                : null
+    const legacyExpected: string =
+        input.expectedOutput !== undefined
+            ? input.expectedOutput
+            : firstDialect && expectedOutputs[firstDialect]
+                ? expectedOutputs[firstDialect]
+                : ""
+
+    return { solutions, expectedOutputs, legacySolution, legacyExpected }
+}
 
 export const ApiKeyCreateInput = z.object({
     name: z.string().min(1).max(100),
