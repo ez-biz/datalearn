@@ -21,6 +21,7 @@ export default async function EditProblemPage({ params }: Props) {
         where: { slug },
         include: {
             tags: { select: { slug: true } },
+            discussionState: { select: { mode: true } },
         },
     })
     if (!problem) notFound()
@@ -62,6 +63,7 @@ export default async function EditProblemPage({ params }: Props) {
                     hints: problem.hints,
                     tagSlugs: problem.tags.map((t) => t.slug),
                     schemaId: problem.schemaId,
+                    discussionMode: problem.discussionState?.mode ?? "OPEN",
                     solutions:
                         (problem.solutions as Record<string, string>) ?? {},
                     expectedOutputs:

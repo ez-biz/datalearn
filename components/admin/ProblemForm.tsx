@@ -13,6 +13,7 @@ import { slugify } from "@/lib/admin-validation"
 
 type Difficulty = "EASY" | "MEDIUM" | "HARD"
 type ProblemStatus = "DRAFT" | "BETA" | "PUBLISHED" | "ARCHIVED"
+type DiscussionMode = "OPEN" | "LOCKED" | "HIDDEN"
 
 interface SchemaOption {
     id: string
@@ -35,6 +36,7 @@ export interface ProblemFormInitial {
     hints: string[]
     tagSlugs: string[]
     schemaId?: string
+    discussionMode?: DiscussionMode
     /** v0.4.2+ per-dialect canonical solutions. */
     solutions: Record<string, string>
     /** v0.4.2+ per-dialect expectedOutput JSON strings. */
@@ -63,6 +65,9 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
     const [slugTouched, setSlugTouched] = useState(initial.mode === "edit")
     const [difficulty, setDifficulty] = useState<Difficulty>(initial.difficulty)
     const [status, setStatus] = useState<ProblemStatus>(initial.status)
+    const [discussionMode, setDiscussionMode] = useState<DiscussionMode>(
+        initial.discussionMode ?? "OPEN"
+    )
     const [description, setDescription] = useState(initial.description)
     const [schemaDescription, setSchemaDescription] = useState(
         initial.schemaDescription
@@ -256,6 +261,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
             // PATCH should not send schemaInline (only schemaId is supported on update)
             if (method === "PATCH") {
                 delete payload.schemaInline
+                payload.discussionMode = discussionMode
                 if (schemaMode !== "existing") {
                     setError(
                         "Inline schema creation is only supported when creating a new problem. Pick an existing schema."
@@ -506,6 +512,39 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                     </Field>
                 </CardContent>
             </Card>
+
+            {initial.mode === "edit" && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Discussion</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <Field
+                            label="Mode"
+                            htmlFor="discussionMode"
+                            description="Controls the learner-facing discussion tab for this problem."
+                            required
+                        >
+                            <select
+                                id="discussionMode"
+                                value={discussionMode}
+                                onChange={(e) =>
+                                    setDiscussionMode(e.target.value as DiscussionMode)
+                                }
+                                className="block w-full h-10 px-3 text-sm rounded-md border border-border bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                                <option value="OPEN">Open</option>
+                                <option value="LOCKED">
+                                    Locked - visible, read-only
+                                </option>
+                                <option value="HIDDEN">
+                                    Hidden - learner tab hidden
+                                </option>
+                            </select>
+                        </Field>
+                    </CardContent>
+                </Card>
+            )}
 
             <Card>
                 <CardHeader>

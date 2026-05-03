@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { withAdmin } from "@/lib/api-auth"
 import {
     getMissingPublishedDialectMapEntries,
+    ProblemDiscussionMode,
     ProblemUpdateInput,
 } from "@/lib/admin-validation"
 
@@ -35,6 +36,19 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
         return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 })
     }
 
+    const discussionModeParsed = z
+        .object({ discussionMode: ProblemDiscussionMode.optional() })
+        .safeParse(body)
+    if (!discussionModeParsed.success) {
+        return NextResponse.json(
+            {
+                error: "Validation failed",
+                details: z.treeifyError(discussionModeParsed.error),
+            },
+            { status: 400 }
+        )
+    }
+
     const parsed = ProblemUpdateInput.safeParse(body)
     if (!parsed.success) {
         return NextResponse.json(
@@ -43,6 +57,7 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
         )
     }
     const input = parsed.data
+    const discussionMode = discussionModeParsed.data.discussionMode
 
     const existing = await prisma.sQLProblem.findUnique({
         where: { slug },
@@ -186,6 +201,40 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                     _count: { select: { submissions: true } },
                 },
             })
+
+            if (discussionMode !== undefined) {
+                const currentState = await tx.problemDiscussionState.findUnique({
+                    where: { problemId: result.id },
+                    select: { mode: true },
+                })
+                const oldMode = currentState?.mode ?? "OPEN"
+
+                await tx.problemDiscussionState.upsert({
+                    where: { problemId: result.id },
+                    update: {
+                        mode: discussionMode,
+                        updatedById: _principal.userId,
+                    },
+                    create: {
+                        problemId: result.id,
+                        mode: discussionMode,
+                        updatedById: _principal.userId,
+                    },
+                })
+
+                if (oldMode !== discussionMode) {
+                    await tx.discussionModerationLog.create({
+                        data: {
+                            actorId: _principal.userId,
+                            action: "SET_PROBLEM_MODE",
+                            targetType: "PROBLEM",
+                            targetId: result.id,
+                            note: `Problem discussion mode changed from ${oldMode} to ${discussionMode}.`,
+                        },
+                    })
+                }
+            }
+
             return result
         })
         return NextResponse.json({ data: updated })
