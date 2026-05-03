@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm"
 import type { PGlite } from "@electric-sql/pglite"
+import { checkReadOnlyQuery } from "@/lib/sql-restrict"
 
 export type Row = Record<string, unknown>
 export type Dialect = "DUCKDB" | "POSTGRES"
@@ -111,6 +112,14 @@ export function useProblemDB(
     }, [schemaSql, dialect])
 
     async function runQuery(sql: string): Promise<Row[]> {
+        // Enforce read-only at the boundary. The schema-replay path
+        // (the useEffect above) calls `pg.exec` / `conn.query` directly
+        // for DDL — it doesn't go through this function — so this guard
+        // never blocks legitimate setup, only learner / authoring input.
+        const guard = checkReadOnlyQuery(sql)
+        if (!guard.ok) {
+            throw new Error(guard.reason)
+        }
         if (dialect === "POSTGRES") {
             if (!pgRef.current) throw new Error("Database is not ready yet.")
             const result = await pgRef.current.query<Row>(sql)
