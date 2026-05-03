@@ -15,6 +15,10 @@ type TierLimits = {
 }
 
 type VoteLimitClient = Pick<Prisma.TransactionClient, "discussionVoteAction">
+type DiscussionLimitClient = Pick<
+    Prisma.TransactionClient,
+    "discussionComment" | "discussionVoteAction"
+>
 
 function tierLimits(
     settings: DiscussionSettings,
@@ -79,12 +83,14 @@ export async function checkDiscussionLimit(input: {
     action: DiscussionLimitAction
     tier: ReputationTier
     settings: DiscussionSettings
+    client?: DiscussionLimitClient
 }): Promise<DiscussionLimitResult> {
     const now = Date.now()
     const oneHourAgo = new Date(now - 60 * 60 * 1000)
+    const client = input.client ?? prisma
 
     if (input.action === "VOTE") {
-        return checkVoteLimit(input)
+        return checkVoteLimit({ ...input, client })
     }
 
     const limits = tierLimits(input.settings, input.tier)
@@ -95,7 +101,7 @@ export async function checkDiscussionLimit(input: {
             : limits.topLevelPerHour
     const parentId = input.action === "REPLY" ? { not: null } : null
 
-    const hourlyCount = await prisma.discussionComment.count({
+    const hourlyCount = await client.discussionComment.count({
         where: {
             userId: input.userId,
             parentId,
@@ -110,7 +116,7 @@ export async function checkDiscussionLimit(input: {
         }
     }
 
-    const problemDayCount = await prisma.discussionComment.count({
+    const problemDayCount = await client.discussionComment.count({
         where: {
             userId: input.userId,
             problemId: input.problemId,
@@ -125,7 +131,7 @@ export async function checkDiscussionLimit(input: {
         }
     }
 
-    const lastComment = await prisma.discussionComment.findFirst({
+    const lastComment = await client.discussionComment.findFirst({
         where: { userId: input.userId },
         orderBy: { createdAt: "desc" },
         select: { createdAt: true },
@@ -144,7 +150,7 @@ export async function checkDiscussionLimit(input: {
         const duplicateSince = new Date(
             now - input.settings.duplicateCooldownSeconds * 1000
         )
-        const duplicate = await prisma.discussionComment.findFirst({
+        const duplicate = await client.discussionComment.findFirst({
             where: {
                 userId: input.userId,
                 problemId: input.problemId,

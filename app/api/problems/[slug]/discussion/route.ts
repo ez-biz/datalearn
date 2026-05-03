@@ -196,30 +196,71 @@ export const POST = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
     }
 
     const reputation = await getUserReputation(principal.userId, settings)
-    const limit = await checkDiscussionLimit({
-        userId: principal.userId,
-        problemId: problem.id,
-        bodyMarkdown,
-        action: "COMMENT",
-        tier: reputation.tier,
-        settings,
+
+    const result = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw(Prisma.sql`
+            SELECT "id" FROM "User" WHERE "id" = ${principal.userId} FOR UPDATE
+        `)
+
+        const currentProblem = await tx.sQLProblem.findFirst({
+            where: { id: problem.id, status: "PUBLISHED" },
+            select: {
+                id: true,
+                discussionState: { select: { mode: true } },
+            },
+        })
+        if (!currentProblem) {
+            return {
+                ok: false as const,
+                error: "Problem not found.",
+                status: 404,
+            }
+        }
+        if ((currentProblem.discussionState?.mode ?? "OPEN") !== "OPEN") {
+            return {
+                ok: false as const,
+                error: "Discussion is not open.",
+                status: 403,
+            }
+        }
+
+        const limit = await checkDiscussionLimit({
+            userId: principal.userId,
+            problemId: currentProblem.id,
+            bodyMarkdown,
+            action: "COMMENT",
+            tier: reputation.tier,
+            settings,
+            client: tx,
+        })
+        if (!limit.ok) {
+            return { ok: false as const, error: limit.error, status: 429 }
+        }
+
+        const comment = await tx.discussionComment.create({
+            data: {
+                problemId: currentProblem.id,
+                userId: principal.userId,
+                bodyMarkdown,
+            },
+            include: publicCommentInclude(principal.userId),
+        })
+
+        return {
+            ok: true as const,
+            data: shapePublicComment(comment),
+        }
     })
 
-    if (!limit.ok) {
-        return NextResponse.json({ error: limit.error }, { status: 429 })
+    if (!result.ok) {
+        return NextResponse.json(
+            { error: result.error },
+            { status: result.status }
+        )
     }
 
-    const comment = await prisma.discussionComment.create({
-        data: {
-            problemId: problem.id,
-            userId: principal.userId,
-            bodyMarkdown,
-        },
-        include: publicCommentInclude(principal.userId),
-    })
-
     return NextResponse.json(
-        { data: shapePublicComment(comment) },
+        { data: result.data },
         { status: 201 }
     )
 })

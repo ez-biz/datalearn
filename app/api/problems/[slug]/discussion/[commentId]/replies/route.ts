@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
+import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { DiscussionCommentCreateInput } from "@/lib/admin-validation"
 import { withDiscussionAuth } from "@/lib/discussions/api-auth"
@@ -87,31 +88,89 @@ export const POST = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
     }
 
     const reputation = await getUserReputation(principal.userId, settings)
-    const limit = await checkDiscussionLimit({
-        userId: principal.userId,
-        problemId: parent.problemId,
-        bodyMarkdown,
-        action: "REPLY",
-        tier: reputation.tier,
-        settings,
+
+    const result = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw(Prisma.sql`
+            SELECT "id" FROM "User" WHERE "id" = ${principal.userId} FOR UPDATE
+        `)
+        const lockedParent = await tx.$queryRaw<
+            Array<{ id: string; problemId: string }>
+        >(Prisma.sql`
+            SELECT "id", "problemId"
+            FROM "DiscussionComment"
+            WHERE "id" = ${parent.id}
+              AND "parentId" IS NULL
+              AND "status" IN ('VISIBLE'::"DiscussionCommentStatus", 'DELETED'::"DiscussionCommentStatus")
+            FOR UPDATE
+        `)
+        if (lockedParent.length === 0) {
+            return {
+                ok: false as const,
+                error: "Comment is no longer available for replies.",
+                status: 409,
+            }
+        }
+
+        const currentProblem = await tx.sQLProblem.findFirst({
+            where: { id: lockedParent[0].problemId, status: "PUBLISHED" },
+            select: {
+                id: true,
+                discussionState: { select: { mode: true } },
+            },
+        })
+        if (!currentProblem) {
+            return {
+                ok: false as const,
+                error: "Problem not found.",
+                status: 404,
+            }
+        }
+        if ((currentProblem.discussionState?.mode ?? "OPEN") !== "OPEN") {
+            return {
+                ok: false as const,
+                error: "Discussion is not open.",
+                status: 403,
+            }
+        }
+
+        const limit = await checkDiscussionLimit({
+            userId: principal.userId,
+            problemId: currentProblem.id,
+            bodyMarkdown,
+            action: "REPLY",
+            tier: reputation.tier,
+            settings,
+            client: tx,
+        })
+        if (!limit.ok) {
+            return { ok: false as const, error: limit.error, status: 429 }
+        }
+
+        const reply = await tx.discussionComment.create({
+            data: {
+                problemId: currentProblem.id,
+                userId: principal.userId,
+                parentId: lockedParent[0].id,
+                bodyMarkdown,
+            },
+            include: publicCommentInclude(principal.userId),
+        })
+
+        return {
+            ok: true as const,
+            data: shapePublicComment(reply),
+        }
     })
 
-    if (!limit.ok) {
-        return NextResponse.json({ error: limit.error }, { status: 429 })
+    if (!result.ok) {
+        return NextResponse.json(
+            { error: result.error },
+            { status: result.status }
+        )
     }
 
-    const reply = await prisma.discussionComment.create({
-        data: {
-            problemId: parent.problemId,
-            userId: principal.userId,
-            parentId: parent.id,
-            bodyMarkdown,
-        },
-        include: publicCommentInclude(principal.userId),
-    })
-
     return NextResponse.json(
-        { data: shapePublicComment(reply) },
+        { data: result.data },
         { status: 201 }
     )
 })
