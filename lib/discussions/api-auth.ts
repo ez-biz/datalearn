@@ -45,6 +45,14 @@ function assertSameOriginWrite(req: Request) {
 export async function requireDiscussionUser(
     req: Request
 ): Promise<SessionPrincipal> {
+    const authz =
+        req.headers.get("authorization") ?? req.headers.get("Authorization")
+    if (authz && authz.length > 0) {
+        throw new AuthFailure(401, {
+            error: "Authorization headers are not accepted on discussion routes. Sign in instead.",
+        })
+    }
+
     assertSameOriginWrite(req)
     const session = await auth()
     if (!session?.user?.id) {

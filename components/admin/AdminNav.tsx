@@ -12,7 +12,6 @@ import {
     Key,
     LayoutDashboard,
     MessageSquareText,
-    ShieldCheck,
     Tag,
     Users,
 } from "lucide-react"
@@ -28,7 +27,7 @@ const items: {
     exact?: boolean
     badgeKey?: BadgeKey
     adminOnly?: boolean
-    moderatorAllowed?: boolean
+    requiresDiscussionQueuePermission?: boolean
 }[] = [
     {
         href: "/admin",
@@ -61,9 +60,8 @@ const items: {
         label: "Discussions",
         icon: MessageSquareText,
         badgeKey: "discussionQueue",
-        moderatorAllowed: true,
+        requiresDiscussionQueuePermission: true,
     },
-    { href: "/admin/moderators", label: "Moderators", icon: ShieldCheck, adminOnly: true },
     { href: "/admin/contributors", label: "Contributors", icon: Users, adminOnly: true },
     { href: "/admin/api-keys", label: "API keys", icon: Key, adminOnly: true },
 ]
@@ -72,11 +70,13 @@ export function AdminNav({
     role,
     openReportCount = 0,
     articleQueueCount = 0,
+    canViewDiscussionQueue = false,
     discussionQueueCount = 0,
 }: {
     role: AdminRole
     openReportCount?: number
     articleQueueCount?: number
+    canViewDiscussionQueue?: boolean
     discussionQueueCount?: number
 }) {
     const pathname = usePathname()
@@ -87,7 +87,9 @@ export function AdminNav({
         return 0
     }
     const visibleItems = items.filter((item) =>
-        role === "ADMIN" ? true : item.moderatorAllowed && !item.adminOnly
+        role === "ADMIN"
+            ? true
+            : item.requiresDiscussionQueuePermission && canViewDiscussionQueue
     )
 
     return (
