@@ -39,6 +39,19 @@ const nextConfig: NextConfig = {
             },
         ]
     },
+    images: {
+        // OAuth-provider avatar hosts. Without these, next/image silently
+        // refuses to load and we render a broken thumbnail. UserMenu also
+        // has an onError fallback for other failure modes (dead URL, CORS,
+        // user deletes their avatar at the provider).
+        remotePatterns: [
+            { protocol: "https", hostname: "avatars.githubusercontent.com" },
+            { protocol: "https", hostname: "lh3.googleusercontent.com" },
+            { protocol: "https", hostname: "lh4.googleusercontent.com" },
+            { protocol: "https", hostname: "lh5.googleusercontent.com" },
+            { protocol: "https", hostname: "lh6.googleusercontent.com" },
+        ],
+    },
 }
 
 export default nextConfig

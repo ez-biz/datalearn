@@ -226,6 +226,16 @@ export function ProblemClient({
 
     const handleSubmit = useCallback(
         async (userResult: unknown[]): Promise<ValidationResult> => {
+            // Gate Submit on sign-in. Run is fine for anonymous users
+            // (executes purely in their browser, no server contact),
+            // but Submit writes a row to the DB and grants ACCEPTED
+            // credit toward the user's stats — needs a real account.
+            if (!isSignedIn) {
+                return {
+                    ok: false,
+                    reason: "Sign in to submit your solution and track your progress. Run still works for anonymous users.",
+                }
+            }
             const outcome = await validateSubmission({
                 problemSlug: slug,
                 userResult,
@@ -245,7 +255,7 @@ export function ProblemClient({
             ])
             return outcome
         },
-        [slug, query, dialect]
+        [slug, query, dialect, isSignedIn]
     )
 
     return (
