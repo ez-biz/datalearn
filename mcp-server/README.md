@@ -127,10 +127,10 @@ This section is the source of truth for *what* to send to each tool. The Zod val
 | `schemaId` | string | optional, must exist | EITHER this OR `schemaInline`. |
 | `schemaInline` | object | optional | EITHER this OR `schemaId`. Shape: `{ name, sql }`. |
 | `schemaInline.sql` | string | 1–50,000 chars | One string containing CREATE TABLE statements + INSERT seed rows. See "Schema format" below. |
-| `solutions` | object | `{ "DUCKDB": "SELECT …", "POSTGRES": "SELECT …" }` (v0.5.0+) | Per-dialect canonical solutions. Keys must be a subset of `dialects[]`. Either this OR the legacy `solutionSql` is required. |
-| `expectedOutputs` | object | `{ "DUCKDB": "[{…}]", "POSTGRES": "[{…}]" }` (v0.5.0+) | Per-dialect expected output as **JSON-stringified arrays**. Same key constraint. Either this OR the legacy `expectedOutput` is required. |
-| `expectedOutput` | string | 1–2,000,000 chars (legacy) | **Deprecated v0.5.0** — server replicates across every listed dialect into `expectedOutputs`. Removed in v0.5.1. |
-| `solutionSql` | string | ≤ 20,000 chars (legacy) | **Deprecated v0.5.0** — same lifecycle. Use `solutions` instead. |
+| `solutions` | object | `{ "DUCKDB": "SELECT …", "POSTGRES": "SELECT …" }` (v0.4.2+) | Per-dialect canonical solutions. Keys must be a subset of `dialects[]`. Either this OR the legacy `solutionSql` is required. |
+| `expectedOutputs` | object | `{ "DUCKDB": "[{…}]", "POSTGRES": "[{…}]" }` (v0.4.2+) | Per-dialect expected output as **JSON-stringified arrays**. Same key constraint. Either this OR the legacy `expectedOutput` is required. |
+| `expectedOutput` | string | 1–2,000,000 chars (legacy) | **Deprecated v0.4.2** — server replicates across every listed dialect into `expectedOutputs`. Removed in the cleanup release. |
+| `solutionSql` | string | ≤ 20,000 chars (legacy) | **Deprecated v0.4.2** — same lifecycle. Use `solutions` instead. |
 | `status` | — | **NOT ACCEPTED on create** | The `create_problem` input schema omits this field. Every `create_problem` lands as DRAFT. Use `update_problem` to change status after review. |
 
 ### `update_problem`

@@ -128,7 +128,7 @@ Create a problem. Either provide an existing `schemaId` **or** an inline `schema
     "DUCKDB": "[{\"name\":\"Alice\",\"total\":8420.5}]",
     "POSTGRES": "[{\"name\":\"Alice\",\"total\":8420.5}]"
   },
-  // Legacy single-field fallbacks (v0.5.0 transition; removed in v0.5.1):
+  // Legacy single-field fallbacks (v0.4.2 transition; removed in the cleanup release):
   "expectedOutput": "[{\"name\":\"Alice\",\"total\":8420.5}]",
   "solutionSql": "SELECT …"
 }
@@ -137,8 +137,8 @@ Create a problem. Either provide an existing `schemaId` **or** an inline `schema
 **Notes**
 
 - Provide **exactly one** of `schemaId` or `schemaInline`. Sending both, or neither, is a 400.
-- **Per-dialect maps (v0.5.0+)**: `solutions` and `expectedOutputs` are keyed by `Dialect`. Every key must be a member of `dialects[]`. PUBLISHED problems must have a non-empty entry for every listed dialect. DRAFT/BETA/ARCHIVED tolerate partial population.
-- **Legacy fields**: `solutionSql` and `expectedOutput` (singular) are still accepted; the server replicates them across every listed dialect into the new maps. Both legacy fields will be dropped in v0.5.1.
+- **Per-dialect maps (v0.4.2+)**: `solutions` and `expectedOutputs` are keyed by `Dialect`. Every key must be a member of `dialects[]`. PUBLISHED problems must have a non-empty entry for every listed dialect. DRAFT/BETA/ARCHIVED tolerate partial population.
+- **Legacy fields**: `solutionSql` and `expectedOutput` (singular) are still accepted; the server replicates them across every listed dialect into the new maps. Both legacy fields will be dropped in the cleanup release.
 - Each `expectedOutputs[d]` value (and the legacy `expectedOutput`) must be a JSON-encoded array of row objects.
 - `tagSlugs` are upserted by slug; unknown slugs are created with `name = slug.replace(/-/g, " ")`.
 - The admin UI captures `expectedOutputs[<active dialect>]` automatically by running that dialect's solution against the schema in the browser. External callers can do the same client-side or compute it however they want.

@@ -64,7 +64,7 @@ export default async function EditProblemPage({ params }: Props) {
                     expectedOutputs:
                         (problem.expectedOutputs as Record<string, string>) ??
                         {},
-                    // Legacy fallbacks — kept for back-compat during v0.5.0
+                    // Legacy fallbacks — kept for back-compat during v0.4.2
                     // transition. Form initializes per-dialect maps from these
                     // when the new maps are missing entries.
                     expectedOutput: problem.expectedOutput,
