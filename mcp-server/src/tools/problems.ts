@@ -3,7 +3,7 @@ import { z } from "zod"
 import {
     Difficulty,
     ProblemCreateInputBase,
-    ProblemUpdateInput,
+    ProblemUpdateInputBase,
     SlugSchema,
 } from "../../../lib/admin-validation"
 import { ApiError, DataLearnClient } from "../client.js"
@@ -18,7 +18,13 @@ type FullProblem = {
     status: "DRAFT" | "BETA" | "PUBLISHED" | "ARCHIVED"
     description: string
     dialects?: ("DUCKDB" | "POSTGRES")[]
+    /** v0.5.0+ per-dialect canonical solutions. */
+    solutions?: Record<string, string>
+    /** v0.5.0+ per-dialect expectedOutput JSON strings. */
+    expectedOutputs?: Record<string, string>
+    /** @deprecated v0.5.0 — use `expectedOutputs`. */
     expectedOutput?: string | null
+    /** @deprecated v0.5.0 — use `solutions`. */
     solutionSql?: string | null
     tags?: Array<{ id: string; slug: string; name: string }>
     schema?: { id: string; name: string }
@@ -46,18 +52,24 @@ const McpProblemCreateInputShape =
 
 const McpProblemUpdateInputShape = {
     slug: SlugSchema,
-    title: ProblemUpdateInput.shape.title,
+    title: ProblemUpdateInputBase.shape.title,
     newSlug: SlugSchema.optional(),
-    description: ProblemUpdateInput.shape.description,
+    description: ProblemUpdateInputBase.shape.description,
     difficulty: Difficulty.optional(),
+    /** v0.5.0+ per-dialect canonical solutions. */
+    solutions: ProblemUpdateInputBase.shape.solutions,
+    /** v0.5.0+ per-dialect expectedOutput JSON strings. */
+    expectedOutputs: ProblemUpdateInputBase.shape.expectedOutputs,
+    /** @deprecated v0.5.0 — use `solutions`. */
     solutionSql: ProblemCreateInputBase.shape.solutionSql,
-    expectedOutput: ProblemUpdateInput.shape.expectedOutput,
-    hints: ProblemUpdateInput.shape.hints,
-    tagSlugs: ProblemUpdateInput.shape.tagSlugs,
-    ordered: ProblemUpdateInput.shape.ordered,
-    schemaId: ProblemUpdateInput.shape.schemaId,
-    schemaDescription: ProblemUpdateInput.shape.schemaDescription,
-    dialects: ProblemUpdateInput.shape.dialects,
+    /** @deprecated v0.5.0 — use `expectedOutputs`. */
+    expectedOutput: ProblemUpdateInputBase.shape.expectedOutput,
+    hints: ProblemUpdateInputBase.shape.hints,
+    tagSlugs: ProblemUpdateInputBase.shape.tagSlugs,
+    ordered: ProblemUpdateInputBase.shape.ordered,
+    schemaId: ProblemUpdateInputBase.shape.schemaId,
+    schemaDescription: ProblemUpdateInputBase.shape.schemaDescription,
+    dialects: ProblemUpdateInputBase.shape.dialects,
     status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
 }
 
@@ -126,9 +138,17 @@ export function registerProblemTools(
         [
             "Create a new SQL problem. ALWAYS lands as DRAFT — publishing is a deliberate human action via the admin UI; this tool does not accept a status field.",
             "",
-            "Required: title, slug (kebab-case), difficulty (EASY|MEDIUM|HARD), description, expectedOutput.",
+            "Required: title, slug (kebab-case), difficulty (EASY|MEDIUM|HARD), description, AND a solution + expectedOutput for every listed dialect.",
+            "",
+            "v0.5.0+ canonical shape (preferred):",
+            "  solutions:        { \"DUCKDB\": \"SELECT …\", \"POSTGRES\": \"SELECT …\" }",
+            "  expectedOutputs:  { \"DUCKDB\": \"[{...}]\", \"POSTGRES\": \"[{...}]\" }",
+            "Each map's keys must be a subset of `dialects[]`. Each expectedOutputs[dialect] must parse as a JSON array.",
+            "",
+            "Legacy single-field shape (still accepted; will be removed in v0.5.1):",
+            "  solutionSql + expectedOutput. The server replicates these to every listed dialect under the new map.",
+            "",
             "Schema: provide EXACTLY ONE of schemaId (reference an existing schema; check list_schemas first) or schemaInline (create a new schema in the same call).",
-            "expectedOutput: must be a JSON-stringified array of row objects. Example: '[{\"id\":1,\"name\":\"a\"}]'.",
             "Optional: hints (string[], max 10), tagSlugs (string[], max 10 — must reference existing tags).",
         ].join("\n"),
         McpProblemCreateInputShape,
@@ -148,7 +168,20 @@ export function registerProblemTools(
 
     server.tool(
         "update_problem",
-        "Update an existing SQL problem by slug. Only the fields you pass will be changed; omitted fields are left untouched. Use tagSlugs to replace the full tag set. Set status to ARCHIVED to hide a problem without deleting it (preserves submissions). Use newSlug to rename the problem slug. Returns the updated problem or {found: false}.",
+        [
+            "Update an existing SQL problem by slug. Only the fields you pass will be changed; omitted fields are left untouched.",
+            "",
+            "Per-dialect editing (v0.5.0+):",
+            "- `solutions` and `expectedOutputs` replace the WHOLE map for the problem. To edit one dialect's value, fetch the current problem with get_problem first, merge your change in, and pass the merged map.",
+            "- Legacy single-field params `solutionSql` / `expectedOutput` are still accepted; the server replicates them across every listed dialect into the new map.",
+            "",
+            "Other fields:",
+            "- `tagSlugs` replaces the full tag set.",
+            "- `status` ARCHIVED hides without deleting (preserves submissions).",
+            "- `newSlug` renames; old slug is freed.",
+            "",
+            "Returns the updated problem or {found: false}.",
+        ].join("\n"),
         McpProblemUpdateInputShape,
         async (input) => {
             const { slug, newSlug, ...updates } = input

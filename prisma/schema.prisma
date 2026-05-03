@@ -156,8 +156,25 @@ model SQLProblem {
   schemaDescription String     @db.Text
   schemaId          String
   schema            SqlSchema  @relation(fields: [schemaId], references: [id])
+  /// Legacy single-dialect output. Kept during the v0.5.0 transition;
+  /// the source of truth is `expectedOutputs[<dialect>]`. Will be
+  /// dropped in v0.5.1 once all live problems are populated and the
+  /// fallback path in validateSubmission is removed.
   expectedOutput    String     @db.Text
+  /// Legacy single-dialect canonical solution. Same lifecycle as
+  /// `expectedOutput` above — written for back-compat, read with
+  /// fallback when `solutions[<dialect>]` is missing.
   solutionSql       String?    @db.Text
+  /// Per-dialect canonical solutions. Shape: `{ "DUCKDB": "SELECT…",
+  /// "POSTGRES": "SELECT…" }`. Required keys = each entry of
+  /// `dialects[]` for any PUBLISHED problem (enforced at the API
+  /// layer). Each value is the canonical SQL for that engine.
+  solutions         Json       @default("{}")
+  /// Per-dialect expected output rows. Shape: `{ "DUCKDB":
+  /// "[{...rows...}]", "POSTGRES": "[{...rows...}]" }`. Same key
+  /// constraint as `solutions`. Each value is a JSON-stringified
+  /// array of row objects.
+  expectedOutputs   Json       @default("{}")
   ordered           Boolean    @default(false)
   /// Allowed engines for solving this problem. Most problems are
   /// portable (`[DUCKDB, POSTGRES]`); narrow only when the canonical

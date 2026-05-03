@@ -214,6 +214,7 @@ export function ProblemClient({
                 problemSlug: slug,
                 userResult,
                 code: query,
+                dialect,
             })
             if (outcome.ok) setSolved(true)
             setHistory((prev) => [

@@ -120,18 +120,28 @@ Create a problem. Either provide an existing `schemaId` **or** an inline `schema
     "name": "ecommerce",
     "sql": "CREATE TABLE customers (…); INSERT INTO customers VALUES (…);"
   },
+  "solutions": {
+    "DUCKDB": "SELECT c.name, SUM(o.amount) AS total FROM customers c JOIN orders o ON o.customer_id = c.customer_id GROUP BY c.name ORDER BY total DESC LIMIT 3",
+    "POSTGRES": "SELECT c.name, SUM(o.amount) AS total FROM customers c JOIN orders o ON o.customer_id = c.customer_id GROUP BY c.name ORDER BY total DESC LIMIT 3"
+  },
+  "expectedOutputs": {
+    "DUCKDB": "[{\"name\":\"Alice\",\"total\":8420.5}]",
+    "POSTGRES": "[{\"name\":\"Alice\",\"total\":8420.5}]"
+  },
+  // Legacy single-field fallbacks (v0.5.0 transition; removed in v0.5.1):
   "expectedOutput": "[{\"name\":\"Alice\",\"total\":8420.5}]",
-  "solutionSql": "SELECT c.name, SUM(o.amount) AS total FROM customers c JOIN orders o ON o.customer_id = c.customer_id GROUP BY c.name ORDER BY total DESC LIMIT 3"
+  "solutionSql": "SELECT …"
 }
 ```
 
 **Notes**
 
 - Provide **exactly one** of `schemaId` or `schemaInline`. Sending both, or neither, is a 400.
-- `expectedOutput` must be a JSON-encoded array of row objects. The server parses it during validation.
+- **Per-dialect maps (v0.5.0+)**: `solutions` and `expectedOutputs` are keyed by `Dialect`. Every key must be a member of `dialects[]`. PUBLISHED problems must have a non-empty entry for every listed dialect. DRAFT/BETA/ARCHIVED tolerate partial population.
+- **Legacy fields**: `solutionSql` and `expectedOutput` (singular) are still accepted; the server replicates them across every listed dialect into the new maps. Both legacy fields will be dropped in v0.5.1.
+- Each `expectedOutputs[d]` value (and the legacy `expectedOutput`) must be a JSON-encoded array of row objects.
 - `tagSlugs` are upserted by slug; unknown slugs are created with `name = slug.replace(/-/g, " ")`.
-- `solutionSql` is optional and stored on the problem for reference / future re-capture.
-- The admin UI captures `expectedOutput` automatically by running `solutionSql` against the schema in the browser via DuckDB-WASM. External callers can do the same client-side or compute it however they want.
+- The admin UI captures `expectedOutputs[<active dialect>]` automatically by running that dialect's solution against the schema in the browser. External callers can do the same client-side or compute it however they want.
 - The response's `number` is the **stable display ID** (`#247.` LeetCode-style). It's minted server-side as `MAX(number)+1` inside the create transaction; you cannot supply it in the request, and it is never recycled — even after archive — so external callers can persist it as a stable foreign key.
 
 **Response 201**

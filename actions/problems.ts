@@ -76,6 +76,7 @@ export async function getProblem(slug: string) {
                 schemaId: true,
                 schema: { select: { id: true, name: true, sql: true } },
                 expectedOutput: true,
+                expectedOutputs: true,
                 ordered: true,
                 hints: true,
                 dialects: true,
