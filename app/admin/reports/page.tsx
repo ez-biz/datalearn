@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Inbox } from "lucide-react"
 import { prisma } from "@/lib/prisma"
+import { requireAdminPage } from "@/lib/admin-page-auth"
 import { Container } from "@/components/ui/Container"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Badge } from "@/components/ui/Badge"
@@ -28,6 +29,8 @@ const OPEN_LIMIT = 200
 const RESOLVED_LIMIT = 100
 
 export default async function AdminReportsPage() {
+    await requireAdminPage()
+
     const [open, resolved] = await Promise.all([
         prisma.problemReport.findMany({
             where: { resolvedAt: null },

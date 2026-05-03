@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
+import { requireAdminPage } from "@/lib/admin-page-auth"
 import { Container } from "@/components/ui/Container"
 import { ProblemForm } from "@/components/admin/ProblemForm"
 
@@ -8,7 +9,9 @@ export const metadata = {
     robots: { index: false, follow: false },
 }
 
-export default function NewProblemPage() {
+export default async function NewProblemPage() {
+    await requireAdminPage()
+
     return (
         <Container width="lg" className="py-10">
             <Link

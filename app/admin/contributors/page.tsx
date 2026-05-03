@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { requireAdminPage } from "@/lib/admin-page-auth"
 import { Container } from "@/components/ui/Container"
 import { Card, CardContent } from "@/components/ui/Card"
 import { ContributorsClient } from "@/components/admin/ContributorsClient"
@@ -10,6 +11,8 @@ export const metadata = {
 export const dynamic = "force-dynamic"
 
 export default async function ContributorsPage() {
+    await requireAdminPage()
+
     const users = await prisma.user.findMany({
         orderBy: [{ role: "desc" }, { createdAt: "asc" }],
         take: 200,

@@ -1,7 +1,6 @@
 import type { Metadata } from "next"
 import { BookText, Database, FileCode, FileText } from "lucide-react"
-import { auth } from "@/lib/auth"
-import { redirect } from "next/navigation"
+import { requireAdminPage } from "@/lib/admin-page-auth"
 import { prisma } from "@/lib/prisma"
 import { createPage } from "@/actions/admin"
 import { Container } from "@/components/ui/Container"
@@ -23,10 +22,7 @@ export const metadata: Metadata = {
 }
 
 export default async function AdminPage() {
-    const session = await auth()
-    if (!session?.user || session.user.role !== "ADMIN") {
-        redirect("/")
-    }
+    await requireAdminPage()
 
     const [pages, topics, sqlProblems] = await Promise.all([
         prisma.page.findMany({ orderBy: { title: "asc" } }),

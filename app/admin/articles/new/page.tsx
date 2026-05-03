@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
 import { prisma } from "@/lib/prisma"
+import { requireAdminPage } from "@/lib/admin-page-auth"
 import { Container } from "@/components/ui/Container"
 import { ArticleForm } from "@/components/admin/ArticleForm"
 
@@ -10,6 +11,8 @@ export const metadata = {
 }
 
 export default async function NewArticlePage() {
+    await requireAdminPage()
+
     // Pre-pick a topic if one exists
     const firstTopic = await prisma.topic.findFirst({
         orderBy: { name: "asc" },

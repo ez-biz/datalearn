@@ -11,12 +11,15 @@ import {
     FolderOpen,
     Key,
     LayoutDashboard,
+    MessageSquareText,
+    ShieldCheck,
     Tag,
     Users,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-type BadgeKey = "openReports" | "articleQueue"
+type AdminRole = "ADMIN" | "MODERATOR"
+type BadgeKey = "openReports" | "articleQueue" | "discussionQueue"
 
 const items: {
     href: string
@@ -24,45 +27,72 @@ const items: {
     icon: typeof Database
     exact?: boolean
     badgeKey?: BadgeKey
+    adminOnly?: boolean
+    moderatorAllowed?: boolean
 }[] = [
-    { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
-    { href: "/admin/daily", label: "Daily", icon: CalendarCheck2 },
-    { href: "/admin/problems", label: "Problems", icon: Database },
-    { href: "/admin/schemas", label: "Schemas", icon: FileCode },
-    { href: "/admin/topics", label: "Topics", icon: FolderOpen },
+    {
+        href: "/admin",
+        label: "Overview",
+        icon: LayoutDashboard,
+        exact: true,
+        adminOnly: true,
+    },
+    { href: "/admin/daily", label: "Daily", icon: CalendarCheck2, adminOnly: true },
+    { href: "/admin/problems", label: "Problems", icon: Database, adminOnly: true },
+    { href: "/admin/schemas", label: "Schemas", icon: FileCode, adminOnly: true },
+    { href: "/admin/topics", label: "Topics", icon: FolderOpen, adminOnly: true },
     {
         href: "/admin/articles",
         label: "Articles",
         icon: BookOpen,
         badgeKey: "articleQueue",
+        adminOnly: true,
     },
-    { href: "/admin/tags", label: "Tags", icon: Tag },
+    { href: "/admin/tags", label: "Tags", icon: Tag, adminOnly: true },
     {
         href: "/admin/reports",
         label: "Reports",
         icon: Flag,
         badgeKey: "openReports",
+        adminOnly: true,
     },
-    { href: "/admin/contributors", label: "Contributors", icon: Users },
-    { href: "/admin/api-keys", label: "API keys", icon: Key },
+    {
+        href: "/admin/discussions",
+        label: "Discussions",
+        icon: MessageSquareText,
+        badgeKey: "discussionQueue",
+        moderatorAllowed: true,
+    },
+    { href: "/admin/moderators", label: "Moderators", icon: ShieldCheck, adminOnly: true },
+    { href: "/admin/contributors", label: "Contributors", icon: Users, adminOnly: true },
+    { href: "/admin/api-keys", label: "API keys", icon: Key, adminOnly: true },
 ]
 
 export function AdminNav({
+    role,
     openReportCount = 0,
     articleQueueCount = 0,
+    discussionQueueCount = 0,
 }: {
+    role: AdminRole
     openReportCount?: number
     articleQueueCount?: number
+    discussionQueueCount?: number
 }) {
     const pathname = usePathname()
     function badgeFor(key?: BadgeKey): number {
         if (key === "openReports") return openReportCount
         if (key === "articleQueue") return articleQueueCount
+        if (key === "discussionQueue") return discussionQueueCount
         return 0
     }
+    const visibleItems = items.filter((item) =>
+        role === "ADMIN" ? true : item.moderatorAllowed && !item.adminOnly
+    )
+
     return (
         <nav className="flex items-center gap-1 overflow-x-auto scrollbar-thin border-b border-border bg-surface px-4 sm:px-6">
-            {items.map((item) => {
+            {visibleItems.map((item) => {
                 const Icon = item.icon
                 const active = item.exact
                     ? pathname === item.href

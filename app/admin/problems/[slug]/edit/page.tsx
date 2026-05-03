@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
 import { notFound } from "next/navigation"
 import { prisma } from "@/lib/prisma"
+import { requireAdminPage } from "@/lib/admin-page-auth"
 import { Container } from "@/components/ui/Container"
 import { ProblemForm } from "@/components/admin/ProblemForm"
 
@@ -13,6 +14,8 @@ export const metadata = {
 type Props = { params: Promise<{ slug: string }> }
 
 export default async function EditProblemPage({ params }: Props) {
+    await requireAdminPage()
+
     const { slug } = await params
     const problem = await prisma.sQLProblem.findUnique({
         where: { slug },

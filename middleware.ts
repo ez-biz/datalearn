@@ -26,6 +26,11 @@ export default auth((req) => {
     const { pathname } = req.nextUrl
     const isAdminApi = pathname.startsWith("/api/admin/") || pathname === "/api/admin"
     const isAdminPage = pathname.startsWith("/admin/") || pathname === "/admin"
+    const isDiscussionAdminPath =
+        pathname === "/admin/discussions" ||
+        pathname.startsWith("/admin/discussions/") ||
+        pathname === "/api/admin/discussions" ||
+        pathname.startsWith("/api/admin/discussions/")
 
     if (!isAdminApi && !isAdminPage) {
         return NextResponse.next()
@@ -55,6 +60,9 @@ export default auth((req) => {
     }
 
     if (role !== "ADMIN") {
+        if (role === "MODERATOR" && isDiscussionAdminPath) {
+            return NextResponse.next()
+        }
         if (isAdminApi) {
             return NextResponse.json(
                 { error: "Admin access required." },
