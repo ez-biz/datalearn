@@ -1,0 +1,76 @@
+PROPRIETARY LICENSE — ALL RIGHTS RESERVED
+
+Copyright © 2026 Anchit Gupta and the Data Learn project.
+"Data Learn" and the Data·Learn wordmark are trademarks of Anchit Gupta.
+All rights are reserved.
+
+──────────────────────────────────────────────────────────────────────
+
+1. PERMITTED USE
+
+   Permission is granted to view this source code on GitHub for the
+   sole purpose of evaluating the project, reporting bugs, or
+   discussing it publicly with attribution.
+
+2. PROHIBITED USE
+
+   Without prior written permission from the copyright holder, you
+   MAY NOT:
+
+   (a) Copy, reproduce, fork, mirror, redistribute, sublicense, sell,
+       lease, host, or publish the source code or any portion thereof,
+       in source or compiled form, on any platform.
+
+   (b) Modify, adapt, translate, or create derivative works based on
+       the source code or its overall design, including but not limited
+       to its database schemas, problem catalog, expected outputs,
+       canonical solutions, articles, or visual design system.
+
+   (c) Use the source code, in whole or in part, in any commercial
+       product or service, whether or not for profit.
+
+   (d) Train machine learning models, retrieval systems, or other
+       automated systems on the source code, problem catalog, articles,
+       or any user-submitted content scraped from the live site.
+
+   (e) Use the "Data Learn" name, the Data·Learn wordmark, the green
+       logo glyph, or any confusingly similar mark to identify any
+       product, service, repository, or community without explicit
+       written permission.
+
+   (f) Run automated scrapers, headless browsers, or any other
+       programmatic agents against the live site at
+       https://www.learndatanow.com (or any successor domain) to
+       harvest its content, problems, schemas, or user-submitted
+       material. Use of the documented public APIs and the official
+       MCP server with a valid Bearer key is the only permitted form
+       of programmatic access.
+
+3. CONTRIBUTIONS
+
+   By submitting a pull request, issue comment, or any other
+   contribution to this repository, you grant the copyright holder a
+   perpetual, worldwide, irrevocable, royalty-free license to use,
+   modify, sublicense, and incorporate your contribution into the
+   project under the terms of this license.
+
+4. NO WARRANTY
+
+   THE SOURCE CODE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+   NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+   HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+   WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOURCE CODE OR THE USE OR OTHER
+   DEALINGS IN THE SOURCE CODE.
+
+5. CONTACT
+
+   For licensing inquiries (including requests to use, fork, or
+   sublicense any portion of this work) write to:
+   hello@learndatanow.com
+
+   For DMCA / takedown notices regarding content allegedly hosted at
+   https://www.learndatanow.com, see the contact email above and the
+   Privacy / Terms documents on the live site.

@@ -2,10 +2,12 @@
 
 Practice SQL the way LeetCode does code. Real problems. Real schemas. A real database in your browser.
 
-> **Live**: <https://datalearn-iota.vercel.app>
+> **Live**: <https://www.learndatanow.com>
 > Repo: <https://github.com/ez-biz/datalearn>
 
-> ![Built with Next.js 16](https://img.shields.io/badge/Next.js-16-black) ![DuckDB-WASM](https://img.shields.io/badge/SQL-DuckDB--WASM-yellow) ![Postgres-WASM](https://img.shields.io/badge/SQL-PGlite-336791) ![Prisma 7](https://img.shields.io/badge/ORM-Prisma_7-blue) ![Status](https://img.shields.io/badge/status-beta-orange)
+> ![Built with Next.js 16](https://img.shields.io/badge/Next.js-16-black) ![DuckDB-WASM](https://img.shields.io/badge/SQL-DuckDB--WASM-yellow) ![Postgres-WASM](https://img.shields.io/badge/SQL-PGlite-336791) ![Prisma 7](https://img.shields.io/badge/ORM-Prisma_7-blue) ![License: Proprietary](https://img.shields.io/badge/license-Proprietary-red) ![Status](https://img.shields.io/badge/status-beta-orange)
+
+> **© 2026 Anchit Gupta. All rights reserved.** This repository is **source-available, not open-source**. The code is published here for evaluation, bug reports, and discussion. You may **not** copy, fork, mirror, redistribute, modify, train models on, or use any portion of this work without prior written permission. See [`LICENSE`](./LICENSE) for the full terms and [`/terms`](https://www.learndatanow.com/terms) for content/usage rules.
 
 ---
 
