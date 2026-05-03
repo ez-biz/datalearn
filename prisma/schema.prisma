@@ -504,7 +504,7 @@ model DiscussionReport {
 /// migration check constraint because Prisma cannot model check constraints.
 model DiscussionSettings {
   id                       String   @id @default("global")
-  globalEnabled            Boolean  @default(false)
+  globalEnabled            Boolean  @default(true)
   reportThreshold          Int      @default(3)
   editWindowMinutes        Int      @default(15)
   duplicateCooldownSeconds Int      @default(300)

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import {
     DiscussionCommentCreateInput,
     DiscussionCommentEditInput,
@@ -91,5 +93,30 @@ assert.deepEqual(voteCounterDelta("UP", "UP"), {
     downvotes: 0,
     score: 0,
 })
+
+const schemaSource = readFileSync(join(process.cwd(), "prisma/schema.prisma"), "utf8")
+assert.match(
+    schemaSource,
+    /globalEnabled\s+Boolean\s+@default\(true\)/,
+    "Discussion settings should be enabled by default so learners see the tab."
+)
+
+const migrationsSource = readFileSync(
+    join(
+        process.cwd(),
+        "prisma/migrations/20260503141000_enable_discussions_by_default/migration.sql"
+    ),
+    "utf8"
+)
+assert.match(
+    migrationsSource,
+    /ALTER TABLE "DiscussionSettings" ALTER COLUMN "globalEnabled" SET DEFAULT true;/,
+    "The database default must be corrected for fresh settings rows."
+)
+assert.match(
+    migrationsSource,
+    /UPDATE "DiscussionSettings"\s+SET "globalEnabled" = true\s+WHERE "id" = 'global'\s+AND "updatedById" IS NULL;/,
+    "Existing seed-created settings should be enabled unless an admin already changed them."
+)
 
 console.log("discussion helper tests passed")

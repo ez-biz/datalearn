@@ -1,6 +1,6 @@
 # Problem Discussions
 
-> **Status**: design approved, not implemented. This is the v1 community layer for problem-specific discussion on Data Learn.
+> **Status**: implemented on branch `docs/problem-discussions-design`; pending release/PR. This is the v1 community layer for problem-specific discussion on Data Learn.
 
 ## Goal
 
@@ -98,7 +98,7 @@ Add `DiscussionReport`:
 Unique key: `(commentId, userId)` so one user cannot report the same comment repeatedly.
 
 Add `DiscussionSettings` as a singleton config row:
-- `globalEnabled`, default `false` during rollout and `true` once the feature is ready for all learners
+- `globalEnabled`, default `true`; admins can disable globally from `/admin/discussions/settings`
 - `reportThreshold`, default `3`
 - `editWindowMinutes`, default `15`
 - `duplicateCooldownSeconds`, default `300`
@@ -316,7 +316,7 @@ E2E tests:
 
 ## Rollout
 
-Ship behind `DiscussionSettings.globalEnabled`. When `globalEnabled` is false, the learner-facing Discussion tab is hidden everywhere. Once enabled, the default behavior for published problems is `OPEN` unless a problem-specific state row says `LOCKED` or `HIDDEN`. Create the settings row during migration or first boot.
+The feature is controlled by `DiscussionSettings.globalEnabled`. When `globalEnabled` is false, the learner-facing Discussion tab is hidden everywhere. The default behavior for published problems is `OPEN` unless a problem-specific state row says `LOCKED` or `HIDDEN`. Create the settings row during migration or first boot.
 
 Recommended implementation phases:
 1. Schema, settings defaults, reputation helpers, and permission helpers.

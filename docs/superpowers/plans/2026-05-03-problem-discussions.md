@@ -1,5 +1,7 @@
 # Problem Discussions Implementation Plan
 
+> **Status:** implemented on branch `docs/problem-discussions-design`; pending release/PR. The original task checklist below is preserved as execution history.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add problem-level discussions with one-level replies, voting, reports, DB-backed spam controls, admin moderation, moderator permissions, and per-problem discussion modes.
@@ -230,7 +232,7 @@ model DiscussionReport {
 
 model DiscussionSettings {
   id                       String   @id @default("global")
-  globalEnabled            Boolean  @default(false)
+  globalEnabled            Boolean  @default(true)
   reportThreshold          Int      @default(3)
   editWindowMinutes        Int      @default(15)
   duplicateCooldownSeconds Int      @default(300)
@@ -319,7 +321,7 @@ Ensure the generated SQL includes:
 ```sql
 ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'MODERATOR';
 INSERT INTO "DiscussionSettings" ("id", "globalEnabled", "reportThreshold", "editWindowMinutes", "duplicateCooldownSeconds", "bodyMaxChars", "updatedAt")
-VALUES ('global', false, 3, 15, 300, 4000, CURRENT_TIMESTAMP)
+VALUES ('global', true, 3, 15, 300, 4000, CURRENT_TIMESTAMP)
 ON CONFLICT ("id") DO NOTHING;
 ```
 

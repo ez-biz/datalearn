@@ -1,7 +1,7 @@
 # Data Learn — Technical Design Document
 
-> **Version:** 2.1
-> **Last updated:** 2026-05-01
+> **Version:** 2.2
+> **Last updated:** 2026-05-03
 > **Owner:** Anchit Gupta
 > **Repo:** <https://github.com/ez-biz/datalearn>
 
@@ -63,14 +63,15 @@ Data Learn is a single Next.js 16 application backed by Postgres. The runtime ar
 
 | § | Subsystem | What it owns |
 |---|---|---|
-| 4 | Database schema | Users, sessions, problems, schemas, submissions, articles, topics, tags, API keys, problem lists |
-| 5 | Auth & authorization | NextAuth config, edge middleware, role-based access (USER / CONTRIBUTOR / ADMIN), CSRF + Origin gate |
+| 4 | Database schema | Users, sessions, problems, schemas, submissions, articles, topics, tags, API keys, problem lists, discussions |
+| 5 | Auth & authorization | NextAuth config, edge middleware, role-based access (USER / CONTRIBUTOR / MODERATOR / ADMIN), CSRF + Origin gate |
 | 6 | SQL execution engine | DuckDB-WASM bootstrap, shared-DB hook, validator, expected-output capture |
 | 7 | Learn CMS | Topics, articles, status state machine, snapshot-on-publish, contributor authoring |
 | 8 | Admin REST API | `/api/admin/*` endpoints, Bearer-key auth, validation pipeline |
 | 9 | MCP server | Standalone stdio process, 9 tools, forced-DRAFT writes |
 | 10 | Profile & stats | Activity heatmap, streaks, solved donut, skills-by-tag |
 | 11 | Custom problem lists | Private user-curated collections — `/me/lists`, drag-drop reorder, sort options, add-from-workspace popover |
+| 11.6 | Problem discussions | Learner discussion tab, moderation queue, moderator permissions, settings, reputation |
 | 12 | Security posture | Threat model, mitigations, audit log of shipped fixes |
 
 ---
@@ -232,9 +233,9 @@ User ──┐
 
 ### Key models
 
-- **User** — id, email, name, image, role (`USER` / `CONTRIBUTOR` / `ADMIN`), accounts, sessions, submissions, authored articles, created API keys.
+- **User** — id, email, name, image, role (`USER` / `CONTRIBUTOR` / `MODERATOR` / `ADMIN`), accounts, sessions, submissions, authored articles, created API keys, discussion activity, reputation events, moderator permissions.
 - **Session** — NextAuth-managed; database session strategy.
-- **SQLProblem** — `number` (stable display ID, `Int @unique`, minted as `MAX(number)+1` in the create transaction; never recycled), slug, title, difficulty, status (`DRAFT` / `BETA` / `PUBLISHED` / `ARCHIVED`), description, schemaDescription, ordered, hints[], `dialects[]` (engines this problem can be solved in — typically `[DUCKDB, POSTGRES]`), `solutions Json` (per-dialect canonical SQL, keyed by `Dialect`; v0.4.2+), `expectedOutputs Json` (per-dialect expected rows as JSON-stringified arrays; v0.4.2+), legacy `expectedOutput` and `solutionSql` (kept until the cleanup release that drops them), schemaId, tags M:N.
+- **SQLProblem** — `number` (stable display ID, `Int @unique`, minted as `MAX(number)+1` in the create transaction; never recycled), slug, title, difficulty, status (`DRAFT` / `BETA` / `PUBLISHED` / `ARCHIVED`), description, schemaDescription, ordered, hints[], `dialects[]` (engines this problem can be solved in — typically `[DUCKDB, POSTGRES]`), `solutions Json` (per-dialect canonical SQL, keyed by `Dialect`; v0.4.2+), `expectedOutputs Json` (per-dialect expected rows as JSON-stringified arrays; v0.4.2+), legacy `expectedOutput` and `solutionSql` (kept until the cleanup release that drops them), schemaId, tags M:N, discussion comments, optional discussion state.
 - **SqlSchema** — name, sql (CREATE TABLE + INSERT VALUES — **not** stored as separate DDL/seed columns).
 - **Submission** — userId, problemId, status (`ACCEPTED` / `WRONG_ANSWER`), code, reason, createdAt.
 - **Tag** — slug, name; M:N to Problem and to Article.
@@ -244,6 +245,12 @@ User ──┐
 - **ProblemReport** — per-user reports against problems (anonymous variant rate-limited).
 - **ProblemList** — `{ id, ownerId, name, description?, createdAt, updatedAt }`. Cascade-deletes with the User. Indexed on `(ownerId, updatedAt)` for the index page sort.
 - **ProblemListItem** — `{ listId, problemId, position, addedAt }` with composite PK `(listId, problemId)` so the same problem can't appear twice in one list. `position` is mutated by `reorderList` in a single transaction; never auto-managed. Indexed on `(listId, position)` for the detail-page render.
+- **DiscussionComment** — problem-scoped learner discussion rows with one-level replies (`parentId`), Markdown body, status (`VISIBLE` / `HIDDEN` / `DELETED` / `SPAM`), vote counters, report count, edit/delete/hide timestamps, and author/moderator relations.
+- **DiscussionVote / DiscussionVoteAction / DiscussionReport** — one current vote per user/comment, append-style vote actions for rate limiting, and one report per user/comment. Reports have status (`OPEN` / `DISMISSED` / `CONFIRMED`) so queue membership is based on current open reports, not historical count.
+- **DiscussionSettings** — singleton `id = "global"` row. Controls global enablement, report threshold, edit window, duplicate cooldown, body length, per-tier comment/vote limits, per-problem daily limit, and reputation thresholds. `globalEnabled` defaults to `true`; admins can disable it.
+- **ProblemDiscussionState** — optional per-problem mode (`OPEN` / `LOCKED` / `HIDDEN`). Missing row means `OPEN`.
+- **ModeratorPermission / DiscussionModerationLog** — permission grants for `MODERATOR` users plus append-only audit logs for settings changes, problem-mode changes, comment moderation, and moderator permission changes.
+- **UserReputationEvent** — auditable point events for accepted solves, vote effects, hidden comments, confirmed spam, and account-age bonus inputs. Reputation is derived from the event sum.
 
 ### Design decisions
 
@@ -255,6 +262,8 @@ User ──┐
 - **Schemas are stored as one `sql` string** (DDL + seed `INSERTs` together). Keeps the model simple at the cost of needing the schema parser (`lib/schema-parser.ts`) for fast first-paint introspection.
 - **Problem numbers are minted in-transaction, never recycled.** `SQLProblem.number` is set as `MAX(number)+1` inside the same `prisma.$transaction` that creates the row, so concurrent creates can't collide; the DB-side `UNIQUE` constraint is the ultimate guard. Even after `ARCHIVED`, the number stays — external links, search results, and shared screenshots remain stable forever.
 - **Custom lists dedupe at the DB level.** `ProblemListItem` uses a composite PK `(listId, problemId)`, so `addToList` is idempotent — a duplicate insert raises `P2002` and the action treats it as success. No application-level dedupe logic.
+- **Problem discussions are additive and preserve submissions.** Moderation never deletes submissions or problems. Hiding a comment changes comment status; hiding a problem discussion changes `ProblemDiscussionState.mode` to `HIDDEN`; archiving a problem is separate from discussion moderation.
+- **Discussion settings are DB-backed.** Spam thresholds and rate limits live in the singleton settings row. Routes call `getDiscussionSettings()` and apply the current values.
 
 ---
 
@@ -274,7 +283,8 @@ Bounces unauthorized requests to `/admin/*` and `/api/admin/*` **before** any re
 
 - Runs on the Node runtime (not Edge) so the Prisma session adapter works.
 - Anonymous → 307 redirect to `/api/auth/signin?callbackUrl=...` (pages) or 401 JSON (API).
-- Non-admin USER → 307 to `/` (pages) or 403 JSON (API).
+- Non-admin USER / CONTRIBUTOR → 307 to `/` (pages) or 403 JSON (API).
+- `MODERATOR` can enter only `/admin/discussions*` and `/api/admin/discussions*`; route handlers still enforce the exact `ModeratorPermission`.
 - Bearer-token requests to `/api/admin/*` bypass the session check and are validated downstream by `withAdmin` against the `ApiKey` table.
 - This is **defense-in-depth.** `withAdmin` and `AdminLayout` still do their own checks; the middleware closes a small DoS / race window.
 
@@ -295,7 +305,8 @@ Two route wrappers. Both:
 |---|---|
 | `USER` | Public site + per-user submissions and profile |
 | `CONTRIBUTOR` | + `/me/articles` authoring (own articles only); article submission for admin review |
-| `ADMIN` | + Admin CMS, role grant API, API key management, contributor management, full content control |
+| `MODERATOR` | + admin shell access only for permitted discussion moderation surfaces. Individual capabilities come from `ModeratorPermission`; no content-CMS or API-key access. |
+| `ADMIN` | + Admin CMS, role grant API, API key management, contributor/moderator management, full content and moderation control |
 
 Role grants are admin-only via `/api/admin/users/[id]/role`. ADMIN role changes are deliberately UI-blocked (psql-only) so an admin can't accidentally demote themselves.
 
@@ -519,6 +530,64 @@ Both caps are checked at write-time in `addToList` / `createList` and surface a 
 - MCP tools (`list_my_lists`, `add_to_list`, `remove_from_list`) — today the MCP path is admin-only; opens up when we extend MCP for contributors.
 - Bulk operations (move N problems between lists).
 - "Lists containing this problem" surface on the practice page — the `getListIdsContainingProblem` query exists but is only consumed by AddToListButton today.
+
+---
+
+## 11.6 Problem Discussions
+
+Problem discussions are the first community layer and live directly inside the practice workspace.
+
+### Learner surface
+
+- `components/practice/ProblemPanel.tsx` adds a `Discussion` tab beside Description, Hints, and History.
+- The tab renders only when `DiscussionSettings.globalEnabled = true` and the problem's mode is not `HIDDEN`.
+- `OPEN` mode allows signed-in users to post top-level comments, reply one level deep, vote, report, edit within the edit window, and soft-delete their own visible comments.
+- `LOCKED` mode keeps existing comments readable but blocks all discussion mutations.
+- Signed-out users can read comments. Mutating actions open the existing sign-in dialog.
+- Comments render through the shared safe Markdown renderer with inline code, fenced code blocks, and SQL highlighting where available. Raw HTML is not rendered.
+- Accepted submission history exposes `Share approach`, which pre-fills a comment with the accepted SQL in a fenced `sql` block.
+
+### Public API
+
+Public discussion reads and learner writes sit under:
+
+- `GET /api/problems/[slug]/discussion?sort=best|votes|latest&page=1&limit=20`
+- `POST /api/problems/[slug]/discussion`
+- `PATCH|DELETE /api/problems/[slug]/discussion/[commentId]`
+- `POST /api/problems/[slug]/discussion/[commentId]/replies`
+- `PUT /api/problems/[slug]/discussion/[commentId]/vote`
+- `POST /api/problems/[slug]/discussion/[commentId]/report`
+
+`GET` returns paginated top-level comments with capped inline replies, aggregate vote counts, and viewer vote state when signed in. Hidden/spam comments are excluded from public reads. Deleted comments return as placeholders when needed to preserve reply context.
+
+### Spam controls and reputation
+
+Rate limits are per reputation tier (`NEW`, `TRUSTED`, `HIGH_TRUST`) and are configured in `DiscussionSettings`: hourly top-level comments, hourly replies, per-problem daily comments, minimum seconds between comments, duplicate cooldown, and hourly votes. Writes re-check settings and problem mode inside transactions before mutating state.
+
+Reputation is derived from `UserReputationEvent`. Accepted submissions add a small positive event; votes and moderation outcomes can add or subtract points. The event table is append-only so scores can be recalculated later.
+
+### Admin and moderator surfaces
+
+- `/admin/discussions` is the moderation queue. It shows needs-review, hidden, dismissed-reports, and spam buckets.
+- A comment enters needs-review when its OPEN report count reaches `DiscussionSettings.reportThreshold`. This does not auto-hide the comment.
+- Moderation actions are hide, restore, dismiss reports, and mark spam. Actions update comment/report state and write `DiscussionModerationLog`.
+- `/admin/discussions/settings` is admin-only. It edits the global settings singleton.
+- `/admin/moderators` is admin-only. Admins can promote existing `USER` accounts to `MODERATOR`, replace their permission set, revoke individual permissions, or remove the moderator role.
+- Problem edit forms expose `OPEN`, `LOCKED`, and `HIDDEN` discussion mode. Moderators can change problem discussion mode only when their permissions cover the transition.
+
+### Permission model
+
+`ADMIN` bypasses moderator permission checks. `MODERATOR` users need explicit `ModeratorPermission` rows for each capability:
+
+- `VIEW_DISCUSSION_QUEUE`
+- `HIDE_COMMENT`
+- `RESTORE_COMMENT`
+- `DISMISS_REPORT`
+- `MARK_SPAM`
+- `LOCK_PROBLEM_DISCUSSION`
+- `HIDE_PROBLEM_DISCUSSION`
+
+Middleware lets moderators enter only the discussion moderation paths; page guards and route handlers enforce the same checks server-side.
 
 ---
 
