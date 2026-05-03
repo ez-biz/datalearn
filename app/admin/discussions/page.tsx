@@ -1,5 +1,5 @@
 import Link from "next/link"
-import type { ModeratorPermissionKey, Prisma } from "@prisma/client"
+import { Prisma, type ModeratorPermissionKey } from "@prisma/client"
 import { MessageSquareWarning, Settings } from "lucide-react"
 import { prisma } from "@/lib/prisma"
 import { requireAdminOrModeratorPage } from "@/lib/admin-page-auth"
@@ -63,21 +63,48 @@ type CommentRecord = Prisma.DiscussionCommentGetPayload<{
     select: typeof commentSelect
 }>
 
+async function findNeedsReviewCommentIds(reportThreshold: number) {
+    const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT c."id"
+        FROM "DiscussionComment" c
+        INNER JOIN "DiscussionReport" r
+          ON r."commentId" = c."id"
+         AND r."status" = 'OPEN'::"DiscussionReportStatus"
+        WHERE c."status" = 'VISIBLE'::"DiscussionCommentStatus"
+        GROUP BY c."id", c."updatedAt"
+        HAVING COUNT(r."id") >= ${reportThreshold}
+        ORDER BY COUNT(r."id") DESC, c."updatedAt" DESC
+        LIMIT ${QUEUE_LIMIT}
+    `)
+
+    return rows.map((row) => row.id)
+}
+
+async function loadCommentsInOrder(ids: string[]) {
+    if (ids.length === 0) return [] as CommentRecord[]
+
+    const comments = await prisma.discussionComment.findMany({
+        where: { id: { in: ids } },
+        select: commentSelect,
+    })
+    const byId = new Map(comments.map((comment) => [comment.id, comment]))
+
+    return ids.flatMap((id) => {
+        const comment = byId.get(id)
+        return comment ? [comment] : []
+    })
+}
+
 export default async function AdminDiscussionQueuePage() {
     const session = await requireAdminOrModeratorPage("VIEW_DISCUSSION_QUEUE")
     const settings = await getDiscussionSettings()
+    const needsReviewIdsPromise = findNeedsReviewCommentIds(
+        settings.reportThreshold
+    )
 
     const [needsReview, hidden, dismissedReports, spam, moderatorPermissions] =
         await Promise.all([
-            prisma.discussionComment.findMany({
-                where: {
-                    status: "VISIBLE",
-                    reportCount: { gte: settings.reportThreshold },
-                },
-                orderBy: [{ reportCount: "desc" }, { updatedAt: "desc" }],
-                take: QUEUE_LIMIT,
-                select: commentSelect,
-            }),
+            needsReviewIdsPromise.then(loadCommentsInOrder),
             prisma.discussionComment.findMany({
                 where: { status: "HIDDEN" },
                 orderBy: [{ hiddenAt: "desc" }, { updatedAt: "desc" }],

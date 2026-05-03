@@ -16,7 +16,20 @@ export async function POST(req: Request, ctx: Ctx) {
                 where: { id: commentId },
                 select: { id: true, status: true, reportCount: true, score: true },
             })
-            if (!comment) return null
+            if (!comment) {
+                return {
+                    ok: false as const,
+                    status: 404,
+                    error: "Comment not found.",
+                }
+            }
+            if (comment.status === "DELETED") {
+                return {
+                    ok: false as const,
+                    status: 409,
+                    error: "Reports on deleted comments cannot be dismissed here.",
+                }
+            }
 
             const dismissed = await tx.discussionReport.updateMany({
                 where: {
@@ -42,13 +55,17 @@ export async function POST(req: Request, ctx: Ctx) {
                 },
             })
 
-            return { comment, dismissedCount: dismissed.count }
+            return {
+                ok: true as const,
+                comment,
+                dismissedCount: dismissed.count,
+            }
         })
 
-        if (!result) {
+        if (!result.ok) {
             return NextResponse.json(
-                { error: "Comment not found." },
-                { status: 404 }
+                { error: result.error },
+                { status: result.status }
             )
         }
 

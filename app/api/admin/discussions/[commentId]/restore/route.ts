@@ -13,17 +13,41 @@ export async function POST(req: Request, ctx: Ctx) {
         const result = await prisma.$transaction(async (tx) => {
             const comment = await tx.discussionComment.findUnique({
                 where: { id: commentId },
-                select: { id: true },
+                select: { id: true, status: true, userId: true },
             })
-            if (!comment) return null
+            if (!comment) {
+                return {
+                    ok: false as const,
+                    status: 404,
+                    error: "Comment not found.",
+                }
+            }
+            if (comment.status !== "HIDDEN" && comment.status !== "SPAM") {
+                return {
+                    ok: false as const,
+                    status: 409,
+                    error: "Only hidden or spam comments can be restored.",
+                }
+            }
 
-            const updated = await tx.discussionComment.update({
-                where: { id: comment.id },
+            const transition = await tx.discussionComment.updateMany({
+                where: { id: comment.id, status: { in: ["HIDDEN", "SPAM"] } },
                 data: {
                     status: "VISIBLE",
                     hiddenAt: null,
                     hiddenById: null,
                 },
+            })
+            if (transition.count === 0) {
+                return {
+                    ok: false as const,
+                    status: 409,
+                    error: "Comment state changed before it could be restored.",
+                }
+            }
+
+            const updated = await tx.discussionComment.findUniqueOrThrow({
+                where: { id: comment.id },
                 select: {
                     id: true,
                     status: true,
@@ -33,6 +57,24 @@ export async function POST(req: Request, ctx: Ctx) {
                     score: true,
                 },
             })
+
+            if (comment.userId) {
+                await tx.userReputationEvent.deleteMany({
+                    where: {
+                        userId: comment.userId,
+                        OR: [
+                            {
+                                kind: "COMMENT_HIDDEN",
+                                sourceId: `moderation:hide:${comment.id}`,
+                            },
+                            {
+                                kind: "COMMENT_SPAM_CONFIRMED",
+                                sourceId: `moderation:spam:${comment.id}`,
+                            },
+                        ],
+                    },
+                })
+            }
 
             await tx.discussionModerationLog.create({
                 data: {
@@ -44,18 +86,18 @@ export async function POST(req: Request, ctx: Ctx) {
                 },
             })
 
-            return updated
+            return { ok: true as const, comment: updated }
         })
 
-        if (!result) {
+        if (!result.ok) {
             return NextResponse.json(
-                { error: "Comment not found." },
-                { status: 404 }
+                { error: result.error },
+                { status: result.status }
             )
         }
 
         return NextResponse.json({
-            data: { action: "RESTORE_COMMENT", comment: result },
+            data: { action: "RESTORE_COMMENT", comment: result.comment },
         })
     } catch (e) {
         if (e instanceof AuthFailure) {

@@ -14,17 +14,41 @@ export async function POST(req: Request, ctx: Ctx) {
         const result = await prisma.$transaction(async (tx) => {
             const comment = await tx.discussionComment.findUnique({
                 where: { id: commentId },
-                select: { id: true, userId: true },
+                select: { id: true, status: true, userId: true },
             })
-            if (!comment) return null
+            if (!comment) {
+                return {
+                    ok: false as const,
+                    status: 404,
+                    error: "Comment not found.",
+                }
+            }
+            if (comment.status !== "VISIBLE") {
+                return {
+                    ok: false as const,
+                    status: 409,
+                    error: "Only visible comments can be hidden.",
+                }
+            }
 
-            const updated = await tx.discussionComment.update({
-                where: { id: comment.id },
+            const transition = await tx.discussionComment.updateMany({
+                where: { id: comment.id, status: "VISIBLE" },
                 data: {
                     status: "HIDDEN",
                     hiddenAt: now,
                     hiddenById: principal.userId,
                 },
+            })
+            if (transition.count === 0) {
+                return {
+                    ok: false as const,
+                    status: 409,
+                    error: "Comment state changed before it could be hidden.",
+                }
+            }
+
+            const updated = await tx.discussionComment.findUniqueOrThrow({
+                where: { id: comment.id },
                 select: {
                     id: true,
                     status: true,
@@ -64,18 +88,18 @@ export async function POST(req: Request, ctx: Ctx) {
                 },
             })
 
-            return updated
+            return { ok: true as const, comment: updated }
         })
 
-        if (!result) {
+        if (!result.ok) {
             return NextResponse.json(
-                { error: "Comment not found." },
-                { status: 404 }
+                { error: result.error },
+                { status: result.status }
             )
         }
 
         return NextResponse.json({
-            data: { action: "HIDE_COMMENT", comment: result },
+            data: { action: "HIDE_COMMENT", comment: result.comment },
         })
     } catch (e) {
         if (e instanceof AuthFailure) {

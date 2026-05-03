@@ -14,17 +14,41 @@ export async function POST(req: Request, ctx: Ctx) {
         const result = await prisma.$transaction(async (tx) => {
             const comment = await tx.discussionComment.findUnique({
                 where: { id: commentId },
-                select: { id: true, userId: true },
+                select: { id: true, status: true, userId: true },
             })
-            if (!comment) return null
+            if (!comment) {
+                return {
+                    ok: false as const,
+                    status: 404,
+                    error: "Comment not found.",
+                }
+            }
+            if (comment.status !== "VISIBLE" && comment.status !== "HIDDEN") {
+                return {
+                    ok: false as const,
+                    status: 409,
+                    error: "Only visible or hidden comments can be marked as spam.",
+                }
+            }
 
-            const updated = await tx.discussionComment.update({
-                where: { id: comment.id },
+            const transition = await tx.discussionComment.updateMany({
+                where: { id: comment.id, status: { in: ["VISIBLE", "HIDDEN"] } },
                 data: {
                     status: "SPAM",
                     hiddenAt: now,
                     hiddenById: principal.userId,
                 },
+            })
+            if (transition.count === 0) {
+                return {
+                    ok: false as const,
+                    status: 409,
+                    error: "Comment state changed before it could be marked as spam.",
+                }
+            }
+
+            const updated = await tx.discussionComment.findUniqueOrThrow({
+                where: { id: comment.id },
                 select: {
                     id: true,
                     status: true,
@@ -78,13 +102,17 @@ export async function POST(req: Request, ctx: Ctx) {
                 },
             })
 
-            return { comment: updated, confirmedCount: confirmed.count }
+            return {
+                ok: true as const,
+                comment: updated,
+                confirmedCount: confirmed.count,
+            }
         })
 
-        if (!result) {
+        if (!result.ok) {
             return NextResponse.json(
-                { error: "Comment not found." },
-                { status: 404 }
+                { error: result.error },
+                { status: result.status }
             )
         }
 
