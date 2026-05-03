@@ -45,17 +45,41 @@ export const TagCreateInput = z.object({
  * doesn't expose those.
  */
 /**
- * Per-dialect record schemas. `solutions` keys must match `dialects[]`;
+ * Per-dialect record schemas. `solutions` keys must be valid dialects
+ * and are checked against `dialects[]` in cross-field validation;
  * each value is the canonical SQL for that engine. `expectedOutputs`
  * mirrors the shape with JSON-stringified row arrays. Both are
  * v0.5.0+ — the legacy single-field `solutionSql` / `expectedOutput`
  * remain accepted during the transition window.
  */
-const SolutionsRecord = z.record(Dialect, z.string().max(20_000))
-const ExpectedOutputsRecord = z.record(
+const SolutionsRecord = z.partialRecord(Dialect, z.string().max(20_000))
+const ExpectedOutputsRecord = z.partialRecord(
     Dialect,
     z.string().min(2).max(2_000_000)
 )
+
+type DialectValue = z.infer<typeof Dialect>
+type ProblemStatusValue = z.infer<typeof ProblemStatus>
+
+export function getMissingPublishedDialectMapEntries(input: {
+    status: ProblemStatusValue
+    dialects: DialectValue[]
+    solutions: Record<string, string>
+    expectedOutputs: Record<string, string>
+}): string[] {
+    if (input.status !== "PUBLISHED") return []
+
+    const missing: string[] = []
+    for (const dialect of input.dialects) {
+        if (!input.solutions[dialect]?.trim()) {
+            missing.push(`solutions.${dialect}`)
+        }
+        if (!input.expectedOutputs[dialect]?.trim()) {
+            missing.push(`expectedOutputs.${dialect}`)
+        }
+    }
+    return missing
+}
 
 export const ProblemCreateInputBase = z.object({
     title: z.string().min(1).max(200),

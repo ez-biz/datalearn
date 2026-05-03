@@ -3,7 +3,10 @@ import { z } from "zod"
 import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { withAdmin } from "@/lib/api-auth"
-import { ProblemUpdateInput } from "@/lib/admin-validation"
+import {
+    getMissingPublishedDialectMapEntries,
+    ProblemUpdateInput,
+} from "@/lib/admin-validation"
 
 type Ctx = { params: Promise<{ slug: string }> }
 
@@ -43,7 +46,13 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
 
     const existing = await prisma.sQLProblem.findUnique({
         where: { slug },
-        select: { id: true, dialects: true, solutions: true, expectedOutputs: true },
+        select: {
+            id: true,
+            status: true,
+            dialects: true,
+            solutions: true,
+            expectedOutputs: true,
+        },
     })
     if (!existing) {
         return NextResponse.json({ error: "Not found." }, { status: 404 })
@@ -94,9 +103,12 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                 (existing.solutions as Record<string, string>) ?? {}
             const existingExpectedOutputs =
                 (existing.expectedOutputs as Record<string, string>) ?? {}
+            let finalSolutions = existingSolutions
+            let finalExpectedOutputs = existingExpectedOutputs
 
             if (input.solutions !== undefined) {
                 data.solutions = input.solutions
+                finalSolutions = input.solutions
                 // Sync legacy field from the first listed dialect.
                 const firstDialect = effectiveDialects[0]
                 if (firstDialect && input.solutions[firstDialect] !== undefined) {
@@ -111,11 +123,13 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                         merged[d] = input.solutionSql
                     }
                     data.solutions = merged
+                    finalSolutions = merged
                 }
             }
 
             if (input.expectedOutputs !== undefined) {
                 data.expectedOutputs = input.expectedOutputs
+                finalExpectedOutputs = input.expectedOutputs
                 const firstDialect = effectiveDialects[0]
                 if (
                     firstDialect &&
@@ -130,6 +144,20 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                     merged[d] = input.expectedOutput
                 }
                 data.expectedOutputs = merged
+                finalExpectedOutputs = merged
+            }
+
+            const missingPublishedEntries =
+                getMissingPublishedDialectMapEntries({
+                    status: input.status ?? existing.status,
+                    dialects: effectiveDialects,
+                    solutions: finalSolutions,
+                    expectedOutputs: finalExpectedOutputs,
+                })
+            if (missingPublishedEntries.length > 0) {
+                throw new Error(
+                    `PUBLISHED_DIALECT_MAP_INCOMPLETE:${missingPublishedEntries.join(",")}`
+                )
             }
 
             if (input.tagSlugs !== undefined) {
@@ -182,6 +210,22 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
             const missing = error.message.slice("TAGS_NOT_FOUND:".length)
             return NextResponse.json(
                 { error: `Unknown tag slug(s): ${missing}.` },
+                { status: 400 }
+            )
+        }
+        if (
+            typeof error.message === "string" &&
+            error.message.startsWith("PUBLISHED_DIALECT_MAP_INCOMPLETE:")
+        ) {
+            const missing = error.message.slice(
+                "PUBLISHED_DIALECT_MAP_INCOMPLETE:".length
+            )
+            return NextResponse.json(
+                {
+                    error:
+                        "PUBLISHED problems require non-empty solutions and expectedOutputs for every listed dialect.",
+                    missing: missing.split(",").filter(Boolean),
+                },
                 { status: 400 }
             )
         }
