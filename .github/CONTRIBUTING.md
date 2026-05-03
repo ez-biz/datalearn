@@ -10,7 +10,8 @@ If anything here is unclear or out of date, that's a bug — open a PR.
 
 ## TL;DR
 
-- **`main` is integration; `production` is what's live.** Pushes to `main` deploy to a Preview URL only. Production deploys when you open a PR `main → production` (titled `release: vX.Y.Z`) and merge it. This batches multiple feature merges into one explicit, tag-able release event.
+- **`main` is integration; `production` is what's live and is the GitHub default branch.** Pushes to `main` deploy to a Preview URL only. Production deploys when you open a PR `main → production` (titled `release: vX.Y.Z`) and merge it. This batches multiple feature merges into one explicit, tag-able release event.
+- **Important — feature PRs must use `--base main`.** Because `production` is the default branch, `gh pr create` would otherwise target it. Always pass `--base main` for feature work, or risk shipping unfinished code to live. (Release PRs go `main → production` and don't need `--base` since `production` is default.)
 - Every change ships through a pull request. No direct pushes to `main` or `production`.
 - Branches are named `<type>/<short-description>` (e.g. `feat/admin-sorting`).
 - Commits use conventional-commit-style prefixes (`feat:`, `fix:`, …).
@@ -117,8 +118,8 @@ branch → push → open PR → CI runs → preview deploy → review → merge 
 ### 1. Open the PR
 
 - Push your branch: `git push -u origin <branch>`
-- `gh pr create` (or use the GitHub UI). The PR template loads
-  automatically (see `.github/PULL_REQUEST_TEMPLATE.md`).
+- `gh pr create --base main` — **the `--base main` is required.** The repo's default branch is `production` (= live), so without an explicit base your feature PR would target production. The PR template loads automatically (see `.github/PULL_REQUEST_TEMPLATE.md`).
+- In the GitHub UI, double-check the base dropdown reads `main`, not `production`.
 - Mark **Draft** if you're not ready for review yet.
 
 ### 2. CI
@@ -277,6 +278,8 @@ git checkout main && git pull
 gh run list --branch main --limit 1   # CI status (informational; not a hard gate)
 
 # 2. Open the release PR: main → production. Title MUST be `release: vX.Y.Z`.
+# `--base production` is omittable since `production` is the repo default,
+# but writing it explicitly keeps the intent clear in scripts.
 gh pr create --base production --head main \
   --title "release: v0.3.0" \
   --body "$(gh pr list --base main --state merged --limit 50 --json title,number --jq '.[] | "- #\(.number) \(.title)"')"

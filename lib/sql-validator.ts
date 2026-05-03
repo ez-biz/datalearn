@@ -49,10 +49,63 @@ function normalizeCell(v: unknown): unknown {
         }
         return v.toString()
     }
+    // Date objects must be handled BEFORE the generic toString() path
+    // below — Date.toString() returns the locale string ("Sun Jan 15 2023
+    // 05:30:00 GMT+0530…"), not ISO. PGlite returns Date instances for
+    // DATE / TIMESTAMP columns, so without this branch every cross-dialect
+    // date comparison would silently fail.
+    if (v instanceof Date) {
+        return Number.isNaN(v.getTime()) ? null : v.toISOString()
+    }
     if (typeof v === 'object' && v !== null && 'toString' in v) {
         return (v as { toString(): string }).toString()
     }
     return v
+}
+
+/**
+ * Coerce a cell to a canonical ISO 8601 datetime string when it
+ * plausibly represents a date or timestamp; otherwise return null.
+ *
+ * Bridges cross-dialect date serialization:
+ * - DuckDB-WASM emits dates as epoch milliseconds (number)
+ * - PGlite emits dates as ISO 8601 strings
+ * - Native Postgres clients (e.g. node-pg) sometimes emit `Date` objects
+ *
+ * Same `expectedOutput` JSON should match a learner's query regardless
+ * of which engine they ran it in. Without this, capturing
+ * `expectedOutput` in one engine breaks the other.
+ *
+ * Conservative on what counts as a "date" — only ISO-shaped strings
+ * (`YYYY-MM-DD…`) and numbers in a plausible epoch range
+ * (year 2000 to year 3000, both seconds and ms units) qualify. A
+ * number like `1` won't be misread as 1970.
+ */
+function toIsoIfDate(v: unknown): string | null {
+    if (v instanceof Date) {
+        return Number.isNaN(v.getTime()) ? null : v.toISOString()
+    }
+    if (typeof v === 'number' && Number.isFinite(v)) {
+        // Year 2000 (946684800) to year 3000 (32503680000) in seconds,
+        // or the same range in milliseconds.
+        if (v >= 946_684_800_000 && v <= 32_503_680_000_000) {
+            return new Date(v).toISOString()
+        }
+        if (v >= 946_684_800 && v <= 32_503_680_000) {
+            return new Date(v * 1000).toISOString()
+        }
+        return null
+    }
+    if (typeof v === 'string') {
+        // ISO 8601 date or datetime — leading YYYY-MM-DD with optional
+        // T or space separator. Reject otherwise to keep regular strings
+        // (UUIDs, names) out of the date path.
+        if (/^\d{4}-\d{2}-\d{2}([T ]|$)/.test(v)) {
+            const d = new Date(v)
+            if (!Number.isNaN(d.getTime())) return d.toISOString()
+        }
+    }
+    return null
 }
 
 function cellEqual(a: unknown, b: unknown): boolean {
@@ -72,7 +125,13 @@ function cellEqual(a: unknown, b: unknown): boolean {
         const naAsNum = Number(na)
         if (!Number.isNaN(naAsNum)) return Math.abs(naAsNum - nb) < EPSILON
     }
-    return na === nb
+    if (na === nb) return true
+    // Last-resort fallback: cross-dialect date equivalence. Run AFTER
+    // exact-match so non-date strings/numbers compare unchanged.
+    const aIso = toIsoIfDate(na)
+    const bIso = toIsoIfDate(nb)
+    if (aIso !== null && bIso !== null && aIso === bIso) return true
+    return false
 }
 
 function rowEqual(a: Row, b: Row): boolean {
@@ -84,6 +143,11 @@ function rowEqual(a: Row, b: Row): boolean {
 
 function canonicalCell(v: unknown): unknown {
     const n = normalizeCell(v)
+    // Date-like values canonicalize to ISO 8601 so unordered comparison
+    // matches whatever cellEqual matches (DuckDB epoch ms, PGlite ISO
+    // string, and native Date objects all collapse to one form).
+    const iso = toIsoIfDate(n)
+    if (iso !== null) return iso
     // Numbers get rounded to a stable precision so that values within
     // EPSILON canonicalize to the same string (otherwise unordered
     // comparison via JSON.stringify would treat 0.3 and 0.30000000000000004

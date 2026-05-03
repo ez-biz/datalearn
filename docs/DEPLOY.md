@@ -20,6 +20,8 @@ First-time runbook for shipping Data Learn to production. **Vercel** for the Nex
 
 Vercel knows `production` is the prod branch via **Project → Settings → Git → Production Branch**. (Default is `main`; we override.)
 
+> **GitHub default branch is `production`** — set with `gh repo edit ez-biz/datalearn --default-branch production`. Reasons: (1) suppresses the "Compare & pull request" banner that fired after every release merge under the old setup, (2) `git clone` lands on the live state, and (3) the "behind/ahead" framing on the branches page reads correctly. **Trade-off: feature PRs must explicitly pass `--base main`** to `gh pr create`, otherwise they target `production` and a forgotten flag would deploy unfinished work to live. CONTRIBUTING.md documents this.
+
 > **Neon branching tip**: instead of running two separate projects (one dev, one prod), Neon's free tier lets you create branches off the prod database — copy-on-write Postgres branches that share storage. The Neon-Vercel integration can auto-create one branch per preview deploy, isolating each PR's schema changes. Skip this if you want simpler ops; revisit when previews start stepping on each other.
 
 ---
