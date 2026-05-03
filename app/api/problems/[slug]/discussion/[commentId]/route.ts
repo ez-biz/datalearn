@@ -28,15 +28,8 @@ async function findOwnedComment(slug: string, commentId: string, userId: string)
         },
         select: {
             id: true,
-            problemId: true,
-            userId: true,
             status: true,
             createdAt: true,
-            problem: {
-                select: {
-                    discussionState: { select: { mode: true } },
-                },
-            },
         },
     })
 }
@@ -44,13 +37,6 @@ async function findOwnedComment(slug: string, commentId: string, userId: string)
 export const PATCH = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
     const { slug, commentId } = await ctx.params
     const settings = await getDiscussionSettings()
-
-    if (!settings.globalEnabled) {
-        return NextResponse.json(
-            { error: "Discussions are disabled." },
-            { status: 403 }
-        )
-    }
 
     const parsed = DiscussionCommentEditInput.safeParse(await readJson(req))
     if (!parsed.success) {
@@ -73,13 +59,6 @@ export const PATCH = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
     const comment = await findOwnedComment(slug, commentId, principal.userId)
     if (!comment) {
         return NextResponse.json({ error: "Comment not found." }, { status: 404 })
-    }
-
-    if ((comment.problem.discussionState?.mode ?? "OPEN") !== "OPEN") {
-        return NextResponse.json(
-            { error: "Discussion is not open." },
-            { status: 403 }
-        )
     }
 
     if (comment.status !== "VISIBLE") {
@@ -111,25 +90,9 @@ export const PATCH = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
 
 export const DELETE = withDiscussionAuth(async (_req, principal, ctx: Ctx) => {
     const { slug, commentId } = await ctx.params
-    const settings = await getDiscussionSettings()
-
-    if (!settings.globalEnabled) {
-        return NextResponse.json(
-            { error: "Discussions are disabled." },
-            { status: 403 }
-        )
-    }
-
     const comment = await findOwnedComment(slug, commentId, principal.userId)
     if (!comment) {
         return NextResponse.json({ error: "Comment not found." }, { status: 404 })
-    }
-
-    if ((comment.problem.discussionState?.mode ?? "OPEN") !== "OPEN") {
-        return NextResponse.json(
-            { error: "Discussion is not open." },
-            { status: 403 }
-        )
     }
 
     const updated = await prisma.discussionComment.update({

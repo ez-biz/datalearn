@@ -17,10 +17,12 @@ import { getDiscussionSettings } from "@/lib/discussions/settings"
 
 type Ctx = { params: Promise<{ slug: string }> }
 
+const MAX_DISCUSSION_PAGE = 10_000
+
 function parsePositiveInt(value: string | null, fallback: number): number {
     if (!value) return fallback
-    const parsed = Number.parseInt(value, 10)
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+    const parsed = Number(value)
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -39,7 +41,11 @@ export async function GET(req: Request, ctx: Ctx) {
     const { slug } = await ctx.params
     const url = new URL(req.url)
     const sort = parseDiscussionSort(url.searchParams.get("sort"))
-    const page = parsePositiveInt(url.searchParams.get("page"), 1)
+    const page = clamp(
+        parsePositiveInt(url.searchParams.get("page"), 1),
+        1,
+        MAX_DISCUSSION_PAGE
+    )
     const pageSize = clamp(parsePositiveInt(url.searchParams.get("limit"), 20), 1, 50)
     const skip = (page - 1) * pageSize
 
