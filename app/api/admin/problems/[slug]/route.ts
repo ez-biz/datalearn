@@ -311,7 +311,7 @@ export const DELETE = withAdmin(async (_req, _principal, ctx: Ctx) => {
 
 async function lockProblemBySlug(tx: Prisma.TransactionClient, slug: string) {
     const rows = await tx.$queryRaw<LockedProblem[]>`
-        SELECT "id", "status", "dialects", "solutions", "expectedOutputs"
+        SELECT "id", "status", to_json("dialects") AS "dialects", "solutions", "expectedOutputs"
         FROM "SQLProblem"
         WHERE "slug" = ${slug}
         FOR UPDATE
