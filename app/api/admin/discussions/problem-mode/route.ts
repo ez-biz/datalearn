@@ -143,33 +143,28 @@ async function canSetProblemMode(
     mode: ProblemMode,
     oldMode: ProblemMode
 ) {
-    if (mode === "LOCKED") {
-        return userHasDiscussionPermission(
-            { id: principal.userId, role: principal.role },
-            "LOCK_PROBLEM_DISCUSSION"
-        )
+    if (oldMode === mode) return true
+
+    const required = new Set<
+        "LOCK_PROBLEM_DISCUSSION" | "HIDE_PROBLEM_DISCUSSION"
+    >()
+
+    if (oldMode === "LOCKED" || mode === "LOCKED") {
+        required.add("LOCK_PROBLEM_DISCUSSION")
     }
-    if (mode === "HIDDEN") {
-        return userHasDiscussionPermission(
-            { id: principal.userId, role: principal.role },
-            "HIDE_PROBLEM_DISCUSSION"
-        )
-    }
-    if (oldMode === "OPEN") return true
-    if (oldMode === "LOCKED") {
-        return userHasDiscussionPermission(
-            { id: principal.userId, role: principal.role },
-            "LOCK_PROBLEM_DISCUSSION"
-        )
-    }
-    if (oldMode === "HIDDEN") {
-        return userHasDiscussionPermission(
-            { id: principal.userId, role: principal.role },
-            "HIDE_PROBLEM_DISCUSSION"
-        )
+    if (oldMode === "HIDDEN" || mode === "HIDDEN") {
+        required.add("HIDE_PROBLEM_DISCUSSION")
     }
 
-    return false
+    const checks = await Promise.all(
+        [...required].map((permission) =>
+            userHasDiscussionPermission(
+                { id: principal.userId, role: principal.role },
+                permission
+            )
+        )
+    )
+    return checks.every(Boolean)
 }
 
 async function lockProblemBySlug(tx: Prisma.TransactionClient, slug: string) {

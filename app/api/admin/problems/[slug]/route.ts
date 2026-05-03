@@ -10,6 +10,13 @@ import {
 } from "@/lib/admin-validation"
 
 type Ctx = { params: Promise<{ slug: string }> }
+type LockedProblem = {
+    id: string
+    status: "DRAFT" | "BETA" | "PUBLISHED" | "ARCHIVED"
+    dialects: Array<"DUCKDB" | "POSTGRES">
+    solutions: Prisma.JsonValue
+    expectedOutputs: Prisma.JsonValue
+}
 
 export const GET = withAdmin(async (_req, _principal, ctx: Ctx) => {
     const { slug } = await ctx.params
@@ -59,22 +66,11 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
     const input = parsed.data
     const discussionMode = discussionModeParsed.data.discussionMode
 
-    const existing = await prisma.sQLProblem.findUnique({
-        where: { slug },
-        select: {
-            id: true,
-            status: true,
-            dialects: true,
-            solutions: true,
-            expectedOutputs: true,
-        },
-    })
-    if (!existing) {
-        return NextResponse.json({ error: "Not found." }, { status: 404 })
-    }
-
     try {
         const updated = await prisma.$transaction(async (tx) => {
+            const lockedProblem = await lockProblemBySlug(tx, slug)
+            if (!lockedProblem) throw new Error("PROBLEM_NOT_FOUND")
+
             if (input.schemaId) {
                 const ok = await tx.sqlSchema.findUnique({
                     where: { id: input.schemaId },
@@ -90,9 +86,6 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                 })
                 if (slugOwner) throw new Error("SLUG_TAKEN")
             }
-
-            const lockedProblem = await lockProblemById(tx, existing.id)
-            if (!lockedProblem) throw new Error("PROBLEM_NOT_FOUND")
 
             const data: Prisma.SQLProblemUpdateInput = {
                 ...(input.title !== undefined && { title: input.title }),
@@ -116,11 +109,11 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
             // replicate them across the existing dialects[] into the
             // new maps. This keeps old and new columns in sync until
             // the cleanup release drops the legacy columns.
-            const effectiveDialects = input.dialects ?? existing.dialects
+            const effectiveDialects = input.dialects ?? lockedProblem.dialects
             const existingSolutions =
-                (existing.solutions as Record<string, string>) ?? {}
+                (lockedProblem.solutions as Record<string, string>) ?? {}
             const existingExpectedOutputs =
-                (existing.expectedOutputs as Record<string, string>) ?? {}
+                (lockedProblem.expectedOutputs as Record<string, string>) ?? {}
             let finalSolutions = existingSolutions
             let finalExpectedOutputs = existingExpectedOutputs
 
@@ -167,7 +160,7 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
 
             const missingPublishedEntries =
                 getMissingPublishedDialectMapEntries({
-                    status: input.status ?? existing.status,
+                    status: input.status ?? lockedProblem.status,
                     dialects: effectiveDialects,
                     solutions: finalSolutions,
                     expectedOutputs: finalExpectedOutputs,
@@ -316,11 +309,11 @@ export const DELETE = withAdmin(async (_req, _principal, ctx: Ctx) => {
     }
 })
 
-async function lockProblemById(tx: Prisma.TransactionClient, id: string) {
-    const rows = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT "id"
+async function lockProblemBySlug(tx: Prisma.TransactionClient, slug: string) {
+    const rows = await tx.$queryRaw<LockedProblem[]>`
+        SELECT "id", "status", "dialects", "solutions", "expectedOutputs"
         FROM "SQLProblem"
-        WHERE "id" = ${id}
+        WHERE "slug" = ${slug}
         FOR UPDATE
     `
     return rows[0] ?? null
