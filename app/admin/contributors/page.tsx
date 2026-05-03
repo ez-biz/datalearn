@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { requireAdminPage } from "@/lib/admin-page-auth"
+import type { UserRole } from "@prisma/client"
 import { Container } from "@/components/ui/Container"
 import { Card, CardContent } from "@/components/ui/Card"
 import { ContributorsClient } from "@/components/admin/ContributorsClient"
@@ -10,10 +11,17 @@ export const metadata = {
 }
 export const dynamic = "force-dynamic"
 
+type ContributorPageRole = Exclude<UserRole, "MODERATOR">
+
+function isContributorPageRole(role: UserRole): role is ContributorPageRole {
+    return role !== "MODERATOR"
+}
+
 export default async function ContributorsPage() {
     await requireAdminPage()
 
-    const users = await prisma.user.findMany({
+    const rawUsers = await prisma.user.findMany({
+        where: { role: { not: "MODERATOR" } },
         orderBy: [{ role: "desc" }, { createdAt: "asc" }],
         take: 200,
         select: {
@@ -26,6 +34,9 @@ export default async function ContributorsPage() {
             _count: { select: { articles: true } },
         },
     })
+    const users = rawUsers.flatMap((user) =>
+        isContributorPageRole(user.role) ? [{ ...user, role: user.role }] : []
+    )
 
     const adminCount = users.filter((u) => u.role === "ADMIN").length
     const contributorCount = users.filter((u) => u.role === "CONTRIBUTOR").length

@@ -10,12 +10,14 @@ type Role = ProfileData["user"]["role"]
 const ROLE_LABEL: Record<Role, string> = {
     USER: "Member",
     CONTRIBUTOR: "Contributor",
+    MODERATOR: "Moderator",
     ADMIN: "Admin",
 }
 
 const ROLE_PILL: Record<Role, string> = {
     USER: "secondary",
     CONTRIBUTOR: "primary",
+    MODERATOR: "accent",
     ADMIN: "accent",
 }
 
