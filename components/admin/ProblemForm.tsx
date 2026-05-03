@@ -20,6 +20,8 @@ interface SchemaOption {
     sql: string
 }
 
+type Dialect = "DUCKDB" | "POSTGRES"
+
 export interface ProblemFormInitial {
     mode: "create" | "edit"
     title: string
@@ -29,12 +31,23 @@ export interface ProblemFormInitial {
     description: string
     schemaDescription: string
     ordered: boolean
-    dialects: ("DUCKDB" | "POSTGRES")[]
+    dialects: Dialect[]
     hints: string[]
     tagSlugs: string[]
     schemaId?: string
+    /** v0.5.0+ per-dialect canonical solutions. */
+    solutions: Record<string, string>
+    /** v0.5.0+ per-dialect expectedOutput JSON strings. */
+    expectedOutputs: Record<string, string>
+    /** @deprecated v0.5.0 — fallback when `solutions` is empty. */
     expectedOutput: string
+    /** @deprecated v0.5.0 — fallback when `expectedOutputs` is empty. */
     solutionSql: string
+}
+
+const DIALECT_LABELS: Record<Dialect, string> = {
+    DUCKDB: "DuckDB",
+    POSTGRES: "Postgres",
 }
 
 interface ProblemFormProps {
@@ -55,13 +68,45 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
         initial.schemaDescription
     )
     const [ordered, setOrdered] = useState(initial.ordered)
-    const [dialects, setDialects] = useState<("DUCKDB" | "POSTGRES")[]>(
+    const initialDialects: Dialect[] =
         initial.dialects.length > 0 ? initial.dialects : ["DUCKDB", "POSTGRES"]
-    )
+    const [dialects, setDialects] = useState<Dialect[]>(initialDialects)
     const [hints, setHints] = useState(initial.hints)
     const [tagSlugs, setTagSlugs] = useState(initial.tagSlugs)
-    const [solutionSql, setSolutionSql] = useState(initial.solutionSql)
-    const [expectedOutput, setExpectedOutput] = useState(initial.expectedOutput)
+
+    // v0.5.0+ per-dialect maps. Initialize from the new fields when
+    // present, fall back to the legacy single fields (which seed every
+    // listed dialect with the same value) so existing problems open
+    // populated.
+    const [solutions, setSolutions] = useState<Record<string, string>>(() => {
+        const seed: Record<string, string> = { ...initial.solutions }
+        for (const d of initialDialects) {
+            if (!seed[d] && initial.solutionSql) seed[d] = initial.solutionSql
+        }
+        return seed
+    })
+    const [expectedOutputs, setExpectedOutputs] = useState<Record<string, string>>(
+        () => {
+            const seed: Record<string, string> = { ...initial.expectedOutputs }
+            for (const d of initialDialects) {
+                if (!seed[d] && initial.expectedOutput)
+                    seed[d] = initial.expectedOutput
+            }
+            return seed
+        }
+    )
+    const [activeDialect, setActiveDialect] = useState<Dialect>(
+        initialDialects[0] ?? "DUCKDB"
+    )
+
+    // Convenience accessors for the active tab — keeps render code clean.
+    const solutionSql = solutions[activeDialect] ?? ""
+    const expectedOutput = expectedOutputs[activeDialect] ?? ""
+    const setSolutionSql = (v: string) =>
+        setSolutions((prev) => ({ ...prev, [activeDialect]: v }))
+    const setExpectedOutput = (v: string) =>
+        setExpectedOutputs((prev) => ({ ...prev, [activeDialect]: v }))
+
     /**
      * Industry practice (Codeforces, HackerRank, Codewars, etc.): expected
      * output is captured from running a reference solution, never hand-typed.
@@ -107,7 +152,12 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
     }, [schemaMode, inlineSchemaSql, schemaId, schemas])
 
     const dbInput = activeSchemaSql.trim().length > 0 ? activeSchemaSql : null
-    const { ready: dbReady, error: dbError, runQuery } = useProblemDB(dbInput)
+    // Use the active dialect's engine for "Run & capture" so authors
+    // capture the exact rows learners will see in that dialect.
+    const { ready: dbReady, error: dbError, runQuery } = useProblemDB(
+        dbInput,
+        activeDialect
+    )
     const [running, setRunning] = useState(false)
     const [runStatus, setRunStatus] = useState<string | null>(null)
 
@@ -153,6 +203,23 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
         setError(null)
         setSubmitting(true)
         try {
+            // Send only the entries for currently-listed dialects.
+            // (Author may have toggled a dialect off after capturing
+            // its solution; we don't ship orphaned slots.)
+            const filteredSolutions: Record<string, string> = {}
+            const filteredExpectedOutputs: Record<string, string> = {}
+            for (const d of dialects) {
+                if (solutions[d]) filteredSolutions[d] = solutions[d]
+                if (expectedOutputs[d])
+                    filteredExpectedOutputs[d] = expectedOutputs[d]
+            }
+            // Pick a representative legacy value for back-compat write.
+            const firstDialect = dialects[0]
+            const legacyExpected =
+                (firstDialect && filteredExpectedOutputs[firstDialect]) || ""
+            const legacySolution =
+                (firstDialect && filteredSolutions[firstDialect]) || ""
+
             const payload: Record<string, unknown> = {
                 title,
                 slug,
@@ -164,8 +231,12 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                 dialects,
                 hints: hints.filter((h) => h.trim().length > 0),
                 tagSlugs,
-                expectedOutput,
-                solutionSql: solutionSql.length > 0 ? solutionSql : null,
+                solutions: filteredSolutions,
+                expectedOutputs: filteredExpectedOutputs,
+                // Legacy back-compat fields — server reads new shape first
+                // but writes both columns until v0.5.1.
+                expectedOutput: legacyExpected,
+                solutionSql: legacySolution.length > 0 ? legacySolution : null,
             }
             if (schemaMode === "existing") {
                 payload.schemaId = schemaId
@@ -346,10 +417,55 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                                                             ? prev
                                                             : [...prev, d]
                                                     )
+                                                    // Auto-copy from the
+                                                    // currently-populated
+                                                    // dialect so the new tab
+                                                    // opens with a starting
+                                                    // point. Author can edit
+                                                    // freely from there.
+                                                    setSolutions((prev) => {
+                                                        if (prev[d]) return prev
+                                                        const source =
+                                                            prev[activeDialect] ||
+                                                            Object.values(prev).find(
+                                                                (v) => Boolean(v)
+                                                            )
+                                                        return source
+                                                            ? { ...prev, [d]: source }
+                                                            : prev
+                                                    })
+                                                    setExpectedOutputs((prev) => {
+                                                        if (prev[d]) return prev
+                                                        const source =
+                                                            prev[activeDialect] ||
+                                                            Object.values(prev).find(
+                                                                (v) => Boolean(v)
+                                                            )
+                                                        return source
+                                                            ? { ...prev, [d]: source }
+                                                            : prev
+                                                    })
                                                 } else {
                                                     setDialects((prev) =>
                                                         prev.filter((p) => p !== d)
                                                     )
+                                                    // Don't delete data on
+                                                    // toggle-off (mistakes
+                                                    // happen). Only filter on
+                                                    // submit. If the active
+                                                    // tab was just removed,
+                                                    // switch to a remaining
+                                                    // dialect.
+                                                    if (activeDialect === d) {
+                                                        const remaining =
+                                                            dialects.filter(
+                                                                (p) => p !== d
+                                                            )
+                                                        if (remaining[0])
+                                                            setActiveDialect(
+                                                                remaining[0]
+                                                            )
+                                                    }
                                                 }
                                             }}
                                             className="h-4 w-4"
@@ -471,11 +587,99 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="text-sm text-muted-foreground">
-                        Write the canonical solution. Hit{" "}
+                        Write the canonical solution per dialect. Most problems are portable —
+                        type once, click <span className="font-medium text-foreground">Copy from {DIALECT_LABELS[activeDialect === "DUCKDB" ? "POSTGRES" : "DUCKDB"]}</span>{" "}
+                        on the other tab if you want the same SQL there. Hit{" "}
                         <span className="font-medium text-foreground">Run & capture</span>{" "}
-                        to execute it against the schema in your browser and store the
-                        output as JSON below.
+                        to execute against the active dialect&apos;s engine and capture
+                        its expected output as JSON.
                     </div>
+
+                    {/* Per-dialect tab strip. Tabs only appear when multiple
+                        dialects are selected; otherwise it's just a static
+                        label so the active engine is always clear. */}
+                    {dialects.length > 1 ? (
+                        <div className="inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1">
+                            {dialects.map((d) => {
+                                const active = d === activeDialect
+                                const hasSolution = Boolean(solutions[d]?.trim())
+                                return (
+                                    <button
+                                        key={d}
+                                        type="button"
+                                        onClick={() => setActiveDialect(d)}
+                                        className={[
+                                            "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer",
+                                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                            active
+                                                ? "bg-surface-muted text-foreground"
+                                                : "text-muted-foreground hover:text-foreground",
+                                        ].join(" ")}
+                                    >
+                                        {DIALECT_LABELS[d]}
+                                        {hasSolution && (
+                                            <span
+                                                title="Has solution"
+                                                className="h-1.5 w-1.5 rounded-full bg-easy"
+                                            />
+                                        )}
+                                    </button>
+                                )
+                            })}
+                            {dialects.length === 2 && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const other =
+                                            activeDialect === "DUCKDB"
+                                                ? "POSTGRES"
+                                                : "DUCKDB"
+                                        if (solutions[other]) {
+                                            setSolutions((prev) => ({
+                                                ...prev,
+                                                [activeDialect]: solutions[other],
+                                            }))
+                                        }
+                                        if (expectedOutputs[other]) {
+                                            setExpectedOutputs((prev) => ({
+                                                ...prev,
+                                                [activeDialect]:
+                                                    expectedOutputs[other],
+                                            }))
+                                        }
+                                    }}
+                                    disabled={
+                                        !solutions[
+                                            activeDialect === "DUCKDB"
+                                                ? "POSTGRES"
+                                                : "DUCKDB"
+                                        ]
+                                    }
+                                    className="ml-2 inline-flex items-center rounded-sm px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    title={`Copy ${
+                                        DIALECT_LABELS[
+                                            activeDialect === "DUCKDB"
+                                                ? "POSTGRES"
+                                                : "DUCKDB"
+                                        ]
+                                    } solution + expected output into ${DIALECT_LABELS[activeDialect]}`}
+                                >
+                                    ← Copy from{" "}
+                                    {
+                                        DIALECT_LABELS[
+                                            activeDialect === "DUCKDB"
+                                                ? "POSTGRES"
+                                                : "DUCKDB"
+                                        ]
+                                    }
+                                </button>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                            Editing for: {DIALECT_LABELS[activeDialect]} (only dialect)
+                        </div>
+                    )}
                     <Field label="Solution SQL" htmlFor="solution">
                         <Textarea
                             id="solution"

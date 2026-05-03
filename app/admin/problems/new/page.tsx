@@ -39,6 +39,8 @@ export default function NewProblemPage() {
                     hints: [],
                     tagSlugs: [],
                     schemaId: undefined,
+                    solutions: {},
+                    expectedOutputs: {},
                     expectedOutput: "",
                     solutionSql: "",
                 }}

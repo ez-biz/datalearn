@@ -59,6 +59,14 @@ export default async function EditProblemPage({ params }: Props) {
                     hints: problem.hints,
                     tagSlugs: problem.tags.map((t) => t.slug),
                     schemaId: problem.schemaId,
+                    solutions:
+                        (problem.solutions as Record<string, string>) ?? {},
+                    expectedOutputs:
+                        (problem.expectedOutputs as Record<string, string>) ??
+                        {},
+                    // Legacy fallbacks — kept for back-compat during v0.5.0
+                    // transition. Form initializes per-dialect maps from these
+                    // when the new maps are missing entries.
                     expectedOutput: problem.expectedOutput,
                     solutionSql: problem.solutionSql ?? "",
                 }}
