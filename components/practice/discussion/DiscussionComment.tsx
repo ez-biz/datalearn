@@ -50,6 +50,7 @@ export function DiscussionComment({
         visible && viewerUserId && comment.author?.id === viewerUserId
     )
     const canInteract = mode === "OPEN" && visible
+    const canEditOwn = owned && mode === "OPEN"
     const authorName = comment.author?.name || "Data Learn user"
 
     async function submitReply() {
@@ -64,6 +65,7 @@ export function DiscussionComment({
     }
 
     async function saveEdit() {
+        if (!canEditOwn) return
         if (!editBody.trim()) return
         setPending(true)
         setError(null)
@@ -90,6 +92,7 @@ export function DiscussionComment({
     }
 
     async function deleteComment() {
+        if (!canEditOwn) return
         setPending(true)
         setError(null)
         try {
@@ -127,6 +130,10 @@ export function DiscussionComment({
             )
             const payload = await response.json().catch(() => null)
             if (!response.ok) {
+                if (response.status === 409) {
+                    setReported(true)
+                    return
+                }
                 throw new Error(payload?.error ?? "Could not report comment.")
             }
             setReported(true)
@@ -184,7 +191,7 @@ export function DiscussionComment({
                                 value={editBody}
                                 onChange={setEditBody}
                                 onSubmit={saveEdit}
-                                disabled={pending}
+                                disabled={pending || mode !== "OPEN"}
                                 isSignedIn={isSignedIn}
                                 submitLabel="Save"
                                 compact
@@ -221,7 +228,7 @@ export function DiscussionComment({
                                         type="button"
                                         size="sm"
                                         variant="ghost"
-                                        disabled={pending}
+                                        disabled={pending || !canEditOwn}
                                         onClick={() => {
                                             setEditBody(comment.bodyMarkdown)
                                             setEditing((open) => !open)
@@ -235,7 +242,7 @@ export function DiscussionComment({
                                         type="button"
                                         size="sm"
                                         variant="ghost"
-                                        disabled={pending}
+                                        disabled={pending || !canEditOwn}
                                         onClick={deleteComment}
                                         className="h-8 px-2 text-hard hover:text-hard"
                                     >

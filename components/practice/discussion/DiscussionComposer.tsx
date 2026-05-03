@@ -83,12 +83,13 @@ export function DiscussionComposer({
             </div>
             {mode === "write" ? (
                 <textarea
+                    aria-label="Discussion comment"
                     value={value}
                     onChange={(event) => onChange(event.target.value)}
                     disabled={disabled || submitting}
                     placeholder={placeholder}
                     rows={compact ? 4 : 6}
-                    className="block w-full resize-y border-0 bg-transparent px-3 py-2.5 text-sm leading-6 outline-none placeholder:text-muted-foreground/70 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="block w-full resize-y border-0 bg-transparent px-3 py-2.5 text-sm leading-6 outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                 />
             ) : (
                 <div className={cn("min-h-32 px-3 py-2.5", compact && "min-h-24")}>
@@ -103,7 +104,7 @@ export function DiscussionComposer({
                     disabled={!canSubmit}
                 >
                     <Send className="h-3.5 w-3.5" />
-                    {submitting ? "Posting..." : submitLabel}
+                    {submitting ? "Posting" : submitLabel}
                 </Button>
             </div>
         </div>

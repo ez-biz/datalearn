@@ -30,6 +30,11 @@ async function findOwnedComment(slug: string, commentId: string, userId: string)
             id: true,
             status: true,
             createdAt: true,
+            problem: {
+                select: {
+                    discussionState: { select: { mode: true } },
+                },
+            },
         },
     })
 }
@@ -59,6 +64,13 @@ export const PATCH = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
     const comment = await findOwnedComment(slug, commentId, principal.userId)
     if (!comment) {
         return NextResponse.json({ error: "Comment not found." }, { status: 404 })
+    }
+
+    if ((comment.problem.discussionState?.mode ?? "OPEN") !== "OPEN") {
+        return NextResponse.json(
+            { error: "Discussion is not open." },
+            { status: 403 }
+        )
     }
 
     if (comment.status !== "VISIBLE") {
@@ -93,6 +105,13 @@ export const DELETE = withDiscussionAuth(async (_req, principal, ctx: Ctx) => {
     const comment = await findOwnedComment(slug, commentId, principal.userId)
     if (!comment) {
         return NextResponse.json({ error: "Comment not found." }, { status: 404 })
+    }
+
+    if ((comment.problem.discussionState?.mode ?? "OPEN") !== "OPEN") {
+        return NextResponse.json(
+            { error: "Discussion is not open." },
+            { status: 403 }
+        )
     }
 
     if (comment.status === "DELETED") {

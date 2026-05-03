@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Lock, Loader2, MessageSquareOff } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { EmptyState } from "@/components/ui/EmptyState"
@@ -78,6 +78,7 @@ export function DiscussionPanel({
     const [posting, setPosting] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [composerValue, setComposerValue] = useState(prefillMarkdown ?? "")
+    const loadRequestId = useRef(0)
     const enabled = remoteState?.enabled ?? discussionEnabled
     const mode = remoteState?.mode ?? discussionMode
     const totalPages = useMemo(
@@ -87,6 +88,8 @@ export function DiscussionPanel({
 
     const loadDiscussion = useCallback(
         async (nextPage = page, nextSort = sort) => {
+            const requestId = loadRequestId.current + 1
+            loadRequestId.current = requestId
             setLoading(true)
             setError(null)
             try {
@@ -102,15 +105,22 @@ export function DiscussionPanel({
                 }
                 const data = payload?.data
                 if (!data) throw new Error("Could not load discussion.")
+                if (requestId !== loadRequestId.current) return
                 setRemoteState({ enabled: data.enabled, mode: data.mode })
                 setComments(data.comments)
                 setTotal(data.total)
                 setPage(data.page ?? nextPage)
                 setPageSize(data.pageSize ?? 20)
             } catch (err) {
-                setError(err instanceof Error ? err.message : "Could not load discussion.")
+                if (requestId === loadRequestId.current) {
+                    setError(
+                        err instanceof Error ? err.message : "Could not load discussion."
+                    )
+                }
             } finally {
-                setLoading(false)
+                if (requestId === loadRequestId.current) {
+                    setLoading(false)
+                }
             }
         },
         [page, problemSlug, sort]
@@ -123,6 +133,8 @@ export function DiscussionPanel({
 
     useEffect(() => {
         if (prefillMarkdown === null) return
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setComposerValue(prefillMarkdown)
         onPrefillConsumed()
     }, [onPrefillConsumed, prefillMarkdown])
 
