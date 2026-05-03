@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { Prisma, type ModeratorPermissionKey } from "@prisma/client"
+import { Prisma, type ModeratorPermissionKey, type UserRole } from "@prisma/client"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { withAdmin } from "@/lib/api-auth"
@@ -54,7 +54,7 @@ export const GET = withAdmin(async (req) => {
     const candidates = q
         ? await prisma.user.findMany({
               where: {
-                  role: { in: ["USER", "CONTRIBUTOR"] },
+                  role: "USER",
                   OR: [
                       { email: { contains: q, mode: "insensitive" } },
                       { name: { contains: q, mode: "insensitive" } },
@@ -86,26 +86,26 @@ export const POST = withAdmin(async (req, principal) => {
     }
 
     const { userId, permissions } = parsed.data
-    const target = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-            id: true,
-            role: true,
-            moderatorPermissions: { select: { permission: true } },
-        },
-    })
+    const result = await prisma.$transaction(async (tx) => {
+        const target = await lockUserForModeratorUpdate(tx, userId)
+        if (!target) {
+            return { error: "User not found.", status: 404 as const }
+        }
+        if (target.role !== "USER") {
+            return {
+                error:
+                    target.role === "CONTRIBUTOR"
+                        ? "Contributors cannot be added as moderators until roles are modeled separately. Change the role explicitly through the users API first."
+                        : "Only USER accounts can be promoted through the moderator add flow.",
+                status: 403 as const,
+            }
+        }
 
-    if (!target) {
-        return NextResponse.json({ error: "User not found." }, { status: 404 })
-    }
-    if (target.role === "ADMIN") {
-        return NextResponse.json(
-            { error: "ADMIN users cannot be managed as moderators." },
-            { status: 403 }
-        )
-    }
+        const existingPermissions = await tx.moderatorPermission.findMany({
+            where: { userId },
+            select: { permission: true },
+        })
 
-    await prisma.$transaction(async (tx) => {
         await tx.user.update({
             where: { id: userId },
             data: { role: "MODERATOR" },
@@ -114,17 +114,22 @@ export const POST = withAdmin(async (req, principal) => {
         await replaceModeratorPermissions(tx, {
             userId,
             actorId: principal.userId,
-            before: target.moderatorPermissions.map((p) => p.permission),
+            before: existingPermissions.map((p) => p.permission),
             after: permissions,
             logNoDelta:
-                target.role !== "MODERATOR" && permissions.length === 0
+                permissions.length === 0
                     ? "Granted moderator role with no permissions."
                     : null,
         })
+        return { data: { id: userId } }
     })
 
+    if ("error" in result) {
+        return NextResponse.json({ error: result.error }, { status: result.status })
+    }
+
     const moderator = await prisma.user.findUniqueOrThrow({
-        where: { id: userId },
+        where: { id: result.data.id },
         select: moderatorSelect,
     })
 
@@ -193,4 +198,22 @@ async function replaceModeratorPermissions(
     if (logs.length > 0) {
         await tx.discussionModerationLog.createMany({ data: logs })
     }
+}
+
+type LockedUser = {
+    id: string
+    role: UserRole
+}
+
+async function lockUserForModeratorUpdate(
+    tx: Prisma.TransactionClient,
+    id: string
+): Promise<LockedUser | null> {
+    const rows = await tx.$queryRaw<LockedUser[]>(Prisma.sql`
+        SELECT "id", "role"
+        FROM "User"
+        WHERE "id" = ${id}
+        FOR UPDATE
+    `)
+    return rows[0] ?? null
 }

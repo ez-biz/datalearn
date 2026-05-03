@@ -260,7 +260,7 @@ export function ModeratorsClient({
                             Add moderator
                         </CardTitle>
                         <Badge variant="secondary" className="normal-case tracking-normal">
-                            Search users
+                            USER accounts only
                         </Badge>
                     </div>
                 </CardHeader>
@@ -339,6 +339,11 @@ export function ModeratorsClient({
                                     )}
                                     Make moderator
                                 </Button>
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                    Contributors are not listed here until moderator
+                                    access can be modeled separately from contributor
+                                    access.
+                                </p>
                             </div>
                         </div>
                     )}

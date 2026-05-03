@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { Prisma, type ModeratorPermissionKey, type UserRole } from "@prisma/client"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { withAdmin } from "@/lib/api-auth"
@@ -40,39 +41,120 @@ export const PATCH = withAdmin(async (req, principal, ctx: Ctx) => {
             { status: 403 }
         )
     }
-    const target = await prisma.user.findUnique({
-        where: { id },
-        select: { id: true, role: true, email: true, name: true },
-    })
-    if (!target) {
-        return NextResponse.json({ error: "User not found." }, { status: 404 })
-    }
-    if (target.role === "ADMIN") {
-        return NextResponse.json(
-            { error: "Demote ADMINs via the database, not the UI." },
-            { status: 403 }
-        )
-    }
-    if (target.id === principal.userId) {
-        return NextResponse.json(
-            { error: "You cannot change your own role." },
-            { status: 403 }
-        )
-    }
-    if (target.role === newRole) {
-        return NextResponse.json({ data: target })
-    }
 
-    const updated = await prisma.$transaction(async (tx) => {
-        if (target.role === "MODERATOR" && newRole !== "MODERATOR") {
-            await tx.moderatorPermission.deleteMany({ where: { userId: id } })
+    const result = await prisma.$transaction(async (tx) => {
+        const target = await lockUserForRoleUpdate(tx, id)
+        if (!target) {
+            return { error: "User not found.", status: 404 as const }
+        }
+        if (target.role === "ADMIN") {
+            return {
+                error: "Demote ADMINs via the database, not the UI.",
+                status: 403 as const,
+            }
+        }
+        if (target.id === principal.userId) {
+            return {
+                error: "You cannot change your own role.",
+                status: 403 as const,
+            }
+        }
+        if (target.role === newRole) {
+            return { data: target }
         }
 
-        return tx.user.update({
+        const existingPermissions = await tx.moderatorPermission.findMany({
+            where: { userId: id },
+            select: { permission: true },
+        })
+        const permissions = existingPermissions.map((p) => p.permission)
+
+        if (target.role === "MODERATOR" && newRole !== "MODERATOR") {
+            await tx.moderatorPermission.deleteMany({ where: { userId: id } })
+            await tx.discussionModerationLog.createMany({
+                data: buildModeratorRoleRevokeLogs({
+                    actorId: principal.userId,
+                    targetId: id,
+                    permissions,
+                    newRole,
+                }),
+            })
+        }
+
+        if (target.role !== "MODERATOR" && newRole === "MODERATOR") {
+            await tx.discussionModerationLog.create({
+                data: {
+                    actorId: principal.userId,
+                    action: "GRANT_MODERATOR_PERMISSION",
+                    targetType: "USER",
+                    targetId: id,
+                    note: "Granted moderator role with no permissions.",
+                },
+            })
+        }
+
+        const updated = await tx.user.update({
             where: { id },
             data: { role: newRole },
             select: { id: true, role: true, email: true, name: true },
         })
+        return { data: updated }
     })
-    return NextResponse.json({ data: updated })
+
+    if ("error" in result) {
+        return NextResponse.json({ error: result.error }, { status: result.status })
+    }
+    return NextResponse.json({ data: result.data })
 })
+
+type LockedUser = {
+    id: string
+    role: UserRole
+    email: string | null
+    name: string | null
+}
+
+async function lockUserForRoleUpdate(
+    tx: Prisma.TransactionClient,
+    id: string
+): Promise<LockedUser | null> {
+    const rows = await tx.$queryRaw<LockedUser[]>(Prisma.sql`
+        SELECT "id", "role", "email", "name"
+        FROM "User"
+        WHERE "id" = ${id}
+        FOR UPDATE
+    `)
+    return rows[0] ?? null
+}
+
+function buildModeratorRoleRevokeLogs({
+    actorId,
+    targetId,
+    permissions,
+    newRole,
+}: {
+    actorId: string
+    targetId: string
+    permissions: ModeratorPermissionKey[]
+    newRole: Exclude<UserRole, "ADMIN">
+}) {
+    if (permissions.length === 0) {
+        return [
+            {
+                actorId,
+                action: "REVOKE_MODERATOR_PERMISSION" as const,
+                targetType: "USER",
+                targetId,
+                note: `Revoked moderator role with no permissions; new role ${newRole}.`,
+            },
+        ]
+    }
+
+    return permissions.map((permission) => ({
+        actorId,
+        action: "REVOKE_MODERATOR_PERMISSION" as const,
+        targetType: "USER",
+        targetId,
+        note: `Revoked ${permission}; new role ${newRole}.`,
+    }))
+}

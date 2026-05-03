@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { Prisma, type ModeratorPermissionKey } from "@prisma/client"
+import { Prisma, type ModeratorPermissionKey, type UserRole } from "@prisma/client"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { withAdmin } from "@/lib/api-auth"
@@ -47,42 +47,41 @@ export const PATCH = withAdmin(async (req, principal, ctx: Ctx) => {
         )
     }
 
-    const target = await prisma.user.findUnique({
-        where: { id },
-        select: {
-            id: true,
-            role: true,
-            moderatorPermissions: { select: { permission: true } },
-        },
-    })
+    const result = await prisma.$transaction(async (tx) => {
+        const target = await lockUserForModeratorUpdate(tx, id)
+        if (!target) {
+            return { error: "User not found.", status: 404 as const }
+        }
+        if (target.role === "ADMIN") {
+            return {
+                error: "ADMIN users cannot be managed as moderators.",
+                status: 403 as const,
+            }
+        }
+        if (target.role !== "MODERATOR") {
+            return { error: "User is not a moderator.", status: 409 as const }
+        }
 
-    if (!target) {
-        return NextResponse.json({ error: "User not found." }, { status: 404 })
-    }
-    if (target.role === "ADMIN") {
-        return NextResponse.json(
-            { error: "ADMIN users cannot be managed as moderators." },
-            { status: 403 }
-        )
-    }
-    if (target.role !== "MODERATOR") {
-        return NextResponse.json(
-            { error: "User is not a moderator." },
-            { status: 409 }
-        )
-    }
+        const existingPermissions = await tx.moderatorPermission.findMany({
+            where: { userId: id },
+            select: { permission: true },
+        })
 
-    await prisma.$transaction(async (tx) => {
         await replaceModeratorPermissions(tx, {
             userId: id,
             actorId: principal.userId,
-            before: target.moderatorPermissions.map((p) => p.permission),
+            before: existingPermissions.map((p) => p.permission),
             after: parsed.data.permissions,
         })
+        return { data: { id } }
     })
 
+    if ("error" in result) {
+        return NextResponse.json({ error: result.error }, { status: result.status })
+    }
+
     const moderator = await prisma.user.findUniqueOrThrow({
-        where: { id },
+        where: { id: result.data.id },
         select: moderatorSelect,
     })
 
@@ -91,32 +90,26 @@ export const PATCH = withAdmin(async (req, principal, ctx: Ctx) => {
 
 export const DELETE = withAdmin(async (_req, principal, ctx: Ctx) => {
     const { id } = await ctx.params
-    const target = await prisma.user.findUnique({
-        where: { id },
-        select: {
-            id: true,
-            role: true,
-            moderatorPermissions: { select: { permission: true } },
-        },
-    })
+    const result = await prisma.$transaction(async (tx) => {
+        const target = await lockUserForModeratorUpdate(tx, id)
+        if (!target) {
+            return { error: "User not found.", status: 404 as const }
+        }
+        if (target.role === "ADMIN") {
+            return {
+                error: "ADMIN users cannot be demoted through this flow.",
+                status: 403 as const,
+            }
+        }
+        if (target.role !== "MODERATOR") {
+            return { error: "User is not a moderator.", status: 409 as const }
+        }
 
-    if (!target) {
-        return NextResponse.json({ error: "User not found." }, { status: 404 })
-    }
-    if (target.role === "ADMIN") {
-        return NextResponse.json(
-            { error: "ADMIN users cannot be demoted through this flow." },
-            { status: 403 }
-        )
-    }
-    if (target.role !== "MODERATOR") {
-        return NextResponse.json(
-            { error: "User is not a moderator." },
-            { status: 409 }
-        )
-    }
+        const existingPermissions = await tx.moderatorPermission.findMany({
+            where: { userId: id },
+            select: { permission: true },
+        })
 
-    await prisma.$transaction(async (tx) => {
         await tx.moderatorPermission.deleteMany({ where: { userId: id } })
         await tx.user.update({
             where: { id },
@@ -124,7 +117,7 @@ export const DELETE = withAdmin(async (_req, principal, ctx: Ctx) => {
             select: { id: true },
         })
 
-        const permissions = target.moderatorPermissions.map((p) => p.permission)
+        const permissions = existingPermissions.map((p) => p.permission)
         const logs =
             permissions.length > 0
                 ? permissions.map((permission) => ({
@@ -145,10 +138,33 @@ export const DELETE = withAdmin(async (_req, principal, ctx: Ctx) => {
                   ]
 
         await tx.discussionModerationLog.createMany({ data: logs })
+        return { data: { id, role: "USER" as const } }
     })
 
-    return NextResponse.json({ data: { id, role: "USER" } })
+    if ("error" in result) {
+        return NextResponse.json({ error: result.error }, { status: result.status })
+    }
+
+    return NextResponse.json({ data: result.data })
 })
+
+type LockedUser = {
+    id: string
+    role: UserRole
+}
+
+async function lockUserForModeratorUpdate(
+    tx: Prisma.TransactionClient,
+    id: string
+): Promise<LockedUser | null> {
+    const rows = await tx.$queryRaw<LockedUser[]>(Prisma.sql`
+        SELECT "id", "role"
+        FROM "User"
+        WHERE "id" = ${id}
+        FOR UPDATE
+    `)
+    return rows[0] ?? null
+}
 
 async function replaceModeratorPermissions(
     tx: Prisma.TransactionClient,

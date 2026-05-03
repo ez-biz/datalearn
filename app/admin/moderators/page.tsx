@@ -57,7 +57,8 @@ export default async function ModeratorsPage() {
                         revoke moderator access.
                     </p>
                     <p className="mt-2 text-xs text-muted-foreground">
-                        ADMIN users are intentionally excluded from this flow.
+                        ADMIN, CONTRIBUTOR, and existing MODERATOR accounts are
+                        intentionally excluded from the add flow.
                     </p>
                 </div>
                 <div className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm text-muted-foreground">
