@@ -21,6 +21,15 @@ model User {
   reports       ProblemReport[]
   articles      Article[]
   lists         ProblemList[]
+  discussionComments DiscussionComment[] @relation("DiscussionCommentAuthor")
+  discussionVotes DiscussionVote[]
+  discussionReports DiscussionReport[] @relation("DiscussionReportReporter")
+  resolvedDiscussionReports DiscussionReport[] @relation("DiscussionReportResolver")
+  hiddenDiscussionComments DiscussionComment[] @relation("DiscussionCommentHiddenBy")
+  reputationEvents UserReputationEvent[]
+  moderatorPermissions ModeratorPermission[] @relation("ModeratorPermissionUser")
+  grantedModeratorPermissions ModeratorPermission[] @relation("ModeratorPermissionGranter")
+  moderationActions DiscussionModerationLog[] @relation("DiscussionModerationActor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -29,6 +38,7 @@ model User {
 enum UserRole {
   USER
   CONTRIBUTOR
+  MODERATOR
   ADMIN
 }
 
@@ -189,6 +199,8 @@ model SQLProblem {
   relatedArticles   Article[]  @relation("ArticleProblems")
   listItems         ProblemListItem[]
   dailyProblems     DailyProblem[]
+  discussionComments DiscussionComment[]
+  discussionState   ProblemDiscussionState?
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 
@@ -346,4 +358,205 @@ model DailyProblem {
 enum DailyProblemSource {
   AUTO
   MANUAL
+}
+
+enum DiscussionCommentStatus {
+  VISIBLE
+  HIDDEN
+  DELETED
+  SPAM
+}
+
+enum DiscussionVoteValue {
+  UP
+  DOWN
+}
+
+enum DiscussionReportReason {
+  SPAM
+  ABUSE
+  SPOILER
+  OFF_TOPIC
+  OTHER
+}
+
+enum DiscussionReportStatus {
+  OPEN
+  DISMISSED
+  CONFIRMED
+}
+
+enum ProblemDiscussionMode {
+  OPEN
+  LOCKED
+  HIDDEN
+}
+
+enum UserReputationEventKind {
+  ACCEPTED_SOLVE
+  COMMENT_UPVOTE_RECEIVED
+  COMMENT_DOWNVOTE_RECEIVED
+  COMMENT_HIDDEN
+  COMMENT_SPAM_CONFIRMED
+  ACCOUNT_AGE_BONUS
+}
+
+enum ModeratorPermissionKey {
+  VIEW_DISCUSSION_QUEUE
+  HIDE_COMMENT
+  RESTORE_COMMENT
+  DISMISS_REPORT
+  MARK_SPAM
+  LOCK_PROBLEM_DISCUSSION
+  HIDE_PROBLEM_DISCUSSION
+}
+
+enum DiscussionModerationActionKind {
+  HIDE_COMMENT
+  RESTORE_COMMENT
+  DISMISS_REPORT
+  MARK_SPAM
+  SET_PROBLEM_MODE
+  UPDATE_SETTINGS
+  GRANT_MODERATOR_PERMISSION
+  REVOKE_MODERATOR_PERMISSION
+}
+
+model DiscussionComment {
+  id          String                  @id @default(cuid())
+  problemId   String
+  problem     SQLProblem              @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User                    @relation("DiscussionCommentAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  parentId    String?
+  parent      DiscussionComment?      @relation("DiscussionReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies     DiscussionComment[]     @relation("DiscussionReplies")
+  bodyMarkdown String                 @db.Text
+  status      DiscussionCommentStatus @default(VISIBLE)
+  upvotes     Int                     @default(0)
+  downvotes   Int                     @default(0)
+  score       Int                     @default(0)
+  reportCount Int                     @default(0)
+  votes       DiscussionVote[]
+  reports     DiscussionReport[]
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  editedAt    DateTime?
+  deletedAt   DateTime?
+  hiddenAt    DateTime?
+  hiddenById  String?
+  hiddenBy    User?                   @relation("DiscussionCommentHiddenBy", fields: [hiddenById], references: [id], onDelete: SetNull)
+
+  @@index([problemId, parentId, status, score, createdAt])
+  @@index([problemId, status, createdAt])
+  @@index([userId, createdAt])
+  @@index([parentId, createdAt])
+}
+
+model DiscussionVote {
+  commentId String
+  comment   DiscussionComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  value     DiscussionVoteValue
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@id([commentId, userId])
+  @@index([userId, updatedAt])
+}
+
+model DiscussionReport {
+  id          String                 @id @default(cuid())
+  commentId   String
+  comment     DiscussionComment      @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User                   @relation("DiscussionReportReporter", fields: [userId], references: [id], onDelete: Cascade)
+  reason      DiscussionReportReason
+  message     String                 @db.Text
+  status      DiscussionReportStatus @default(OPEN)
+  createdAt   DateTime               @default(now())
+  resolvedAt  DateTime?
+  resolvedById String?
+  resolvedBy  User?                  @relation("DiscussionReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@unique([commentId, userId])
+  @@index([commentId, status])
+  @@index([commentId, userId])
+  @@index([status, createdAt])
+}
+
+model DiscussionSettings {
+  id                       String   @id @default("global")
+  globalEnabled            Boolean  @default(false)
+  reportThreshold          Int      @default(3)
+  editWindowMinutes        Int      @default(15)
+  duplicateCooldownSeconds Int      @default(300)
+  bodyMaxChars             Int      @default(4000)
+  trustedMinReputation     Int      @default(20)
+  highTrustMinReputation   Int      @default(100)
+  newTopLevelPerHour       Int      @default(3)
+  newRepliesPerHour        Int      @default(6)
+  newPerProblemPerDay      Int      @default(5)
+  newMinSecondsBetween     Int      @default(60)
+  newVotesPerHour          Int      @default(20)
+  trustedTopLevelPerHour   Int      @default(10)
+  trustedRepliesPerHour    Int      @default(20)
+  trustedPerProblemPerDay  Int      @default(15)
+  trustedMinSecondsBetween Int      @default(20)
+  trustedVotesPerHour      Int      @default(60)
+  highTopLevelPerHour      Int      @default(30)
+  highRepliesPerHour       Int      @default(60)
+  highPerProblemPerDay     Int      @default(40)
+  highMinSecondsBetween    Int      @default(5)
+  highVotesPerHour         Int      @default(200)
+  updatedAt                DateTime @updatedAt
+  updatedById              String?
+}
+
+model ProblemDiscussionState {
+  problemId   String                @id
+  problem     SQLProblem            @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  mode        ProblemDiscussionMode @default(OPEN)
+  updatedAt   DateTime              @updatedAt
+  updatedById String?
+}
+
+model UserReputationEvent {
+  id        String                  @id @default(cuid())
+  userId    String
+  user      User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      UserReputationEventKind
+  points    Int
+  sourceId  String
+  createdAt DateTime                @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, kind, sourceId])
+}
+
+model ModeratorPermission {
+  userId      String
+  user        User                   @relation("ModeratorPermissionUser", fields: [userId], references: [id], onDelete: Cascade)
+  permission  ModeratorPermissionKey
+  grantedById String?
+  grantedBy   User?                  @relation("ModeratorPermissionGranter", fields: [grantedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime               @default(now())
+
+  @@id([userId, permission])
+  @@index([userId, permission])
+}
+
+model DiscussionModerationLog {
+  id        String                         @id @default(cuid())
+  actorId   String?
+  actor     User?                          @relation("DiscussionModerationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action    DiscussionModerationActionKind
+  targetType String
+  targetId   String
+  note       String?                       @db.Text
+  createdAt  DateTime                      @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId, createdAt])
 }
