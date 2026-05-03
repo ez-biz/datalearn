@@ -216,7 +216,7 @@ export function DiscussionPanel({
 
     const locked = mode === "LOCKED"
     const disabled = !enabled || mode === "HIDDEN"
-    const composerDisabled = disabled || locked || posting
+    const composerDisabled = disabled || posting
 
     return (
         <div className="p-3 space-y-3">
@@ -260,18 +260,14 @@ export function DiscussionPanel({
                 </div>
             )}
 
-            {enabled && mode !== "HIDDEN" && (
+            {enabled && mode === "OPEN" && (
                 <DiscussionComposer
                     value={composerValue}
                     onChange={setComposerValue}
                     onSubmit={createComment}
                     disabled={composerDisabled}
                     isSignedIn={isSignedIn}
-                    placeholder={
-                        locked
-                            ? "This discussion is locked."
-                            : "Share your approach, edge case, or question."
-                    }
+                    placeholder="Share your approach, edge case, or question."
                 />
             )}
 

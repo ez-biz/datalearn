@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
+import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { DiscussionCommentEditInput } from "@/lib/admin-validation"
 import { withDiscussionAuth } from "@/lib/discussions/api-auth"
@@ -8,6 +9,7 @@ import {
     shapePublicComment,
 } from "@/lib/discussions/queries"
 import { getDiscussionSettings } from "@/lib/discussions/settings"
+import { DISCUSSION_SETTINGS_ID } from "@/lib/discussions/constants"
 
 type Ctx = { params: Promise<{ slug: string; commentId: string }> }
 
@@ -50,16 +52,26 @@ function openPublishedProblemWhere(slug: string) {
     }
 }
 
+async function lockDiscussionSettings(tx: Prisma.TransactionClient) {
+    const rows = await tx.$queryRaw<
+        Array<{
+            globalEnabled: boolean
+            bodyMaxChars: number
+            editWindowMinutes: number
+        }>
+    >(Prisma.sql`
+        SELECT "globalEnabled", "bodyMaxChars", "editWindowMinutes"
+        FROM "DiscussionSettings"
+        WHERE "id" = ${DISCUSSION_SETTINGS_ID}
+        FOR UPDATE
+    `)
+
+    return rows[0] ?? null
+}
+
 export const PATCH = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
     const { slug, commentId } = await ctx.params
-    const settings = await getDiscussionSettings()
-
-    if (!settings.globalEnabled) {
-        return NextResponse.json(
-            { error: "Discussions are disabled." },
-            { status: 403 }
-        )
-    }
+    await getDiscussionSettings()
 
     const parsed = DiscussionCommentEditInput.safeParse(await readJson(req))
     if (!parsed.success) {
@@ -70,32 +82,60 @@ export const PATCH = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
     }
 
     const bodyMarkdown = parsed.data.bodyMarkdown.trim()
-    if (bodyMarkdown.length > settings.bodyMaxChars) {
-        return NextResponse.json(
-            {
-                error: `Comment must be ${settings.bodyMaxChars} characters or fewer.`,
-            },
-            { status: 400 }
-        )
-    }
 
-    const editWindowMs = settings.editWindowMinutes * 60 * 1000
-    const editSince = new Date(Date.now() - editWindowMs)
-    const result = await prisma.discussionComment.updateMany({
-        where: {
-            id: commentId,
-            userId: principal.userId,
-            status: "VISIBLE",
-            createdAt: { gte: editSince },
-            problem: openPublishedProblemWhere(slug),
-        },
-        data: {
-            bodyMarkdown,
-            editedAt: new Date(),
-        },
+    const result = await prisma.$transaction(async (tx) => {
+        const settings = await lockDiscussionSettings(tx)
+        if (!settings?.globalEnabled) {
+            return {
+                ok: false as const,
+                error: "Discussions are disabled.",
+                status: 403,
+            }
+        }
+
+        if (bodyMarkdown.length > settings.bodyMaxChars) {
+            return {
+                ok: false as const,
+                error: `Comment must be ${settings.bodyMaxChars} characters or fewer.`,
+                status: 400,
+            }
+        }
+
+        const editWindowMs = settings.editWindowMinutes * 60 * 1000
+        const editSince = new Date(Date.now() - editWindowMs)
+        const update = await tx.discussionComment.updateMany({
+            where: {
+                id: commentId,
+                userId: principal.userId,
+                status: "VISIBLE",
+                createdAt: { gte: editSince },
+                problem: openPublishedProblemWhere(slug),
+            },
+            data: {
+                bodyMarkdown,
+                editedAt: new Date(),
+            },
+        })
+
+        if (update.count === 0) {
+            return { ok: false as const, error: "Comment not updated.", status: 409 }
+        }
+
+        const updated = await tx.discussionComment.findUniqueOrThrow({
+            where: { id: commentId },
+            include: publicCommentInclude(principal.userId),
+        })
+
+        return { ok: true as const, data: shapePublicComment(updated) }
     })
 
-    if (result.count === 0) {
+    if (!result.ok) {
+        if (result.error !== "Comment not updated.") {
+            return NextResponse.json(
+                { error: result.error },
+                { status: result.status }
+            )
+        }
         const comment = await findOwnedComment(slug, commentId, principal.userId)
         if (!comment) {
             return NextResponse.json({ error: "Comment not found." }, { status: 404 })
@@ -118,40 +158,56 @@ export const PATCH = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
         )
     }
 
-    const updated = await prisma.discussionComment.findUniqueOrThrow({
-        where: { id: commentId },
-        include: publicCommentInclude(principal.userId),
-    })
-
-    return NextResponse.json({ data: shapePublicComment(updated) })
+    return NextResponse.json({ data: result.data })
 })
 
 export const DELETE = withDiscussionAuth(async (_req, principal, ctx: Ctx) => {
     const { slug, commentId } = await ctx.params
-    const settings = await getDiscussionSettings()
+    await getDiscussionSettings()
 
-    if (!settings.globalEnabled) {
-        return NextResponse.json(
-            { error: "Discussions are disabled." },
-            { status: 403 }
-        )
-    }
+    const result = await prisma.$transaction(async (tx) => {
+        const settings = await lockDiscussionSettings(tx)
+        if (!settings?.globalEnabled) {
+            return {
+                ok: false as const,
+                error: "Discussions are disabled.",
+                status: 403,
+            }
+        }
 
-    const result = await prisma.discussionComment.updateMany({
-        where: {
-            id: commentId,
-            userId: principal.userId,
-            status: "VISIBLE",
-            problem: openPublishedProblemWhere(slug),
-        },
-        data: {
-            status: "DELETED",
-            bodyMarkdown: "",
-            deletedAt: new Date(),
-        },
+        const update = await tx.discussionComment.updateMany({
+            where: {
+                id: commentId,
+                userId: principal.userId,
+                status: "VISIBLE",
+                problem: openPublishedProblemWhere(slug),
+            },
+            data: {
+                status: "DELETED",
+                bodyMarkdown: "",
+                deletedAt: new Date(),
+            },
+        })
+
+        if (update.count === 0) {
+            return { ok: false as const, error: "Comment not deleted.", status: 409 }
+        }
+
+        const updated = await tx.discussionComment.findUniqueOrThrow({
+            where: { id: commentId },
+            include: publicCommentInclude(principal.userId),
+        })
+
+        return { ok: true as const, data: shapePublicComment(updated) }
     })
 
-    if (result.count === 0) {
+    if (!result.ok) {
+        if (result.error !== "Comment not deleted.") {
+            return NextResponse.json(
+                { error: result.error },
+                { status: result.status }
+            )
+        }
         const comment = await findOwnedComment(slug, commentId, principal.userId)
         if (!comment) {
             return NextResponse.json({ error: "Comment not found." }, { status: 404 })
@@ -175,10 +231,5 @@ export const DELETE = withDiscussionAuth(async (_req, principal, ctx: Ctx) => {
         )
     }
 
-    const updated = await prisma.discussionComment.findUniqueOrThrow({
-        where: { id: commentId },
-        include: publicCommentInclude(principal.userId),
-    })
-
-    return NextResponse.json({ data: shapePublicComment(updated) })
+    return NextResponse.json({ data: result.data })
 })
