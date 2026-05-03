@@ -35,13 +35,13 @@ export interface ProblemFormInitial {
     hints: string[]
     tagSlugs: string[]
     schemaId?: string
-    /** v0.5.0+ per-dialect canonical solutions. */
+    /** v0.4.2+ per-dialect canonical solutions. */
     solutions: Record<string, string>
-    /** v0.5.0+ per-dialect expectedOutput JSON strings. */
+    /** v0.4.2+ per-dialect expectedOutput JSON strings. */
     expectedOutputs: Record<string, string>
-    /** @deprecated v0.5.0 — fallback when `solutions` is empty. */
+    /** @deprecated v0.4.2 — fallback when `solutions` is empty. */
     expectedOutput: string
-    /** @deprecated v0.5.0 — fallback when `expectedOutputs` is empty. */
+    /** @deprecated v0.4.2 — fallback when `expectedOutputs` is empty. */
     solutionSql: string
 }
 
@@ -74,7 +74,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
     const [hints, setHints] = useState(initial.hints)
     const [tagSlugs, setTagSlugs] = useState(initial.tagSlugs)
 
-    // v0.5.0+ per-dialect maps. Initialize from the new fields when
+    // v0.4.2+ per-dialect maps. Initialize from the new fields when
     // present, fall back to the legacy single fields (which seed every
     // listed dialect with the same value) so existing problems open
     // populated.
@@ -234,7 +234,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                 solutions: filteredSolutions,
                 expectedOutputs: filteredExpectedOutputs,
                 // Legacy back-compat fields — server reads new shape first
-                // but writes both columns until v0.5.1.
+                // but writes both columns until the cleanup release.
                 expectedOutput: legacyExpected,
                 solutionSql: legacySolution.length > 0 ? legacySolution : null,
             }

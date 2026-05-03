@@ -18,13 +18,13 @@ type FullProblem = {
     status: "DRAFT" | "BETA" | "PUBLISHED" | "ARCHIVED"
     description: string
     dialects?: ("DUCKDB" | "POSTGRES")[]
-    /** v0.5.0+ per-dialect canonical solutions. */
+    /** v0.4.2+ per-dialect canonical solutions. */
     solutions?: Record<string, string>
-    /** v0.5.0+ per-dialect expectedOutput JSON strings. */
+    /** v0.4.2+ per-dialect expectedOutput JSON strings. */
     expectedOutputs?: Record<string, string>
-    /** @deprecated v0.5.0 — use `expectedOutputs`. */
+    /** @deprecated v0.4.2 — use `expectedOutputs`. */
     expectedOutput?: string | null
-    /** @deprecated v0.5.0 — use `solutions`. */
+    /** @deprecated v0.4.2 — use `solutions`. */
     solutionSql?: string | null
     tags?: Array<{ id: string; slug: string; name: string }>
     schema?: { id: string; name: string }
@@ -56,13 +56,13 @@ const McpProblemUpdateInputShape = {
     newSlug: SlugSchema.optional(),
     description: ProblemUpdateInputBase.shape.description,
     difficulty: Difficulty.optional(),
-    /** v0.5.0+ per-dialect canonical solutions. */
+    /** v0.4.2+ per-dialect canonical solutions. */
     solutions: ProblemUpdateInputBase.shape.solutions,
-    /** v0.5.0+ per-dialect expectedOutput JSON strings. */
+    /** v0.4.2+ per-dialect expectedOutput JSON strings. */
     expectedOutputs: ProblemUpdateInputBase.shape.expectedOutputs,
-    /** @deprecated v0.5.0 — use `solutions`. */
+    /** @deprecated v0.4.2 — use `solutions`. */
     solutionSql: ProblemCreateInputBase.shape.solutionSql,
-    /** @deprecated v0.5.0 — use `expectedOutputs`. */
+    /** @deprecated v0.4.2 — use `expectedOutputs`. */
     expectedOutput: ProblemUpdateInputBase.shape.expectedOutput,
     hints: ProblemUpdateInputBase.shape.hints,
     tagSlugs: ProblemUpdateInputBase.shape.tagSlugs,
@@ -140,12 +140,12 @@ export function registerProblemTools(
             "",
             "Required: title, slug (kebab-case), difficulty (EASY|MEDIUM|HARD), description, AND a solution + expectedOutput for every listed dialect.",
             "",
-            "v0.5.0+ canonical shape (preferred):",
+            "v0.4.2+ canonical shape (preferred):",
             "  solutions:        { \"DUCKDB\": \"SELECT …\", \"POSTGRES\": \"SELECT …\" }",
             "  expectedOutputs:  { \"DUCKDB\": \"[{...}]\", \"POSTGRES\": \"[{...}]\" }",
             "Each map's keys must be a subset of `dialects[]`. Each expectedOutputs[dialect] must parse as a JSON array.",
             "",
-            "Legacy single-field shape (still accepted; will be removed in v0.5.1):",
+            "Legacy single-field shape (still accepted; will be removed in the cleanup release):",
             "  solutionSql + expectedOutput. The server replicates these to every listed dialect under the new map.",
             "",
             "Schema: provide EXACTLY ONE of schemaId (reference an existing schema; check list_schemas first) or schemaInline (create a new schema in the same call).",
@@ -171,7 +171,7 @@ export function registerProblemTools(
         [
             "Update an existing SQL problem by slug. Only the fields you pass will be changed; omitted fields are left untouched.",
             "",
-            "Per-dialect editing (v0.5.0+):",
+            "Per-dialect editing (v0.4.2+):",
             "- `solutions` and `expectedOutputs` replace the WHOLE map for the problem. To edit one dialect's value, fetch the current problem with get_problem first, merge your change in, and pass the merged map.",
             "- Legacy single-field params `solutionSql` / `expectedOutput` are still accepted; the server replicates them across every listed dialect into the new map.",
             "",

@@ -1,10 +1,25 @@
 # 🚀 Antigravity Data Learning Platform — Long-Term Roadmap
 
-> **Last updated:** 2026-05-02
+> **Last updated:** 2026-05-03
 > **Status:** Live — <https://www.learndatanow.com>
-> **Version:** 0.4.0 (deployed)
+> **Version:** 0.4.2 (deployed)
 
 ## Recently shipped
+
+### May 2026 — v0.4.2: per-dialect solutions schema groundwork (PR #65 + #66)
+
+- **`SQLProblem.solutions Json` + `expectedOutputs Json`** — new per-dialect maps keyed by `Dialect` (`{ "DUCKDB": "...", "POSTGRES": "..." }`). Legacy `solutionSql` / `expectedOutput` columns kept for back-compat through the cleanup release that drops them. Migration backfills new columns from old for every existing problem.
+- **Zod refines** — keys must subset `dialects[]`; PUBLISHED requires non-empty entries for every listed dialect (DRAFT/BETA/ARCHIVED tolerate partial). `getMissingPublishedDialectMapEntries()` helper used by both POST and PATCH gates.
+- **Admin form rebuilt** — per-dialect tabs, "Copy from `<other>`" button, auto-copy on dialect-toggle-on, Run & capture uses the active dialect's engine.
+- **`validateSubmission(slug, userResult, dialect)`** — server action accepts `dialect` param, reads `expectedOutputs[dialect]` with fallback to legacy `expectedOutput`.
+- **MCP `create_problem` + `update_problem`** — accept new `solutions` / `expectedOutputs` records (preferred); legacy single fields still accepted with deprecation note. Bundle rebuilt.
+- **`scripts/audit-all-dialects.ts` (new) + `scripts/sync-from-prod.sh` (new)** — `npm run audit:dialects` validates every (problem × dialect) pair against its engine. `npm run db:sync-prod` mirrors prod data to local while preserving local schema (useful when local is on a feature branch ahead of prod's migration state). 46/46 (problem × dialect) pairs pass on local DB.
+- Plan doc: [`docs/superpowers/plans/2026-05-03-per-dialect-solutions.md`](./superpowers/plans/2026-05-03-per-dialect-solutions.md).
+
+### May 2026 — v0.4.1: cross-dialect date validator fix (PR #60)
+
+- **Critical correctness fix** — DuckDB-WASM emits dates as epoch ms; PGlite emits Date objects (which `Object.toString()` was rendering as locale strings, not ISO). `lib/sql-validator.ts` `normalizeCell` now handles `instanceof Date` before the generic `toString` fallback, and `cellEqual` / `canonicalCell` get a date-equivalence fallback via a new `toIsoIfDate()` helper. Live users solving date problems in Postgres were getting WRONG_ANSWER on correct queries; fixed.
+- **Audit + dual-engine validation tooling** — `scripts/audit-postgres-compatibility.ts` (later renamed to `audit-all-dialects.ts` in v0.4.2), `scripts/validate-problem.ts` runs each problem's solution against both engines + cross-engine equivalence. Also added `@duckdb/node-api` as a devDep for offline DuckDB validation. Probed AVG over DOUBLE PRECISION exhaustively — no drift; both engines produce byte-identical doubles.
 
 ### May 2026 — release flow + v0.4.0 (auth revamp + design system)
 

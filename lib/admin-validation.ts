@@ -49,7 +49,7 @@ export const TagCreateInput = z.object({
  * and are checked against `dialects[]` in cross-field validation;
  * each value is the canonical SQL for that engine. `expectedOutputs`
  * mirrors the shape with JSON-stringified row arrays. Both are
- * v0.5.0+ — the legacy single-field `solutionSql` / `expectedOutput`
+ * v0.4.2+ — the legacy single-field `solutionSql` / `expectedOutput`
  * remain accepted during the transition window.
  */
 const SolutionsRecord = z.partialRecord(Dialect, z.string().max(20_000))
@@ -101,19 +101,19 @@ export const ProblemCreateInputBase = z.object({
     schemaId: z.string().min(1).optional(),
     schemaInline: SqlSchemaCreateInput.optional(),
     /**
-     * v0.5.0+ canonical shape: per-dialect map of SQL solutions.
+     * v0.4.2+ canonical shape: per-dialect map of SQL solutions.
      * Either this OR the legacy `solutionSql` must be provided.
      */
     solutions: SolutionsRecord.optional(),
     /**
-     * v0.5.0+ canonical shape: per-dialect map of expectedOutput JSON
+     * v0.4.2+ canonical shape: per-dialect map of expectedOutput JSON
      * strings. Either this OR the legacy `expectedOutput` must be
      * provided. Each value must parse as a JSON array.
      */
     expectedOutputs: ExpectedOutputsRecord.optional(),
-    /** @deprecated v0.5.0 — use `expectedOutputs`. Removed in v0.5.1. */
+    /** @deprecated v0.4.2 — use `expectedOutputs`. Removed in the cleanup release. */
     expectedOutput: z.string().min(2).max(2_000_000).optional(),
-    /** @deprecated v0.5.0 — use `solutions`. Removed in v0.5.1. */
+    /** @deprecated v0.4.2 — use `solutions`. Removed in the cleanup release. */
     solutionSql: z.string().max(20_000).optional(),
 })
 
@@ -264,11 +264,11 @@ export const ProblemUpdateInputBase = z.object({
     hints: z.array(z.string().min(1).max(2_000)).max(10).optional(),
     tagSlugs: z.array(SlugSchema).max(10).optional(),
     schemaId: z.string().min(1).optional(),
-    /** v0.5.0+ canonical shape; PATCH replaces the whole map. */
+    /** v0.4.2+ canonical shape; PATCH replaces the whole map. */
     solutions: SolutionsRecord.optional(),
-    /** v0.5.0+ canonical shape; PATCH replaces the whole map. */
+    /** v0.4.2+ canonical shape; PATCH replaces the whole map. */
     expectedOutputs: ExpectedOutputsRecord.optional(),
-    /** @deprecated v0.5.0 — use `expectedOutputs`. */
+    /** @deprecated v0.4.2 — use `expectedOutputs`. */
     expectedOutput: z
         .string()
         .min(2)
@@ -284,7 +284,7 @@ export const ProblemUpdateInputBase = z.object({
             { message: "expectedOutput must be a JSON array." }
         )
         .optional(),
-    /** @deprecated v0.5.0 — use `solutions`. */
+    /** @deprecated v0.4.2 — use `solutions`. */
     solutionSql: z.string().max(20_000).optional().nullable(),
 })
 
@@ -309,7 +309,7 @@ export const ProblemUpdateInput = ProblemUpdateInputBase
     )
 
 /**
- * Reconcile legacy single-field and v0.5.0 per-dialect-map inputs into
+ * Reconcile legacy single-field and v0.4.2 per-dialect-map inputs into
  * BOTH shapes so we can write to both columns during the transition.
  *
  * - `solutions` map: the source of truth going forward. Keys = dialects.
@@ -319,7 +319,7 @@ export const ProblemUpdateInput = ProblemUpdateInputBase
  *   author provides only the new shape.
  * - `legacyExpected`: same idea for the legacy `expectedOutput` column.
  *
- * Cleanup pass in v0.5.1 will drop both legacy fields and this helper
+ * Cleanup pass in the cleanup release will drop both legacy fields and this helper
  * collapses to "use the maps directly."
  */
 export function synthesizeBothShapes(input: {

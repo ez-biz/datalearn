@@ -1,6 +1,8 @@
 {
   "name": "datalearn",
-  "version": "0.1.2",
+  "version": "0.4.2",
+  "private": true,
+  "license": "UNLICENSED",
   "private": true,
   "scripts": {
     "dev": "next dev",

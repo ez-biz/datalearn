@@ -81,12 +81,12 @@ export const POST = withAdmin(async (req) => {
             })
             const nextNumber = (max._max.number ?? 0) + 1
 
-            // Synthesize both shapes during the v0.5.0 transition:
+            // Synthesize both shapes during the v0.4.2 transition:
             // - If author provided per-dialect maps, fan one entry into
             //   the legacy single fields (pick the first listed dialect)
             // - If author provided only legacy fields, replicate them
             //   across every listed dialect into the new maps
-            // After v0.5.1, the legacy half goes away.
+            // After the cleanup release, the legacy half goes away.
             const { solutions, expectedOutputs, legacySolution, legacyExpected } =
                 synthesizeBothShapes(input)
 
