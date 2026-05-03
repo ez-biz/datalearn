@@ -10,7 +10,8 @@
     "postinstall": "prisma generate",
     "vercel-build": "prisma migrate deploy && next build --webpack",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "audit:postgres": "tsx scripts/audit-postgres-compatibility.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
