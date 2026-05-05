@@ -19,6 +19,7 @@ Practice SQL the way LeetCode does code. Real problems. Real schemas. A real dat
 - **LeetCode-style workspace** — two-pane layout: tabbed Description / Hints / History on the left, Monaco editor + tabbed Results / Verdict on the right. Stable problem numbers (`#247.` LeetCode-style) on every surface.
 - **Custom problem lists** — private user-curated collections at `/me/lists` with rename, delete, drag-and-drop reorder, sort options (recently added / recently solved / unsolved first / number), and a one-click bookmark popover on the workspace.
 - **Daily problem** — a featured problem rotating daily on the home page; streak-friendly habit hook.
+- **Problem discussions** — a `Discussion` tab in the practice workspace with one-level replies, markdown/code formatting, voting, reports, pagination, and accepted-solution sharing. Admins can enable/disable globally and set per-problem `OPEN` / `LOCKED` / `HIDDEN` mode.
 - **Per-user progress** — solved checkmarks on the problem list, "Solved" badge on the workspace, submission history with code recall, profile stats with by-difficulty breakdown.
 - **Workspace polish** — `⌘↵` run, `⌘⇧↵` submit, draft autosave to localStorage, run timer, NULL-styled cells, tabular numerics.
 - **Admin content portal** — `/admin/*` UI to author problems end-to-end. Type the solution, hit "Run & capture", and we run it against the schema in your browser and store the JSON. No more hand-writing expected output.
@@ -106,7 +107,7 @@ DuckDB-WASM downloads a ~30 MB WASM binary on first visit. PGlite (Postgres) laz
 ```
 app/
   api/admin/             REST endpoints (auth via session OR bearer key)
-  admin/                 Admin UI — gated layout, problems CRUD, schemas, tags, API keys
+  admin/                 Admin UI — gated layout, content CRUD, moderation, API keys
   practice/              /practice list + /practice/[slug] workspace
   learn/                 Topic + article pages
   ...                    profile, dynamic [slug], 404, error
@@ -114,14 +115,17 @@ actions/                 Server actions (validateSubmission, getProblems, ...)
 components/
   ui/                    Hand-rolled primitives (Button, Card, Badge, Input, ...)
   layout/                Navbar, Footer, ThemeProvider, MobileNav
-  practice/              ProblemClient, ProblemPanel, PracticeList, HistoryPanel
+  practice/              ProblemClient, ProblemPanel, PracticeList, HistoryPanel,
+                         discussion UI
   sql/                   SqlPlayground, SqlEditor, ResultTable, ValidationResult
-  admin/                 AdminNav, ProblemForm, HintsEditor, TagPicker, ApiKeysClient
+  admin/                 AdminNav, ProblemForm, moderation/settings clients
 lib/
   prisma.ts              Prisma client singleton
   auth.ts                NextAuth setup (GitHub + Google + Prisma adapter)
   api-auth.ts            requireAdmin() — session OR bearer; withAdmin() route wrapper
   admin-validation.ts    Zod schemas for /api/admin/* payloads
+  discussions/           Discussion settings, rate limits, permissions,
+                         reputation, query shaping
   duckdb.ts              DuckDB-WASM bootstrap
   use-problem-db.ts      Shared DB hook (one connection per problem page)
   sql-validator.ts       Pure validator with epsilon + ordered/unordered modes

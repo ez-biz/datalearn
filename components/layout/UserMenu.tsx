@@ -16,7 +16,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-type Role = "USER" | "CONTRIBUTOR" | "ADMIN"
+type Role = "USER" | "CONTRIBUTOR" | "MODERATOR" | "ADMIN"
 
 interface UserMenuProps {
     name: string | null
@@ -33,12 +33,14 @@ interface UserMenuProps {
 const ROLE_LABEL: Record<Role, string> = {
     USER: "Member",
     CONTRIBUTOR: "Contributor",
+    MODERATOR: "Moderator",
     ADMIN: "Admin",
 }
 
 const ROLE_PILL: Record<Role, string> = {
     USER: "bg-surface-muted text-muted-foreground",
     CONTRIBUTOR: "bg-primary/15 text-primary",
+    MODERATOR: "bg-accent/15 text-accent",
     ADMIN: "bg-accent/15 text-accent",
 }
 
@@ -85,6 +87,14 @@ export function UserMenu({
     const displayName = name?.trim() || email?.split("@")[0] || "Account"
     const safeTotal = Math.max(1, total)
     const pct = Math.min(100, (solved / safeTotal) * 100)
+
+    // Track whether the avatar image failed to load. Common causes:
+    // (a) OAuth provider's avatar URL stopped resolving (user changed avatar
+    //     at the provider, account expired, etc.), (b) next/image domain
+    //     not whitelisted, (c) network/CORS edge case. Falling back to
+    //     initials keeps the UI from rendering a broken thumbnail.
+    const [imageFailed, setImageFailed] = useState(false)
+    const showAvatarImage = Boolean(image) && !imageFailed
     const isContributor = role === "CONTRIBUTOR" || role === "ADMIN"
     const isAdmin = role === "ADMIN"
 
@@ -114,13 +124,15 @@ export function UserMenu({
                         : "ring-transparent hover:ring-primary/30"
                 )}
             >
-                {image ? (
+                {showAvatarImage ? (
                     <Image
-                        src={image}
+                        src={image!}
                         alt={name ?? "Profile"}
                         width={32}
                         height={32}
                         className="h-8 w-8 rounded-full object-cover"
+                        onError={() => setImageFailed(true)}
+                        unoptimized
                     />
                 ) : (
                     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
@@ -137,13 +149,15 @@ export function UserMenu({
                 >
                     {/* Header */}
                     <div className="flex items-start gap-3 p-4 border-b border-border">
-                        {image ? (
+                        {showAvatarImage ? (
                             <Image
-                                src={image}
+                                src={image!}
                                 alt={name ?? "Profile"}
                                 width={40}
                                 height={40}
                                 className="h-10 w-10 rounded-full object-cover shrink-0"
+                                onError={() => setImageFailed(true)}
+                                unoptimized
                             />
                         ) : (
                             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary shrink-0">

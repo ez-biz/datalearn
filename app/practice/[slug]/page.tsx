@@ -12,6 +12,8 @@ import { ProblemClient } from "@/components/practice/ProblemClient"
 import { ReportDialog } from "@/components/practice/ReportDialog"
 import { AddToListButton } from "@/components/lists/AddToListButton"
 import { parseSchema } from "@/lib/schema-parser"
+import { prisma } from "@/lib/prisma"
+import { getDiscussionSettings } from "@/lib/discussions/settings"
 
 type Props = {
     params: Promise<{ slug: string }>
@@ -75,11 +77,17 @@ export default async function ProblemPage({ params }: Props) {
         notFound()
     }
 
-    const [history, solvedSlugs, session] = await Promise.all([
-        getProblemHistory(slug),
-        getSolvedSlugs(),
-        auth(),
-    ])
+    const [history, solvedSlugs, session, discussionSettings, discussionState] =
+        await Promise.all([
+            getProblemHistory(slug),
+            getSolvedSlugs(),
+            auth(),
+            getDiscussionSettings(),
+            prisma.problemDiscussionState.findUnique({
+                where: { problemId: problem.id },
+                select: { mode: true },
+            }),
+        ])
     const isSolved = solvedSlugs.includes(slug)
     const isSignedIn = Boolean(session?.user?.id)
     const { columns: expectedColumns, rows: expectedRows } =
@@ -118,6 +126,10 @@ export default async function ProblemPage({ params }: Props) {
                 expectedRows={expectedRows}
                 initialHistory={history}
                 isSolved={isSolved}
+                isSignedIn={isSignedIn}
+                viewerUserId={session?.user?.id ?? null}
+                discussionEnabled={Boolean(discussionSettings?.globalEnabled)}
+                discussionMode={discussionState?.mode ?? "OPEN"}
                 initialTableInfos={parseSchema(problem.schema?.sql)}
                 relatedArticles={problem.relatedArticles ?? []}
             />

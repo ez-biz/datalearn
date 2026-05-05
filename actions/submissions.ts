@@ -28,6 +28,19 @@ export async function validateSubmission(input: unknown): Promise<ValidationResu
 
     const { problemSlug, userResult, code, dialect } = parsed.data
 
+    // Submit is gated on sign-in. Run executes client-side in the
+    // browser so anonymous users can still try problems freely; only
+    // Submit writes to the DB and counts toward stats. Fail closed
+    // here so a hand-crafted POST bypassing the UI guard still won't
+    // record a submission.
+    const sessionForGate = await auth()
+    if (!sessionForGate?.user?.id) {
+        return {
+            ok: false,
+            reason: "Sign in to submit your solution.",
+        }
+    }
+
     const problem = await prisma.sQLProblem.findUnique({
         where: { slug: problemSlug },
         select: {
@@ -60,7 +73,9 @@ export async function validateSubmission(input: unknown): Promise<ValidationResu
         }
     }
 
-    const session = await auth()
+    // Reuse the session fetched at the gate above — auth() is non-trivial
+    // (DB query + cookie parse), so don't call it twice on the hot path.
+    const session = sessionForGate
 
     if (session?.user?.id) {
         // Per-user rate limit. Cheap query (uses existing
@@ -100,8 +115,27 @@ export async function validateSubmission(input: unknown): Promise<ValidationResu
                     reason: result.ok ? null : result.reason ?? null,
                 },
             })
+
+            if (result.ok) {
+                await prisma.userReputationEvent.upsert({
+                    where: {
+                        userId_kind_sourceId: {
+                            userId: session.user.id,
+                            kind: "ACCEPTED_SOLVE",
+                            sourceId: `problem:${problem.id}`,
+                        },
+                    },
+                    update: { points: 2 },
+                    create: {
+                        userId: session.user.id,
+                        kind: "ACCEPTED_SOLVE",
+                        points: 2,
+                        sourceId: `problem:${problem.id}`,
+                    },
+                })
+            }
         } catch (e) {
-            console.error("Failed to persist submission:", e)
+            console.error("Failed to persist submission or reputation event:", e)
         }
     }
 

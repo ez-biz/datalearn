@@ -4,7 +4,19 @@
 > **Status:** Live — <https://www.learndatanow.com>
 > **Version:** 0.4.2 (deployed)
 
-## Recently shipped
+## Recently shipped / ready for release
+
+### May 2026 — unreleased: problem discussions v1
+
+- **Learner Discussion tab** — added to the practice workspace next to Description, Hints, and History. Published problems show Discussion when global discussions are enabled and the problem is not `HIDDEN`. Signed-out learners can read; signed-in learners can post comments, reply one level deep, vote, report, edit inside the edit window, and soft-delete their own visible comments.
+- **Markdown + code formatting** — comments and replies use the shared safe Markdown renderer with inline code, fenced code blocks, and SQL highlighting where available. Accepted submissions expose `Share approach`, which pre-fills a discussion comment with the accepted SQL in a fenced code block.
+- **Spam controls and reputation tiers** — DB-backed `DiscussionSettings` controls global availability, report threshold, edit window, duplicate cooldown, body length, hourly/per-problem limits, vote limits, and reputation thresholds. Accepted solves, vote events, hidden comments, and confirmed spam write auditable `UserReputationEvent` rows.
+- **Admin moderation queue** — `/admin/discussions` groups comments into needs-review, hidden, dismissed-reports, and spam queues. Report threshold uses the count of OPEN reports; crossing the threshold does not auto-hide. Actions are hide, restore, dismiss reports, and mark spam.
+- **Moderator role with assignable permissions** — `MODERATOR` is a separate role, but capabilities are permission-based: view queue, hide/restore comments, dismiss reports, mark spam, lock problem discussions, and hide problem discussions. Only admins can grant/revoke moderator permissions through `/admin/moderators`.
+- **Per-problem controls** — problem edit forms and moderator APIs can set discussion mode to `OPEN`, `LOCKED`, or `HIDDEN`. `LOCKED` keeps discussion readable but blocks new mutations; `HIDDEN` removes the learner-facing tab.
+- **Default availability fix** — discussions are enabled by default at the DB/schema level, while admins can still disable globally from settings or hide/lock individual problems.
+- Verification coverage: `npm run test:discussion` plus targeted E2E coverage for learner discussion flows, signed-out gating, locked/hidden modes, report queue threshold, moderator permissions, and admin API security.
+- Design/plan docs: [`docs/superpowers/specs/2026-05-03-problem-discussions-design.md`](./superpowers/specs/2026-05-03-problem-discussions-design.md) and [`docs/superpowers/plans/2026-05-03-problem-discussions.md`](./superpowers/plans/2026-05-03-problem-discussions.md).
 
 ### May 2026 — v0.4.2: per-dialect solutions schema groundwork (PR #65 + #66)
 
@@ -66,7 +78,8 @@ Build the **go-to open platform** for data engineering education — combining i
 | Dynamic Navigation (DB-driven) | ✅ Done | Navbar fetches pages from DB |
 | News Aggregator (RSS) | ✅ Done | Data Engineering Weekly feed |
 | User Profile Page | ✅ Done | Shows session data |
-| Testing | ❌ None | No tests exist yet |
+| Problem Discussions | ✅ Done | Problem-level tab with replies, votes, reports, moderation queue, and per-problem modes |
+| Testing | ✅ Partial | Playwright E2E coverage plus targeted helper tests for core shipped flows |
 | CI/CD | ❌ None | No GitHub Actions or deployment pipeline |
 
 ---
@@ -139,9 +152,10 @@ Build the **go-to open platform** for data engineering education — combining i
 | **CI/CD pipeline (GitHub Actions)** | ⬜ Todo | P0 |
 | **Vercel deployment with preview environments** | ⬜ Todo | P0 |
 | **User analytics dashboard (admin)** | ⬜ Todo | P1 |
-| **Content moderation tools** | ⬜ Todo | P2 |
+| **Problem discussion moderation tools** | ✅ Done | P2 |
 | **Leaderboard / gamification** | ⬜ Todo | P3 |
-| **Community forums / discussions** | ⬜ Todo | P3 |
+| **Problem-specific discussions** | ✅ Done | P3 |
+| **Site-wide community forums** | ⬜ Todo | P3 |
 | **SEO optimization** | ⬜ Todo | P1 |
 | **Performance monitoring (Sentry/Vercel Analytics)** | ⬜ Todo | P2 |
 | **Accessibility audit (WCAG 2.1 AA)** | ⬜ Todo | P2 |

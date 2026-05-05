@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Plus } from "lucide-react"
 import { prisma } from "@/lib/prisma"
+import { requireAdminPage } from "@/lib/admin-page-auth"
 import type { ArticleStatus } from "@prisma/client"
 import { Container } from "@/components/ui/Container"
 import { Card } from "@/components/ui/Card"
@@ -28,6 +29,8 @@ export default async function AdminArticlesPage({
 }: {
     searchParams: Promise<{ status?: string }>
 }) {
+    await requireAdminPage()
+
     const sp = await searchParams
     const filterStatus =
         sp.status && ALLOWED_STATUS.has(sp.status as ArticleStatus)

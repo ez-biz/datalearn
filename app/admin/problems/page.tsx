@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Plus } from "lucide-react"
 import { prisma } from "@/lib/prisma"
+import { requireAdminPage } from "@/lib/admin-page-auth"
 import { Container } from "@/components/ui/Container"
 import { Card } from "@/components/ui/Card"
 import { LinkButton } from "@/components/ui/Button"
@@ -11,6 +12,8 @@ import { ProblemRowActions } from "@/components/admin/ProblemRowActions"
 export const dynamic = "force-dynamic"
 
 export default async function AdminProblemsPage() {
+    await requireAdminPage()
+
     const problems = await prisma.sQLProblem.findMany({
         orderBy: { createdAt: "desc" },
         include: {

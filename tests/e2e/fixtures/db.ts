@@ -28,7 +28,7 @@ export type SeededUser = {
 /** Create a fresh user with a fresh session, return both. */
 export async function seedUser(opts: {
     email: string
-    role?: "USER" | "CONTRIBUTOR" | "ADMIN"
+    role?: "USER" | "CONTRIBUTOR" | "MODERATOR" | "ADMIN"
     name?: string
 }): Promise<SeededUser> {
     const user = await prisma.user.upsert({

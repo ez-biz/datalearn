@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { requireAdminPage } from "@/lib/admin-page-auth"
 import { Container } from "@/components/ui/Container"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Badge } from "@/components/ui/Badge"
@@ -9,6 +10,8 @@ export const metadata = { title: "Schemas", robots: { index: false, follow: fals
 export const dynamic = "force-dynamic"
 
 export default async function SchemasPage() {
+    await requireAdminPage()
+
     const schemas = await prisma.sqlSchema.findMany({
         orderBy: { name: "asc" },
         include: { _count: { select: { problems: true } } },

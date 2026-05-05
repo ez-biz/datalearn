@@ -13,6 +13,7 @@
     "vercel-build": "prisma migrate deploy && next build --webpack",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:discussion": "tsx scripts/test-discussion-helpers.ts",
     "audit:dialects": "tsx scripts/audit-all-dialects.ts",
     "validate:problem": "tsx scripts/validate-problem.ts",
     "db:sync-prod": "bash scripts/sync-from-prod.sh"

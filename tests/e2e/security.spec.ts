@@ -7,6 +7,7 @@ import {
 } from "./fixtures/db"
 
 const ADMIN_EMAIL = "e2e-admin@example.test"
+const MODERATOR_EMAIL = "e2e-security-moderator@example.test"
 const BASE_URL =
     process.env.E2E_BASE_URL ?? `http://localhost:${process.env.E2E_PORT ?? "3100"}`
 
@@ -19,6 +20,7 @@ test.describe.configure({ mode: "serial" })
 
 test.afterAll(async () => {
     await deleteUser(ADMIN_EMAIL)
+    await deleteUser(MODERATOR_EMAIL)
     await prisma.$disconnect()
 })
 
@@ -250,6 +252,22 @@ test.describe("PR #12 — medium followups", () => {
             expect(res.status()).toBe(403)
         } finally {
             await deleteUser("e2e-plain@example.test")
+        }
+    })
+
+    test("moderator cannot list admin problems API", async ({ request }) => {
+        const moderator = await seedUser({
+            email: MODERATOR_EMAIL,
+            role: "MODERATOR",
+        })
+        try {
+            const res = await request.get("/api/admin/problems", {
+                headers: { Cookie: cookie(moderator.sessionToken) },
+                failOnStatusCode: false,
+            })
+            expect(res.status()).toBe(403)
+        } finally {
+            await deleteUser(MODERATOR_EMAIL)
         }
     })
 })
