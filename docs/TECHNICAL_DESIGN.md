@@ -65,7 +65,7 @@ Data Learn is a single Next.js 16 application backed by Postgres. The runtime ar
 |---|---|---|
 | 4 | Database schema | Users, sessions, problems, schemas, submissions, articles, topics, tags, API keys, problem lists, discussions |
 | 5 | Auth & authorization | NextAuth config, edge middleware, role-based access (USER / CONTRIBUTOR / MODERATOR / ADMIN), CSRF + Origin gate |
-| 6 | SQL execution engine | DuckDB-WASM bootstrap, shared-DB hook, validator, expected-output capture |
+| 6 | SQL execution engine | Browser SQL engine sessions, DuckDB-WASM/PGlite adapters, validator, expected-output capture |
 | 7 | Learn CMS | Topics, articles, status state machine, snapshot-on-publish, contributor authoring |
 | 8 | Admin REST API | `/api/admin/*` endpoints, Bearer-key auth, validation pipeline |
 | 9 | MCP server | Standalone stdio process, 9 tools, forced-DRAFT writes |
@@ -88,7 +88,7 @@ Data Learn is a single Next.js 16 application backed by Postgres. The runtime ar
 | ORM | **Prisma 7** with `prisma.config.ts` | `@prisma/adapter-pg` + `pg.Pool` |
 | Database | **PostgreSQL 14+** | Neon in prod (pooled URL at runtime, direct URL for migrate) |
 | Auth | **NextAuth v5** (beta) | Prisma adapter, GitHub + Google OAuth |
-| In-browser SQL | **DuckDB-WASM** | One shared connection per problem page via `useProblemDB` |
+| In-browser SQL | **DuckDB-WASM + PGlite** | One shared engine session per problem page via `useProblemDB` |
 | Editor | **Monaco** (`@monaco-editor/react`) | Lazy-loaded via `next/dynamic` |
 | UI tokens | **Tailwind v4** + `@plugin "@tailwindcss/typography"` | HSL CSS variables; light + full dark mode |
 | Theming | **next-themes** | Light default, manual toggle in nav |
@@ -314,17 +314,18 @@ Role grants are admin-only via `/api/admin/users/[id]/role`. ADMIN role changes 
 
 ## 6. SQL Execution Engine
 
-### 6.1 Why DuckDB-WASM
+### 6.1 Why browser WASM engines
 
 - Free at scale: zero server-side compute per learner query.
 - Instant feedback: no network round-trip per query.
-- Postgres-ish dialect: covers JOINs, window functions, CTEs, GROUP BY, etc. — everything in our problem set.
+- DuckDB-WASM covers analytical SQL well; PGlite gives a real Postgres runtime for problems that need Postgres semantics.
 
-### 6.2 Bootstrap (`lib/duckdb.ts`, `lib/use-problem-db.ts`)
+### 6.2 Engine sessions (`lib/sql-engine/*`, `lib/use-problem-db.ts`)
 
-- WASM bundle loaded from CDN at first visit (~30 MB; cached after).
-- One DuckDB connection per problem page, exposed via the `useProblemDB(schemaSql)` hook. The hook bootstraps the schema (DDL + seed `INSERT`s) once on init, then keeps the connection alive for as many `runQuery` calls as the page makes.
-- Two inits on the same page would mean two WASM downloads + two engines. **Don't initialize twice.**
+- `lib/sql-engine/browser-session.ts` is the browser engine boundary. It lazily initializes DuckDB-WASM or PGlite, replays schema SQL, enforces the read-only guard for learner queries, normalizes rows, and exposes `{ runQuery, dispose }`.
+- `lib/sql-engine/normalize.ts` converts engine-specific values such as `Date`, `bigint`, and object wrappers into JSON-safe scalar values before rows reach React or submission validation.
+- `lib/use-problem-db.ts` is the React lifecycle wrapper. It creates one engine session per problem page and selected dialect, updates `ready` / `error`, and disposes the session on unmount or dialect change.
+- Two inits on the same page would mean duplicate WASM downloads + duplicate engine state. **Don't initialize outside `useProblemDB` / `createSqlEngineSession`.**
 
 ### 6.3 Validator (`lib/sql-validator.ts`)
 
@@ -347,7 +348,8 @@ Pure function. Compares user rows against `expectedOutput`:
 ### 6.5 Limitations
 
 - Cold start can take 1–3 s on a fresh visit (WASM download). Subsequent visits are ~200 ms.
-- Currently single-dialect (DuckDB ≈ Postgres-flavored). Multi-dialect support (MySQL / Hive / explicit Postgres) is on the roadmap; would require either PGlite-style WASM swap or server-side ephemeral Postgres branches (Neon is a strong fit for this — see §13).
+- DuckDB and PGlite are both browser-local. Larger datasets, hidden test cases, and heavier dialects would still need an optional server-side sandbox runner.
+- Query timeout/cancel semantics are not centralized yet; the engine-session boundary is the intended place to add them.
 
 ---
 
