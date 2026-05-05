@@ -63,6 +63,10 @@ const WRITE_TOKENS = new Set([
     "UPSERT",
     "REPLACE",
 ])
+const WRITE_TOKEN_PATTERN = new RegExp(
+    `\\b(${[...WRITE_TOKENS].join("|")})\\b`,
+    "i"
+)
 
 export type SqlGuardResult =
     | { ok: true }
@@ -104,7 +108,7 @@ function firstKeyword(stmt: string): string | null {
 function findWriteKeyword(stmt: string): string | null {
     // \b word boundaries so column names like `last_updated` don't trip
     // the UPDATE check.
-    const m = stmt.match(/\b(INSERT|UPDATE|DELETE|MERGE|UPSERT|REPLACE)\b/i)
+    const m = stmt.match(WRITE_TOKEN_PATTERN)
     return m ? m[1].toUpperCase() : null
 }
 
