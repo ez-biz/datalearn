@@ -12,6 +12,7 @@
 - **Shared result normalization** — new `lib/sql-engine/normalize.ts` converts engine-specific row values (`Date`, safe/unsafe `bigint`, object wrappers) into JSON-safe values before rows reach the results table or submission payload.
 - **Schema statement helper** — schema replay now uses a tested `splitSqlStatements()` helper in `lib/sql-engine/statements.ts`, keeping browser engine setup behavior explicit.
 - Design/plan docs: [`docs/superpowers/specs/2026-05-05-sql-engine-v2-foundation-design.md`](./superpowers/specs/2026-05-05-sql-engine-v2-foundation-design.md) and [`docs/superpowers/plans/2026-05-05-sql-engine-v2-foundation.md`](./superpowers/plans/2026-05-05-sql-engine-v2-foundation.md).
+- Broader roadmap docs: [`docs/superpowers/specs/2026-05-05-sql-engine-v2-roadmap-design.md`](./superpowers/specs/2026-05-05-sql-engine-v2-roadmap-design.md) and [`docs/superpowers/plans/2026-05-05-sql-engine-v2-roadmap.md`](./superpowers/plans/2026-05-05-sql-engine-v2-roadmap.md).
 
 ### May 2026 — v0.4.4: problem discussions v1 + workspace safety
 

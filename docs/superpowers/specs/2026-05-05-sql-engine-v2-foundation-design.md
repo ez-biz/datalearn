@@ -55,3 +55,5 @@ Add focused Node tests for row normalization because it is pure and easy to veri
 ## Future Work
 
 After this foundation, SQL Engine v2 can add timeout/cancel semantics, better parser-backed read-only validation, admin expected-output capture through the same session interface, and eventually an optional server-side runner for heavier workloads.
+
+The broader phased roadmap is captured in [`2026-05-05-sql-engine-v2-roadmap-design.md`](./2026-05-05-sql-engine-v2-roadmap-design.md) with execution sequencing in [`../plans/2026-05-05-sql-engine-v2-roadmap.md`](../plans/2026-05-05-sql-engine-v2-roadmap.md).
