@@ -139,7 +139,7 @@ Phase 1 protects every later phase. Authoring gates (1.1) and validator correctn
 - Unit tests with equivalent timezone timestamp strings.
 - `npm run audit:dialects` passes against current DB.
 
-### PR 1.5: Read-Only Guard Tokenizer (optional)
+### PR 1.5: Read-Only Guard Tokenizer (implemented)
 
 **Goal:** Replace the regex/first-keyword guard in `lib/sql-restrict.ts` with a small tokenizer-based check so adversarial inputs (`;` inside string literals, multi-statement chains hidden in comments, dialect-specific shapes like `COPY ... FROM`) can't slip through.
 
@@ -148,15 +148,16 @@ Phase 1 protects every later phase. Authoring gates (1.1) and validator correctn
 - Modify: `scripts/test-sql-restrict.ts`
 
 **Design:**
-- Tokenize on whitespace/operators with awareness of `'…'` and `"…"` literals.
-- Same allow-list and CTE-DML scan; same `SqlGuardResult` contract.
-- Add adversarial test cases for: `SELECT 'a;DROP TABLE t';`, `/* SELECT */ DROP TABLE t;`, `COPY t FROM stdin`.
+- Tokenize on whitespace/operators with awareness of comments, `'…'` string literals, `"…"` quoted identifiers, and Postgres-style dollar-quoted literals.
+- Same allow-list and `SqlGuardResult` contract.
+- Scan tokenized statements for mutating tokens so CTE-wrapped DML and `EXPLAIN ANALYZE` around DML are rejected without false positives from string data.
+- Added adversarial test cases for semicolons in literals, write keywords inside literals/quoted identifiers, `COPY ... FROM STDIN`, multi-statement chains, CTE-wrapped DML, and `EXPLAIN ANALYZE DELETE`.
 
 **Verification:**
 - All current `scripts/test-sql-restrict.ts` assertions still pass.
 - New adversarial cases pass.
 
-This PR is **optional** — if no exploit is found in the wild, it can ship later. Listed here so it doesn't drift indefinitely.
+This PR closes the optional hardening slot from the roadmap and ships as part of the SQL Engine v2 foundation work.
 
 ### PR 1.6: Engine Timing Telemetry Harness
 

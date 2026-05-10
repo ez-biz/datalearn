@@ -44,6 +44,11 @@ const cases: Array<{ sql: string; expectOk: boolean; desc: string }> = [
         desc: "EXPLAIN ANALYZE",
     },
     {
+        sql: "EXPLAIN SELECT 'DELETE FROM customers' AS note",
+        expectOk: true,
+        desc: "EXPLAIN with write keyword inside string literal",
+    },
+    {
         sql: 'DESCRIBE "customers"',
         expectOk: true,
         desc: "DESCRIBE (DuckDB schema introspection)",
@@ -72,6 +77,46 @@ const cases: Array<{ sql: string; expectOk: boolean; desc: string }> = [
         sql: "SELECT 1;",
         expectOk: true,
         desc: "single SELECT with trailing semicolon",
+    },
+    {
+        sql: "SELECT 'a; DROP TABLE customers' AS note;",
+        expectOk: true,
+        desc: "semicolon inside string literal is data, not a statement separator",
+    },
+    {
+        sql: "WITH cte AS (SELECT 'DELETE FROM customers' AS note) SELECT * FROM cte",
+        expectOk: true,
+        desc: "write keyword inside string literal is data, not CTE DML",
+    },
+    {
+        sql: 'SELECT "DROP TABLE customers" AS label',
+        expectOk: true,
+        desc: "write keyword inside quoted identifier is data, not SQL control flow",
+    },
+    {
+        sql: "SELECT $$a; DROP TABLE customers$$ AS note;",
+        expectOk: true,
+        desc: "semicolon inside dollar-quoted literal is data, not a statement separator",
+    },
+    {
+        sql: "SELECT $tag$DROP TABLE customers$tag$ AS note",
+        expectOk: true,
+        desc: "tagged dollar-quoted literal is data, not SQL control flow",
+    },
+    {
+        sql: "/* DROP TABLE customers */ SELECT 1",
+        expectOk: true,
+        desc: "block comment hides write keyword from the guard",
+    },
+    {
+        sql: "/* /* nested DROP */ DROP TABLE customers */ SELECT 1",
+        expectOk: true,
+        desc: "nested block comments are skipped to the matching close",
+    },
+    {
+        sql: 'SELECT "weird""name" AS label FROM customers',
+        expectOk: true,
+        desc: 'doubled quote inside double-quoted identifier is an escape',
     },
 
     // ── blocked ─────────────────────────────────────────────────────
@@ -117,6 +162,11 @@ const cases: Array<{ sql: string; expectOk: boolean; desc: string }> = [
         desc: "COPY",
     },
     {
+        sql: "COPY customers FROM STDIN",
+        expectOk: false,
+        desc: "COPY FROM STDIN",
+    },
+    {
         sql: "SELECT 1; DROP TABLE customers",
         expectOk: false,
         desc: "multi-statement: SELECT + DROP",
@@ -137,9 +187,19 @@ const cases: Array<{ sql: string; expectOk: boolean; desc: string }> = [
         desc: "CTE-wrapped INSERT",
     },
     {
+        sql: "EXPLAIN ANALYZE DELETE FROM customers WHERE id = 1",
+        expectOk: false,
+        desc: "EXPLAIN ANALYZE wrapped DML",
+    },
+    {
         sql: "-- DROP TABLE customers\nDROP TABLE customers",
         expectOk: false,
         desc: "comment-then-actual DROP (the DROP after the comment is real)",
+    },
+    {
+        sql: "/* SELECT */ DROP TABLE customers",
+        expectOk: false,
+        desc: "block comment hiding SELECT does not protect a real DROP",
     },
 ]
 
