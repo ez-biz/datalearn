@@ -18,7 +18,7 @@
 | 1 | PR 1.1 (shipped) | Dialect audit in CI | Low |
 | 2 | PR 1.2 (implemented) | Result row cap with display/validate split | Low |
 | 3 | PR 1.3 (implemented) | Query timeout, cancel, reset | Medium |
-| 4 | PR 1.4 | JSON + TIMESTAMPTZ validator robustness | Low |
+| 4 | PR 1.4 (implemented) | JSON + TIMESTAMPTZ validator robustness | Low |
 | 5 | PR 1.5 | Read-only guard tokenizer (optional) | Low |
 | 6 | PR 1.6 | Engine timing telemetry harness | Low |
 | 7 | Phase 2 | Authoring correctness (lint, capture diff, publish gate) | Medium |
@@ -121,11 +121,13 @@ Phase 1 protects every later phase. Authoring gates (1.1) and validator correctn
 
 ### PR 1.4: JSON and TIMESTAMPTZ Validator Robustness
 
+**Status:** Implemented in `feat/sql-validator-json-time`.
+
 **Goal:** Close the JSON-key-ordering and timezone-equivalence gaps in the validator. These are correctness fixes, not opt-in options — they fire unconditionally.
 
 **Files:**
 - Modify: `lib/sql-validator.ts`
-- Test: `scripts/test-sql-validator-json-time.mjs`
+- Test: `scripts/test-sql-validator-json-time.ts`
 
 **Design:**
 - Deep-compare object/array JSON values after normalizing key order.

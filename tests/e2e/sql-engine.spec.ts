@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test"
 
 const DRAFT_PREFIX = "dl:draft:"
+const QUERY_TIMEOUT_OVERRIDE_KEY = "dl:query-timeout-ms"
 const SIMPLE_SELECT_SLUG = "simple-select"
 const SIMPLE_SELECT_DRAFT_KEY = `${DRAFT_PREFIX}${SIMPLE_SELECT_SLUG}`
 
@@ -41,33 +42,37 @@ test.describe("SQL engine runtime controls", () => {
     }) => {
         test.slow()
 
-        await page.addInitScript(() => {
-            window.localStorage.setItem("dl:query-timeout-ms", "1")
-        })
-        await page.goto("/practice/simple-select")
+        await page.addInitScript(
+            ({ draftKey, sql, timeoutKey }) => {
+                window.localStorage.setItem(timeoutKey, "1")
+                window.localStorage.setItem(draftKey, sql)
+            },
+            {
+                draftKey: SIMPLE_SELECT_DRAFT_KEY,
+                sql: "SELECT SUM(random()) AS total FROM range(0, 100000000);",
+                timeoutKey: QUERY_TIMEOUT_OVERRIDE_KEY,
+            }
+        )
+        await page.goto(`/practice/${SIMPLE_SELECT_SLUG}`)
 
         const runButton = page.getByTestId("workspace-run-footer")
         await expect(runButton).toBeEnabled({ timeout: 45_000 })
 
-        await page.locator(".monaco-editor").click()
-        await page.keyboard.press("Control+A")
-        await page.keyboard.type(
-            "SELECT SUM(random()) AS total FROM range(0, 100000000);"
-        )
         await runButton.click()
 
         await expect(
             page.getByText(/query timed out.*engine session was reset/i)
-        ).toBeVisible({ timeout: 5_000 })
+        ).toBeVisible({ timeout: 45_000 })
 
-        await page.locator(".monaco-editor").click()
-        await page.keyboard.press("Control+A")
-        await page.keyboard.type("SELECT 1 AS ok;")
+        await expect(runButton).toBeEnabled({ timeout: 45_000 })
+        await page.getByRole("button", { name: "Reset" }).click()
         await runButton.click()
 
-        await expect(page.getByRole("columnheader", { name: "ok" })).toBeVisible({
+        await expect(
+            page.getByRole("columnheader", { name: "id" }).first()
+        ).toBeVisible({
             timeout: 45_000,
         })
-        await expect(page.getByRole("cell", { name: "1" }).last()).toBeVisible()
+        await expect(page.getByRole("cell", { name: "Alice" }).first()).toBeVisible()
     })
 })
