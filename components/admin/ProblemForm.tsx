@@ -179,7 +179,8 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
         }
         setRunning(true)
         try {
-            const rows = await runQuery(solutionSql)
+            const result = await runQuery(solutionSql)
+            const rows = result.rows
             // Convert BigInt to Number/string for JSON serialization
             const safe = rows.map((row) =>
                 Object.fromEntries(

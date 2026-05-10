@@ -65,7 +65,7 @@ Data Learn is a single Next.js 16 application backed by Postgres. The runtime ar
 |---|---|---|
 | 4 | Database schema | Users, sessions, problems, schemas, submissions, articles, topics, tags, API keys, problem lists, discussions |
 | 5 | Auth & authorization | NextAuth config, edge middleware, role-based access (USER / CONTRIBUTOR / MODERATOR / ADMIN), CSRF + Origin gate |
-| 6 | SQL execution engine | DuckDB-WASM bootstrap, shared-DB hook, validator, expected-output capture |
+| 6 | SQL execution engine | Browser SQL engine sessions, DuckDB-WASM/PGlite adapters, validator, expected-output capture |
 | 7 | Learn CMS | Topics, articles, status state machine, snapshot-on-publish, contributor authoring |
 | 8 | Admin REST API | `/api/admin/*` endpoints, Bearer-key auth, validation pipeline |
 | 9 | MCP server | Standalone stdio process, 9 tools, forced-DRAFT writes |
@@ -88,7 +88,7 @@ Data Learn is a single Next.js 16 application backed by Postgres. The runtime ar
 | ORM | **Prisma 7** with `prisma.config.ts` | `@prisma/adapter-pg` + `pg.Pool` |
 | Database | **PostgreSQL 14+** | Neon in prod (pooled URL at runtime, direct URL for migrate) |
 | Auth | **NextAuth v5** (beta) | Prisma adapter, GitHub + Google OAuth |
-| In-browser SQL | **DuckDB-WASM** | One shared connection per problem page via `useProblemDB` |
+| In-browser SQL | **DuckDB-WASM + PGlite** | One shared engine session per problem page via `useProblemDB` |
 | Editor | **Monaco** (`@monaco-editor/react`) | Lazy-loaded via `next/dynamic` |
 | UI tokens | **Tailwind v4** + `@plugin "@tailwindcss/typography"` | HSL CSS variables; light + full dark mode |
 | Theming | **next-themes** | Light default, manual toggle in nav |
@@ -110,7 +110,7 @@ Data Learn is a single Next.js 16 application backed by Postgres. The runtime ar
 |---|---|
 | **Playwright** | E2E test harness (~41 tests, runs in 2s); CI gate |
 | **`node:test` + tsx** | Unit tests for pure helpers (`schema-parser`, `profile-stats`); zero new deps |
-| **GitHub Actions** | Postgres service container, `npx tsc --noEmit`, `npm run build`, `npx playwright test` on every PR |
+| **GitHub Actions** | Postgres service container, seeded data, dialect audit, `npx tsc --noEmit`, `npm run build`, `npx playwright test` on every PR |
 | **CodeQL** | High-severity static analysis (e.g., the clear-text-logging finding caught on the MCP harness) |
 | **`tsup`** | Bundles `mcp-server/` to a single `dist/index.js` |
 | **`vitest`** | MCP server unit tests (40 cases) |
@@ -181,6 +181,8 @@ datalearn/
 ├── tests/e2e/                    Playwright E2E tests
 ├── scripts/
 │   ├── mcp-e2e-test.mjs          End-to-end harness for the MCP server
+│   ├── audit-all-dialects.ts     Runs every published problem/dialect canonical solution through DuckDB-Node or PGlite-Node
+│   ├── test-dialect-audit-helpers.ts Pure helper coverage for per-dialect audit input resolution
 │   ├── test-schema-parser.ts     node:test for the parser
 │   └── test-profile-stats.ts     node:test for heatmap + streak helpers
 └── docs/                         This document, ROADMAP, API, ADMIN, etc.
@@ -314,40 +316,60 @@ Role grants are admin-only via `/api/admin/users/[id]/role`. ADMIN role changes 
 
 ## 6. SQL Execution Engine
 
-### 6.1 Why DuckDB-WASM
+### 6.1 Why browser WASM engines
 
 - Free at scale: zero server-side compute per learner query.
 - Instant feedback: no network round-trip per query.
-- Postgres-ish dialect: covers JOINs, window functions, CTEs, GROUP BY, etc. — everything in our problem set.
+- DuckDB-WASM covers analytical SQL well; PGlite gives a real Postgres runtime for problems that need Postgres semantics.
 
-### 6.2 Bootstrap (`lib/duckdb.ts`, `lib/use-problem-db.ts`)
+### 6.2 Engine sessions (`lib/sql-engine/*`, `lib/use-problem-db.ts`)
 
-- WASM bundle loaded from CDN at first visit (~30 MB; cached after).
-- One DuckDB connection per problem page, exposed via the `useProblemDB(schemaSql)` hook. The hook bootstraps the schema (DDL + seed `INSERT`s) once on init, then keeps the connection alive for as many `runQuery` calls as the page makes.
-- Two inits on the same page would mean two WASM downloads + two engines. **Don't initialize twice.**
+- `lib/sql-engine/browser-session.ts` is the browser engine boundary. It lazily initializes DuckDB-WASM or PGlite, replays schema SQL, enforces the read-only guard for learner queries, normalizes rows, and exposes `{ runQuery, dispose }`.
+- `lib/sql-restrict.ts` is the static read-only preflight. It tokenizes learner SQL before execution so semicolons and write keywords inside comments, quoted strings, quoted identifiers, and dollar-quoted literals do not affect statement splitting, while DDL/DML/DCL, engine configuration, CTE-wrapped DML, and `EXPLAIN ANALYZE` around DML are rejected before either browser engine sees them.
+- `lib/sql-engine/normalize.ts` converts engine-specific values such as `Date`, `bigint`, and object wrappers into JSON-safe scalar values before rows reach React or submission validation.
+- `lib/sql-engine/result-cap.ts` caps learner-facing query results before they reach React. Normal `Run` uses a 1,000-row display cap; `Submit` uses `max(2 × expected output row count, 1,000)` and returns a local "result too large" verdict if the validation cap is exceeded.
+- `lib/sql-engine/runtime-controls.ts` applies the default 10-second query timeout. On timeout, `useProblemDB` calls the session reset path; DuckDB-WASM and PGlite both recover by disposing and recreating the browser engine, then replaying schema SQL.
+- `lib/sql-engine/dialect-audit.ts` resolves the canonical SQL, expected output, schema SQL, and ordered flag for each `(problem, dialect)` pair. The CI audit script uses it so missing per-dialect authoring data is treated as a build failure, not a skipped check.
+- `lib/use-problem-db.ts` is the React lifecycle wrapper. It creates one engine session per problem page and selected dialect, updates `ready` / `error` / `recovering`, and disposes the session on unmount or dialect change.
+- Two inits on the same page would mean duplicate WASM downloads + duplicate engine state. **Don't initialize outside `useProblemDB` / `createSqlEngineSession`.**
 
-### 6.3 Validator (`lib/sql-validator.ts`)
+### 6.3 Dialect audit (`scripts/audit-all-dialects.ts`)
+
+`npm run audit:dialects` and `npm run audit:dialects:ci` load PUBLISHED problems from Prisma, then execute each listed dialect's canonical solution against the matching local engine:
+
+- `DUCKDB` uses `@duckdb/node-api`.
+- `POSTGRES` uses `@electric-sql/pglite`.
+- Results are normalized with `normalizeSqlRows()` before comparison.
+- Missing solution SQL, missing schema SQL, malformed expected output JSON, execution errors, and validator mismatches are failures.
+- The GitHub Actions test workflow runs the CI variant immediately after migrations and seed, before typecheck/build/E2E.
+
+### 6.4 Validator (`lib/sql-validator.ts`)
 
 Pure function. Compares user rows against `expectedOutput`:
 
 - **Ordered mode** (`SQLProblem.ordered = true`): row-by-row positional comparison.
 - **Set mode** (default): canonicalize rows to a sorted JSON form and compare as multisets.
-- **Float epsilon**: numbers compared with `Math.abs(a - b) < 1e-6` to avoid float-precision false negatives.
+- **Float epsilon**: numbers compared with `Math.abs(a - b) < 1e-9` to avoid float-precision false negatives.
+- **JSON cells**: object/array values are canonicalized recursively with stable object-key ordering, so JSON key order does not matter but nested value differences still fail.
+- **Timestamp cells**: date/timestamp-like values are normalized to ISO instants where possible, including timezone-offset strings such as `2026-05-05 10:00:00+05:30`.
 - **Column projection**: only columns named in `expectedOutput[0]` are compared; extra columns in the user result are flagged.
 
 `validateSubmission` (server action, `actions/submissions.ts`) runs the validator and writes a `Submission` row when the user is signed in.
 
-### 6.4 Workspace UX (`components/practice/ProblemClient.tsx`, `components/sql/SqlPlayground.tsx`)
+### 6.5 Workspace UX (`components/practice/ProblemClient.tsx`, `components/sql/SqlPlayground.tsx`)
 
 - Editor renders immediately; **only `Run` and `Submit` are gated on `dbReady`** so the user can read the problem and start typing while DuckDB downloads (PR #20).
+- Oversized query results render only the first 1,000 rows with an explicit warning that the result was truncated. Validation uses a separate cap so larger-but-valid answer sets can still be submitted when the expected output requires them.
+- Timed-out queries show "Query timed out - engine session was reset." in the results panel. While the reset is in progress, Run/Submit are disabled and the results panel reports that the SQL engine is resetting.
 - Layout-matched skeleton (`SqlPlaygroundSkeleton`) covers the brief dynamic-import window so the right pane never collapses to blank.
 - Draft autosave: localStorage `dl:draft:<slug>`, debounced 400 ms.
 - Submission history is fetched server-side and threaded down; updated optimistically on submit.
 
-### 6.5 Limitations
+### 6.6 Limitations
 
 - Cold start can take 1–3 s on a fresh visit (WASM download). Subsequent visits are ~200 ms.
-- Currently single-dialect (DuckDB ≈ Postgres-flavored). Multi-dialect support (MySQL / Hive / explicit Postgres) is on the roadmap; would require either PGlite-style WASM swap or server-side ephemeral Postgres branches (Neon is a strong fit for this — see §13).
+- DuckDB and PGlite are both browser-local. Larger datasets, hidden test cases, and heavier dialects would still need an optional server-side sandbox runner.
+- Query cancel is implemented as session reset because DuckDB-WASM and PGlite do not expose a reliable in-flight cancellation primitive in this browser setup.
 
 ---
 

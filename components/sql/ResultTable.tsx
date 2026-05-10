@@ -1,19 +1,31 @@
 "use client"
 
-import { AlertCircle, Loader2, Table2 } from "lucide-react"
+import { AlertCircle, Loader2, Table2, TriangleAlert } from "lucide-react"
 
 interface ResultTableProps {
     data: any[]
     error?: string | null
     loading?: boolean
+    loadingLabel?: string
+    rowCount?: number
+    truncated?: boolean
+    cap?: number | null
 }
 
-export function ResultTable({ data, error, loading }: ResultTableProps) {
+export function ResultTable({
+    data,
+    error,
+    loading,
+    loadingLabel,
+    rowCount,
+    truncated,
+    cap,
+}: ResultTableProps) {
     if (loading) {
         return (
             <div className="h-full flex items-center justify-center text-sm text-muted-foreground bg-surface">
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Running query…
+                {loadingLabel ?? "Running query…"}
             </div>
         )
     }
@@ -44,52 +56,70 @@ export function ResultTable({ data, error, loading }: ResultTableProps) {
     const isNumeric = (v: any) =>
         typeof v === "number" || (typeof v === "bigint")
 
+    const renderedCount = data.length
+    const observedCount = rowCount ?? renderedCount
+
     return (
-        <div className="h-full overflow-auto bg-surface scrollbar-thin">
-            <table className="min-w-full text-[13px]">
-                <thead className="sticky top-0 z-10 bg-surface-muted/95 backdrop-blur">
-                    <tr>
-                        {columns.map((col) => (
-                            <th
-                                key={col}
-                                className="px-4 py-2.5 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide border-b border-border whitespace-nowrap"
-                            >
-                                {col}
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody className="font-mono">
-                    {data.map((row, i) => (
-                        <tr
-                            key={i}
-                            className="border-b border-border last:border-0 hover:bg-surface-muted/50"
-                        >
-                            {columns.map((col) => {
-                                const v = row[col]
-                                return (
-                                    <td
-                                        key={`${i}-${col}`}
-                                        className={`px-4 py-2 whitespace-nowrap text-foreground/90 ${isNumeric(v) ? "tabular-nums text-right" : ""}`}
-                                    >
-                                        {v === null || v === undefined ? (
-                                            <span className="text-muted-foreground/60 italic font-sans">
-                                                NULL
-                                            </span>
-                                        ) : typeof v === "bigint" ? (
-                                            String(v)
-                                        ) : typeof v === "object" ? (
-                                            JSON.stringify(v)
-                                        ) : (
-                                            String(v)
-                                        )}
-                                    </td>
-                                )
-                            })}
+        <div className="h-full bg-surface flex flex-col">
+            {truncated && (
+                <div className="flex items-center gap-2 border-b border-border bg-warning/10 px-4 py-2 text-xs text-warning-foreground">
+                    <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+                    <span>
+                        Showing first {renderedCount.toLocaleString()} rows
+                        {cap != null
+                            ? ` (cap ${cap.toLocaleString()})`
+                            : ""}
+                        . Query returned at least{" "}
+                        {observedCount.toLocaleString()} rows.
+                    </span>
+                </div>
+            )}
+            <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
+                <table className="min-w-full text-[13px]">
+                    <thead className="sticky top-0 z-10 bg-surface-muted/95 backdrop-blur">
+                        <tr>
+                            {columns.map((col) => (
+                                <th
+                                    key={col}
+                                    className="px-4 py-2.5 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide border-b border-border whitespace-nowrap"
+                                >
+                                    {col}
+                                </th>
+                            ))}
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody className="font-mono">
+                        {data.map((row, i) => (
+                            <tr
+                                key={i}
+                                className="border-b border-border last:border-0 hover:bg-surface-muted/50"
+                            >
+                                {columns.map((col) => {
+                                    const v = row[col]
+                                    return (
+                                        <td
+                                            key={`${i}-${col}`}
+                                            className={`px-4 py-2 whitespace-nowrap text-foreground/90 ${isNumeric(v) ? "tabular-nums text-right" : ""}`}
+                                        >
+                                            {v === null || v === undefined ? (
+                                                <span className="text-muted-foreground/60 italic font-sans">
+                                                    NULL
+                                                </span>
+                                            ) : typeof v === "bigint" ? (
+                                                String(v)
+                                            ) : typeof v === "object" ? (
+                                                JSON.stringify(v)
+                                            ) : (
+                                                String(v)
+                                            )}
+                                        </td>
+                                    )
+                                })}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     )
 }

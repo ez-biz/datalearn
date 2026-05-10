@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { validateSubmission } from "@/actions/submissions"
 import type { ValidationResult } from "@/lib/sql-validator"
 import type { ProblemHistoryEntry } from "@/actions/submissions"
+import { computeValidateRowCap } from "@/lib/sql-engine/result-cap"
 import { ProblemPanel, type TableInfo } from "./ProblemPanel"
 import type { DiscussionMode } from "./discussion/DiscussionPanel"
 import {
@@ -59,6 +60,8 @@ interface ProblemClientProps {
 
 const DRAFT_PREFIX = "dl:draft:"
 const SAMPLE_LIMIT = 5
+const QUERY_TIMEOUT_OVERRIDE_KEY = "dl:query-timeout-ms"
+const MAX_QUERY_TIMEOUT_OVERRIDE_MS = 10_000
 
 export function ProblemClient({
     number,
@@ -86,6 +89,7 @@ export function ProblemClient({
     const [history, setHistory] = useState(initialHistory)
     const [solved, setSolved] = useState(isSolved)
     const [discussionPrefill, setDiscussionPrefill] = useState<string | null>(null)
+    const [queryTimeoutMs] = useState(() => getQueryTimeoutOverride())
     const [tableInfos, setTableInfos] = useState<TableInfo[] | null>(
         initialTableInfos
     )
@@ -120,10 +124,12 @@ export function ProblemClient({
         [dialectKey]
     )
 
-    const { ready: dbReady, error: dbError, runQuery } = useProblemDB(
-        schemaSql,
-        dialect
-    )
+    const {
+        ready: dbReady,
+        error: dbError,
+        recovering: dbRecovering,
+        runQuery,
+    } = useProblemDB(schemaSql, dialect)
 
     // Hydrate draft from localStorage
     useEffect(() => {
@@ -179,13 +185,13 @@ export function ProblemClient({
                                AND table_schema = current_schema()
                              ORDER BY ordinal_position`
                         )
-                        columns = desc.map((row) => ({
+                        columns = desc.rows.map((row) => ({
                             name: String(row.column_name ?? ""),
                             type: String(row.data_type ?? ""),
                         }))
                     } else {
                         const desc = await runQuery(`DESCRIBE "${name}"`)
-                        columns = desc.map((row) => ({
+                        columns = desc.rows.map((row) => ({
                             name: String(row.column_name ?? ""),
                             type: String(row.column_type ?? ""),
                         }))
@@ -193,7 +199,7 @@ export function ProblemClient({
                     const sample = await runQuery(
                         `SELECT * FROM "${name}" LIMIT ${SAMPLE_LIMIT}`
                     )
-                    infos.push({ name, columns, sampleRows: sample })
+                    infos.push({ name, columns, sampleRows: sample.rows })
                 } catch (e: any) {
                     console.error(`Sample fetch failed for ${name}:`, e?.message)
                     infos.push({ name, columns: [], sampleRows: [] })
@@ -290,13 +296,16 @@ export function ProblemClient({
                 <SqlPlayground
                     dbReady={dbReady}
                     dbError={dbError}
+                    dbRecovering={dbRecovering}
                     runQuery={runQuery}
+                    queryTimeoutMs={queryTimeoutMs}
                     initialSchema={schemaSql ?? undefined}
                     problemSlug={slug}
                     query={query}
                     onQueryChange={setQuery}
                     onSubmit={handleSubmit}
                     onReset={resetDraft}
+                    validateRowCap={computeValidateRowCap(expectedRows?.length)}
                     dialect={dialect}
                     allowedDialects={allowedDialects}
                     onDialectChange={handleDialectChange}
@@ -304,4 +313,25 @@ export function ProblemClient({
             </section>
         </div>
     )
+}
+
+function parseQueryTimeoutMs(value: string | null): number | undefined {
+    if (!value) return undefined
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed)) return undefined
+    return Math.min(
+        MAX_QUERY_TIMEOUT_OVERRIDE_MS,
+        Math.max(1, Math.floor(parsed))
+    )
+}
+
+function getQueryTimeoutOverride(): number | undefined {
+    if (typeof window === "undefined") return undefined
+    try {
+        return parseQueryTimeoutMs(
+            localStorage.getItem(QUERY_TIMEOUT_OVERRIDE_KEY)
+        )
+    } catch {
+        return undefined
+    }
 }

@@ -188,6 +188,7 @@ Wire this into UptimeRobot, Better Uptime, or any monitor. It pings the DB so a 
 | DB queries / inspection | `psql "$DIRECT_URL"` or Neon SQL Editor (console → Project → SQL Editor) |
 | Live logs | Vercel deploy logs |
 | Uptime | `GET /api/health` against any monitor |
+| Analytics | Vercel Analytics + Speed Insights are wired in `app/layout.tsx`; GA4 uses `NEXT_PUBLIC_GA_MEASUREMENT_ID` when set, otherwise production falls back to `G-B9RFQWH2JC`. |
 
 **Never** edit prod schema directly via `psql` — write a migration, ship it through a PR. The git-tracked migration log is the audit trail.
 
@@ -200,6 +201,6 @@ These are intentionally not in the v1 deploy runbook; revisit when you have real
 - **Error tracking**: Sentry. The free tier covers a small project comfortably; install in `app/layout.tsx` and the API routes.
 - **Backups**: Neon's free tier includes 7-day point-in-time restore on the prod branch (you can roll back to any second within the window). For longer retention, schedule `pg_dump` on a cron or upgrade to a paid tier.
 - **Custom domain**: Vercel project → Settings → Domains. CNAME to `cname.vercel-dns.com`.
-- **Analytics deeper dive**: Vercel Analytics is wired in `app/layout.tsx` for page views + web vitals; for funnels and conversion you'd want PostHog or similar.
+- **Analytics deeper dive**: Vercel Analytics, Speed Insights, and GA4 are wired in `app/layout.tsx`; for richer funnels and conversion you'd want PostHog or similar.
 - **Rate limiting at the edge**: middleware-level rate limit on `/api/admin/*` and `/api/me/*` (currently per-action, e.g. submission rate limit). Worth doing once the public traffic warrants.
 - **CI deploy gate**: today CI runs but doesn't gate Vercel deploys (we removed the required-checks gate due to GitHub's mergeable bug — see CONTRIBUTING.md). When contributor #2 lands and we re-enable required reviews + checks, the gate becomes meaningful.

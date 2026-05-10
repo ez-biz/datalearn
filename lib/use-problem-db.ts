@@ -1,25 +1,33 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm"
-import type { PGlite } from "@electric-sql/pglite"
-import { checkReadOnlyQuery } from "@/lib/sql-restrict"
+import { createSqlEngineSession } from "@/lib/sql-engine/browser-session"
+import {
+    DEFAULT_QUERY_TIMEOUT_MS,
+    runWithTimeout,
+} from "@/lib/sql-engine/runtime-controls"
+import type {
+    Dialect,
+    SqlQueryOptions,
+    SqlQueryResult,
+    SqlEngineSession,
+} from "@/lib/sql-engine/types"
 
-export type Row = Record<string, unknown>
-export type Dialect = "DUCKDB" | "POSTGRES"
+export type {
+    Dialect,
+    SqlQueryOptions,
+    SqlQueryResult,
+    SqlRow as Row,
+} from "@/lib/sql-engine/types"
 
 export interface ProblemDBState {
     ready: boolean
     error: string | null
-    runQuery: (sql: string) => Promise<Row[]>
+    recovering: boolean
+    runQuery: (sql: string, options?: SqlQueryOptions) => Promise<SqlQueryResult>
+    reset: () => Promise<void>
+    cancel: () => Promise<void>
 }
-
-const DEFAULT_FALLBACK_SCHEMA = `
-CREATE TABLE users (id INTEGER, name VARCHAR, role VARCHAR);
-INSERT INTO users VALUES (1, 'Alice', 'Engineer');
-INSERT INTO users VALUES (2, 'Bob', 'Data Scientist');
-INSERT INTO users VALUES (3, 'Charlie', 'Manager');
-`
 
 /**
  * Per-dialect SQL engine hook. Dynamically imports the right engine
@@ -33,64 +41,31 @@ export function useProblemDB(
     schemaSql: string | null | undefined,
     dialect: Dialect = "DUCKDB"
 ): ProblemDBState {
-    const duckRef = useRef<{
-        db: AsyncDuckDB
-        conn: AsyncDuckDBConnection
-    } | null>(null)
-    const pgRef = useRef<PGlite | null>(null)
+    const sessionRef = useRef<SqlEngineSession | null>(null)
     const [ready, setReady] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [recovering, setRecovering] = useState(false)
 
     useEffect(() => {
         let cancelled = false
         setReady(false)
         setError(null)
+        setRecovering(false)
 
         async function load() {
             try {
-                const schema = schemaSql || DEFAULT_FALLBACK_SCHEMA
-                const statements = splitStatements(schema)
-
-                if (dialect === "POSTGRES") {
-                    const { initPGlite } = await import("@/lib/pglite")
-                    const pg = await initPGlite()
-                    if (cancelled) return
-                    pgRef.current = pg
-                    for (const stmt of statements) {
-                        try {
-                            await pg.exec(stmt)
-                        } catch (stmtErr: any) {
-                            console.error(
-                                "[pglite] schema statement failed:",
-                                stmt.substring(0, 80),
-                                stmtErr?.message
-                            )
-                            throw stmtErr
-                        }
-                    }
-                } else {
-                    const { initDuckDB } = await import("@/lib/duckdb")
-                    const db = await initDuckDB()
-                    if (cancelled) return
-                    const conn = await db.connect()
-                    if (cancelled) return
-                    duckRef.current = { db, conn }
-                    for (const stmt of statements) {
-                        try {
-                            await conn.query(stmt)
-                        } catch (stmtErr: any) {
-                            console.error(
-                                "[duckdb] schema statement failed:",
-                                stmt.substring(0, 80),
-                                stmtErr?.message
-                            )
-                            throw stmtErr
-                        }
-                    }
+                const session = await createSqlEngineSession({
+                    schemaSql,
+                    dialect,
+                })
+                if (cancelled) {
+                    await session.dispose()
+                    return
                 }
+                sessionRef.current = session
 
                 if (!cancelled) setReady(true)
-            } catch (e: any) {
+            } catch (e) {
                 if (!cancelled) {
                     console.error(`Failed to init ${dialect}`, e)
                     setError(
@@ -103,41 +78,62 @@ export function useProblemDB(
         load()
         return () => {
             cancelled = true
-            // Clean up — PGlite has no explicit close in current API; GC
-            // handles it. DuckDB connection is closed implicitly when
-            // the worker is collected. Both are fine for our usage.
-            duckRef.current = null
-            pgRef.current = null
+            const session = sessionRef.current
+            sessionRef.current = null
+            if (session) {
+                void session.dispose().catch((disposeError) => {
+                    console.warn(
+                        `Failed to dispose ${session.dialect} SQL engine session:`,
+                        disposeError
+                    )
+                })
+            }
         }
     }, [schemaSql, dialect])
 
-    async function runQuery(sql: string): Promise<Row[]> {
-        // Enforce read-only at the boundary. The schema-replay path
-        // (the useEffect above) calls `pg.exec` / `conn.query` directly
-        // for DDL — it doesn't go through this function — so this guard
-        // never blocks legitimate setup, only learner / authoring input.
-        const guard = checkReadOnlyQuery(sql)
-        if (!guard.ok) {
-            throw new Error(guard.reason)
-        }
-        if (dialect === "POSTGRES") {
-            if (!pgRef.current) throw new Error("Database is not ready yet.")
-            const result = await pgRef.current.query<Row>(sql)
-            return result.rows
-        }
-        if (!duckRef.current) throw new Error("Database is not ready yet.")
-        const arrowTable = await duckRef.current.conn.query(sql)
-        return arrowTable.toArray().map((row: any) => row.toJSON())
+    async function runQuery(
+        sql: string,
+        options?: SqlQueryOptions
+    ): Promise<SqlQueryResult> {
+        const session = sessionRef.current
+        if (!session) throw new Error("Database is not ready yet.")
+        return runWithTimeout({
+            operation: () => session.runQuery(sql, options),
+            timeoutMs: options?.timeoutMs ?? DEFAULT_QUERY_TIMEOUT_MS,
+            onTimeout: async () => {
+                setRecovering(true)
+                try {
+                    await session.reset()
+                } finally {
+                    setRecovering(false)
+                }
+            },
+        })
     }
 
-    return { ready, error, runQuery }
-}
+    async function reset(): Promise<void> {
+        const session = sessionRef.current
+        if (!session) return
+        setRecovering(true)
+        try {
+            await session.reset()
+        } finally {
+            setRecovering(false)
+        }
+    }
 
-function splitStatements(schema: string): string[] {
-    return schema
-        .split(/;\s*\n|;\s*$/)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0)
+    async function cancel(): Promise<void> {
+        const session = sessionRef.current
+        if (!session) return
+        setRecovering(true)
+        try {
+            await session.cancel()
+        } finally {
+            setRecovering(false)
+        }
+    }
+
+    return { ready, error, recovering, runQuery, reset, cancel }
 }
 
 /** Pull `CREATE TABLE <name>` identifiers out of schema SQL. */
