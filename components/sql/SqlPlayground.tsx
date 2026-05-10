@@ -6,7 +6,16 @@ import { SqlEditor } from "./SqlEditor"
 import { ResultTable } from "./ResultTable"
 import { ValidationResult as ValidationResultView } from "./ValidationResult"
 import type { ValidationResult } from "@/lib/sql-validator"
-import type { Dialect } from "@/lib/use-problem-db"
+import {
+    DEFAULT_DISPLAY_ROW_CAP,
+    computeValidateRowCap,
+    limitQueryResultForDisplay,
+} from "@/lib/sql-engine/result-cap"
+import type {
+    Dialect,
+    SqlQueryOptions,
+    SqlQueryResult,
+} from "@/lib/use-problem-db"
 import { Button } from "@/components/ui/Button"
 import { cn } from "@/lib/utils"
 
@@ -20,14 +29,15 @@ interface SqlPlaygroundProps {
     dbReady: boolean
     /** Init error from the shared DB, if any. */
     dbError: string | null
-    /** Run a SQL string against the shared connection and return rows. */
-    runQuery: (sql: string) => Promise<any[]>
+    /** Run a SQL string against the shared connection and return capped rows. */
+    runQuery: (sql: string, options?: SqlQueryOptions) => Promise<SqlQueryResult>
     initialSchema?: string
     problemSlug?: string
     query?: string
     onQueryChange?: (query: string) => void
     onSubmit?: (userResult: unknown[]) => Promise<ValidationResult>
     onReset?: () => void
+    validateRowCap?: number
     /** Currently selected engine. */
     dialect?: Dialect
     /** Engines this problem allows. If only one, the toggle becomes a static badge. */
@@ -48,6 +58,7 @@ export function SqlPlayground({
     onQueryChange,
     onSubmit,
     onReset,
+    validateRowCap,
     dialect = "DUCKDB",
     allowedDialects = ["DUCKDB"],
     onDialectChange,
@@ -66,7 +77,7 @@ export function SqlPlayground({
         }
     }
 
-    const [results, setResults] = useState<any[]>([])
+    const [queryResult, setQueryResult] = useState<SqlQueryResult | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
     const [submitting, setSubmitting] = useState(false)
@@ -74,6 +85,7 @@ export function SqlPlayground({
     const [validation, setValidation] = useState<ValidationResult | null>(null)
     const [tab, setTab] = useState<Tab>("results")
     const [elapsedMs, setElapsedMs] = useState<number | null>(null)
+    const results = queryResult?.rows ?? []
 
     const queryRef = useRef(query)
     queryRef.current = query
@@ -82,13 +94,15 @@ export function SqlPlayground({
         if (!dbReady || loading || submitting) return
         setLoading(true)
         setError(null)
-        setResults([])
+        setQueryResult(null)
         setValidation(null)
         setTab("results")
         const t0 = performance.now()
         try {
-            const resultJson = await runQuery(queryRef.current)
-            setResults(resultJson)
+            const result = await runQuery(queryRef.current, {
+                rowCap: DEFAULT_DISPLAY_ROW_CAP,
+            })
+            setQueryResult(result)
             setHasRunOnce(true)
         } catch (e: any) {
             setError(e.message || "An error occurred executing the query")
@@ -106,10 +120,21 @@ export function SqlPlayground({
         setError(null)
         const t0 = performance.now()
         try {
-            const resultJson = await runQuery(queryRef.current)
-            setResults(resultJson)
+            const cap = validateRowCap ?? computeValidateRowCap(null)
+            const result = await runQuery(queryRef.current, { rowCap: cap })
+            setQueryResult(
+                limitQueryResultForDisplay(result, DEFAULT_DISPLAY_ROW_CAP)
+            )
             setHasRunOnce(true)
-            const outcome = await onSubmit(resultJson)
+            if (result.truncated) {
+                setValidation({
+                    ok: false,
+                    reason: `Result is too large — your query returned more than ${cap.toLocaleString()} rows. Narrow the query before submitting.`,
+                })
+                setTab("verdict")
+                return
+            }
+            const outcome = await onSubmit(result.rows)
             setValidation(outcome)
             setTab("verdict")
         } catch (e: any) {
@@ -178,6 +203,7 @@ export function SqlPlayground({
                     onRun={handleRun}
                     onSubmit={showSubmit ? handleSubmit : undefined}
                     running={loading}
+                    runDisabled={runDisabled}
                     dialect={dialect}
                     allowedDialects={allowedDialects}
                     onDialectChange={onDialectChange}
@@ -231,6 +257,7 @@ export function SqlPlayground({
                         onClick={handleRun}
                         disabled={runDisabled}
                         title={runTitle}
+                        data-testid="workspace-run-footer"
                     >
                         {!dbReady ? (
                             <>
@@ -269,7 +296,14 @@ export function SqlPlayground({
 
             <div className="h-[34vh] min-h-[260px] rounded-lg border border-border overflow-hidden bg-surface">
                 {tab === "results" ? (
-                    <ResultTable data={results} error={error} loading={loading} />
+                    <ResultTable
+                        data={results}
+                        error={error}
+                        loading={loading}
+                        rowCount={queryResult?.rowCount}
+                        truncated={queryResult?.truncated}
+                        cap={queryResult?.cap}
+                    />
                 ) : (
                     <div className="h-full overflow-auto p-4 scrollbar-thin">
                         {validation ? (
@@ -330,4 +364,3 @@ function TabButton({
         </button>
     )
 }
-

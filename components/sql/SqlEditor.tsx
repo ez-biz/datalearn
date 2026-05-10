@@ -19,6 +19,7 @@ interface SqlEditorProps {
     onRun: () => void
     onSubmit?: () => void
     running?: boolean
+    runDisabled?: boolean
     /** Currently selected engine. */
     dialect?: Dialect
     /** Engines this problem allows. If only one, the toggle becomes a static badge. */
@@ -33,6 +34,7 @@ export function SqlEditor({
     onRun,
     onSubmit,
     running,
+    runDisabled,
     dialect = "DUCKDB",
     allowedDialects = ["DUCKDB"],
     onDialectChange,
@@ -56,6 +58,7 @@ export function SqlEditor({
             : "bg-surface-muted border-border"
     const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
     const modKey = isMac ? "⌘" : "Ctrl"
+    const disableRun = Boolean(running || runDisabled)
 
     const handleMount: OnMount = (editor, monaco) => {
         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
@@ -86,11 +89,16 @@ export function SqlEditor({
                     </kbd>
                     <Button
                         onClick={onRun}
-                        disabled={running}
+                        disabled={disableRun}
                         size="sm"
                         variant="primary"
                         className="h-7 px-2.5 text-xs"
-                        title={`Run query (${modKey} ↵)`}
+                        title={
+                            runDisabled
+                                ? "Engine loading… (you can keep typing)"
+                                : `Run query (${modKey} ↵)`
+                        }
+                        data-testid="workspace-run-editor"
                     >
                         <Play className="h-3 w-3 fill-current" />
                         {running ? "Running…" : "Run"}
