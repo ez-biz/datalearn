@@ -159,7 +159,10 @@ test.describe("SQL engine PGlite persistence", () => {
             {
                 dialectKey: `${DIALECT_PREFIX}${SIMPLE_SELECT_SLUG}`,
                 draftKey: SIMPLE_SELECT_DRAFT_KEY,
-                sql: "SELECT id, name FROM users ORDER BY id LIMIT 1;",
+                // Compose a value that does NOT appear in the schema-panel
+                // sample preview, so the post-Run cell locator is unique.
+                // (`Alice` would also match the schema preview's Alice.)
+                sql: "SELECT name || '_persisted' AS marker FROM users WHERE id = 1;",
             }
         )
 
@@ -167,17 +170,17 @@ test.describe("SQL engine PGlite persistence", () => {
         const runButton = page.getByTestId("workspace-run-footer")
         await expect(runButton).toBeEnabled({ timeout: 60_000 })
         await runButton.click()
-        await expect(page.getByRole("cell", { name: "Alice" })).toBeVisible({
-            timeout: 60_000,
-        })
+        await expect(
+            page.getByRole("cell", { name: "Alice_persisted" })
+        ).toBeVisible({ timeout: 60_000 })
 
         // Reload — IndexedDB persists across the navigation. The schema
         // replay should be skipped on this load (cache hit).
         await page.reload()
         await expect(runButton).toBeEnabled({ timeout: 60_000 })
         await runButton.click()
-        await expect(page.getByRole("cell", { name: "Alice" })).toBeVisible({
-            timeout: 60_000,
-        })
+        await expect(
+            page.getByRole("cell", { name: "Alice_persisted" })
+        ).toBeVisible({ timeout: 60_000 })
     })
 })
