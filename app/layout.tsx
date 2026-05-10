@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
+
+const googleAnalyticsId =
+    process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ??
+    (process.env.VERCEL_ENV === "production" ? "G-B9RFQWH2JC" : undefined);
 
 const inter = Inter({
     variable: "--font-inter",
@@ -82,6 +88,10 @@ export default function RootLayout({
                     <Footer />
                 </ThemeProvider>
                 <Analytics />
+                <SpeedInsights />
+                {googleAnalyticsId ? (
+                    <GoogleAnalytics gaId={googleAnalyticsId} />
+                ) : null}
             </body>
         </html>
     );
