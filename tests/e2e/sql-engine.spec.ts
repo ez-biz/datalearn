@@ -13,22 +13,7 @@ test.describe("SQL engine result caps", () => {
 
         await page.locator(".monaco-editor").click()
         await page.keyboard.press("Control+A")
-        await page.keyboard.type(
-            [
-                "SELECT a.id",
-                "FROM users a",
-                "CROSS JOIN users b",
-                "CROSS JOIN users c",
-                "CROSS JOIN users d",
-                "CROSS JOIN users e",
-                "CROSS JOIN users f",
-                "CROSS JOIN users g",
-                "CROSS JOIN users h",
-                "CROSS JOIN users i",
-                "CROSS JOIN users j",
-                "CROSS JOIN users k;",
-            ].join("\n")
-        )
+        await page.keyboard.type("SELECT * FROM range(0, 1105) AS t(id);")
         await readyRunButton.click()
 
         await expect(
