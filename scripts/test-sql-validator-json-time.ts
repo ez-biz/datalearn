@@ -68,4 +68,65 @@ describe("SQL validator JSON and timestamp robustness", () => {
 
         assert.deepEqual(result, { ok: true })
     })
+
+    it("treats null and undefined inside JSON as equivalent", () => {
+        const result = compareResults(
+            [{ payload: { a: null, b: 1 } }],
+            [{ payload: { a: undefined, b: 1 } }],
+            { ordered: true }
+        )
+
+        assert.deepEqual(result, { ok: true })
+    })
+
+    it("fails when JSON array elements are reordered", () => {
+        const result = compareResults(
+            [{ tags: [1, 2, 3] }],
+            [{ tags: [3, 2, 1] }],
+            { ordered: true }
+        )
+
+        assert.equal(result.ok, false)
+    })
+
+    it("fails when a JSON value's type changes", () => {
+        const result = compareResults(
+            [{ payload: { a: 1 } }],
+            [{ payload: { a: "1" } }],
+            { ordered: true }
+        )
+
+        assert.equal(result.ok, false)
+    })
+
+    it("normalizes BigInt values inside JSON cells", () => {
+        const result = compareResults(
+            [{ payload: { count: BigInt(42) } }],
+            [{ payload: { count: 42 } }],
+            { ordered: true }
+        )
+
+        assert.deepEqual(result, { ok: true })
+    })
+
+    it("stringifies out-of-safe-range BigInts inside JSON cells", () => {
+        const huge = BigInt(Number.MAX_SAFE_INTEGER) + BigInt(10)
+        const result = compareResults(
+            [{ payload: { id: huge } }],
+            [{ payload: { id: huge.toString() } }],
+            { ordered: true }
+        )
+
+        assert.deepEqual(result, { ok: true })
+    })
+
+    it("normalizes Date instances inside JSON cells", () => {
+        const result = compareResults(
+            [{ payload: { ts: new Date("2026-05-05T04:30:00.000Z") } }],
+            [{ payload: { ts: "2026-05-05T04:30:00.000Z" } }],
+            { ordered: true }
+        )
+
+        assert.deepEqual(result, { ok: true })
+    })
 })

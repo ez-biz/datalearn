@@ -90,6 +90,9 @@ function hasCustomToString(v: unknown): v is { toString(): string } {
 
 function canonicalJsonValue(v: unknown): unknown {
     if (v === null || v === undefined) return null
+    if (v instanceof Date) {
+        return Number.isNaN(v.getTime()) ? null : v.toISOString()
+    }
     if (typeof v === 'bigint') {
         if (
             v <= BigInt(Number.MAX_SAFE_INTEGER) &&
@@ -172,6 +175,11 @@ function cellEqual(a: unknown, b: unknown): boolean {
         const naAsNum = Number(na)
         if (!Number.isNaN(naAsNum)) return Math.abs(naAsNum - nb) < EPSILON
     }
+    // Both engines parse JSON/JSONB columns into native objects/arrays, so
+    // we compare canonical structures here. If a future problem returns
+    // JSON-as-text from one engine and JSON-parsed from the other, this
+    // branch will reject the pair — surface that mismatch in the audit
+    // rather than papering over it with a stringify-of-string compare.
     if (isJsonLikeValue(na) || isJsonLikeValue(nb)) {
         return JSON.stringify(na) === JSON.stringify(nb)
     }
