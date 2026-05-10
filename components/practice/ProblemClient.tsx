@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { validateSubmission } from "@/actions/submissions"
 import type { ValidationResult } from "@/lib/sql-validator"
 import type { ProblemHistoryEntry } from "@/actions/submissions"
+import { computeValidateRowCap } from "@/lib/sql-engine/result-cap"
 import { ProblemPanel, type TableInfo } from "./ProblemPanel"
 import type { DiscussionMode } from "./discussion/DiscussionPanel"
 import {
@@ -179,13 +180,13 @@ export function ProblemClient({
                                AND table_schema = current_schema()
                              ORDER BY ordinal_position`
                         )
-                        columns = desc.map((row) => ({
+                        columns = desc.rows.map((row) => ({
                             name: String(row.column_name ?? ""),
                             type: String(row.data_type ?? ""),
                         }))
                     } else {
                         const desc = await runQuery(`DESCRIBE "${name}"`)
-                        columns = desc.map((row) => ({
+                        columns = desc.rows.map((row) => ({
                             name: String(row.column_name ?? ""),
                             type: String(row.column_type ?? ""),
                         }))
@@ -193,7 +194,7 @@ export function ProblemClient({
                     const sample = await runQuery(
                         `SELECT * FROM "${name}" LIMIT ${SAMPLE_LIMIT}`
                     )
-                    infos.push({ name, columns, sampleRows: sample })
+                    infos.push({ name, columns, sampleRows: sample.rows })
                 } catch (e: any) {
                     console.error(`Sample fetch failed for ${name}:`, e?.message)
                     infos.push({ name, columns: [], sampleRows: [] })
@@ -297,6 +298,7 @@ export function ProblemClient({
                     onQueryChange={setQuery}
                     onSubmit={handleSubmit}
                     onReset={resetDraft}
+                    validateRowCap={computeValidateRowCap(expectedRows?.length)}
                     dialect={dialect}
                     allowedDialects={allowedDialects}
                     onDialectChange={handleDialectChange}

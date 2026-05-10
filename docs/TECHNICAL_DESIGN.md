@@ -326,6 +326,7 @@ Role grants are admin-only via `/api/admin/users/[id]/role`. ADMIN role changes 
 
 - `lib/sql-engine/browser-session.ts` is the browser engine boundary. It lazily initializes DuckDB-WASM or PGlite, replays schema SQL, enforces the read-only guard for learner queries, normalizes rows, and exposes `{ runQuery, dispose }`.
 - `lib/sql-engine/normalize.ts` converts engine-specific values such as `Date`, `bigint`, and object wrappers into JSON-safe scalar values before rows reach React or submission validation.
+- `lib/sql-engine/result-cap.ts` caps learner-facing query results before they reach React. Normal `Run` uses a 1,000-row display cap; `Submit` uses `max(2 × expected output row count, 1,000)` and returns a local "result too large" verdict if the validation cap is exceeded.
 - `lib/sql-engine/dialect-audit.ts` resolves the canonical SQL, expected output, schema SQL, and ordered flag for each `(problem, dialect)` pair. The CI audit script uses it so missing per-dialect authoring data is treated as a build failure, not a skipped check.
 - `lib/use-problem-db.ts` is the React lifecycle wrapper. It creates one engine session per problem page and selected dialect, updates `ready` / `error`, and disposes the session on unmount or dialect change.
 - Two inits on the same page would mean duplicate WASM downloads + duplicate engine state. **Don't initialize outside `useProblemDB` / `createSqlEngineSession`.**
@@ -354,6 +355,7 @@ Pure function. Compares user rows against `expectedOutput`:
 ### 6.5 Workspace UX (`components/practice/ProblemClient.tsx`, `components/sql/SqlPlayground.tsx`)
 
 - Editor renders immediately; **only `Run` and `Submit` are gated on `dbReady`** so the user can read the problem and start typing while DuckDB downloads (PR #20).
+- Oversized query results render only the first 1,000 rows with an explicit warning that the result was truncated. Validation uses a separate cap so larger-but-valid answer sets can still be submitted when the expected output requires them.
 - Layout-matched skeleton (`SqlPlaygroundSkeleton`) covers the brief dynamic-import window so the right pane never collapses to blank.
 - Draft autosave: localStorage `dl:draft:<slug>`, debounced 400 ms.
 - Submission history is fetched server-side and threaded down; updated optimistically on submit.

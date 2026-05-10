@@ -16,7 +16,7 @@
 |---:|---|---|---|
 | 0 | Foundation (shipped) | Session boundary + normalization | Low |
 | 1 | PR 1.1 (shipped) | Dialect audit in CI | Low |
-| 2 | PR 1.2 | Result row cap with display/validate split | Low |
+| 2 | PR 1.2 (implemented) | Result row cap with display/validate split | Low |
 | 3 | PR 1.3 | Query timeout, cancel, reset | Medium |
 | 4 | PR 1.4 | JSON + TIMESTAMPTZ validator robustness | Low |
 | 5 | PR 1.5 | Read-only guard tokenizer (optional) | Low |
@@ -67,6 +67,8 @@ Phase 1 protects every later phase. Authoring gates (1.1) and validator correctn
 
 ### PR 1.2: Result Row Cap (with display/validate split)
 
+**Status:** Implemented in `feat/sql-engine-result-cap`.
+
 **Goal:** Prevent accidental huge result sets from freezing `ResultTable`, without breaking validation for problems whose expected output approaches the cap.
 
 **Files:**
@@ -75,7 +77,8 @@ Phase 1 protects every later phase. Authoring gates (1.1) and validator correctn
 - Modify: `components/sql/ResultTable.tsx`
 - Modify: `components/sql/SqlPlayground.tsx`
 - Modify: `lib/use-problem-db.ts`
-- Test: `scripts/test-sql-engine-result-cap.mjs`
+- Test: `scripts/test-sql-engine-result-cap.ts`
+- Test: `tests/e2e/sql-engine.spec.ts`
 
 **Design:**
 - `runQuery` returns `{ rows, rowCount, truncated }` (not bare `Row[]`).

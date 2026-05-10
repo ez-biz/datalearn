@@ -1,6 +1,6 @@
 # 🚀 Antigravity Data Learning Platform — Long-Term Roadmap
 
-> **Last updated:** 2026-05-05
+> **Last updated:** 2026-05-10
 > **Status:** Live — <https://www.learndatanow.com>
 > **Version:** 0.4.4 (deployed)
 
@@ -12,6 +12,7 @@
 - **Shared result normalization** — new `lib/sql-engine/normalize.ts` converts engine-specific row values (`Date`, safe/unsafe `bigint`, object wrappers) into JSON-safe values before rows reach the results table or submission payload.
 - **Schema statement helper** — schema replay now uses a tested `splitSqlStatements()` helper in `lib/sql-engine/statements.ts`, keeping browser engine setup behavior explicit.
 - **Dialect audit CI gate** — `npm run audit:dialects:ci` now runs in the GitHub Actions test workflow after migrations and seed. Published `(problem, dialect)` pairs fail the build when canonical SQL, schema, or expected output is missing or mismatched. Seed problems 1-11 now include per-dialect `solutions` / `expectedOutputs` so fresh CI data is fully auditable.
+- **Result row cap with display/validate split** — learner `Run` caps rendered results at 1,000 rows and shows a truncation warning instead of letting large result sets overload the results table. `Submit` uses a per-problem validation cap of `max(2 × expectedOutput rows, 1,000)`; if that cap is exceeded, the workspace returns a "result too large" verdict locally instead of silently truncating into an incorrect answer.
 - Design/plan docs: [`docs/superpowers/specs/2026-05-05-sql-engine-v2-foundation-design.md`](./superpowers/specs/2026-05-05-sql-engine-v2-foundation-design.md) and [`docs/superpowers/plans/2026-05-05-sql-engine-v2-foundation.md`](./superpowers/plans/2026-05-05-sql-engine-v2-foundation.md).
 - Broader roadmap docs: [`docs/superpowers/specs/2026-05-05-sql-engine-v2-roadmap-design.md`](./superpowers/specs/2026-05-05-sql-engine-v2-roadmap-design.md) and [`docs/superpowers/plans/2026-05-05-sql-engine-v2-roadmap.md`](./superpowers/plans/2026-05-05-sql-engine-v2-roadmap.md).
 

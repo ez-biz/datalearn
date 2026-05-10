@@ -4,16 +4,22 @@ import { useEffect, useRef, useState } from "react"
 import { createSqlEngineSession } from "@/lib/sql-engine/browser-session"
 import type {
     Dialect,
+    SqlQueryOptions,
+    SqlQueryResult,
     SqlEngineSession,
-    SqlRow as Row,
 } from "@/lib/sql-engine/types"
 
-export type { Dialect, SqlRow as Row } from "@/lib/sql-engine/types"
+export type {
+    Dialect,
+    SqlQueryOptions,
+    SqlQueryResult,
+    SqlRow as Row,
+} from "@/lib/sql-engine/types"
 
 export interface ProblemDBState {
     ready: boolean
     error: string | null
-    runQuery: (sql: string) => Promise<Row[]>
+    runQuery: (sql: string, options?: SqlQueryOptions) => Promise<SqlQueryResult>
 }
 
 /**
@@ -76,9 +82,12 @@ export function useProblemDB(
         }
     }, [schemaSql, dialect])
 
-    async function runQuery(sql: string): Promise<Row[]> {
+    async function runQuery(
+        sql: string,
+        options?: SqlQueryOptions
+    ): Promise<SqlQueryResult> {
         if (!sessionRef.current) throw new Error("Database is not ready yet.")
-        return sessionRef.current.runQuery(sql)
+        return sessionRef.current.runQuery(sql, options)
     }
 
     return { ready, error, runQuery }

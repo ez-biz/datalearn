@@ -1,6 +1,7 @@
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm"
 import { checkReadOnlyQuery } from "@/lib/sql-restrict"
 import { normalizeSqlRows } from "@/lib/sql-engine/normalize"
+import { applyRowCap, toRowLimitedSql } from "@/lib/sql-engine/result-cap"
 import { splitSqlStatements } from "@/lib/sql-engine/statements"
 import type { Dialect, SqlEngineSession, SqlRow } from "@/lib/sql-engine/types"
 
@@ -41,10 +42,12 @@ async function createPostgresSession(
 
     return {
         dialect: "POSTGRES",
-        async runQuery(sql) {
+        async runQuery(sql, options) {
             assertReadOnly(sql)
-            const result = await pg.query<SqlRow>(sql)
-            return normalizeSqlRows(result.rows)
+            const result = await pg.query<SqlRow>(
+                toRowLimitedSql(sql, options?.rowCap)
+            )
+            return applyRowCap(normalizeSqlRows(result.rows), options?.rowCap)
         },
         async dispose() {
             await pg.close()
@@ -64,15 +67,17 @@ async function createDuckDbSession(
 
     return {
         dialect: "DUCKDB",
-        async runQuery(sql) {
+        async runQuery(sql, options) {
             assertReadOnly(sql)
-            const arrowTable = await conn.query(sql)
+            const arrowTable = await conn.query(
+                toRowLimitedSql(sql, options?.rowCap)
+            )
             const rows = arrowTable
                 .toArray()
                 .map((row) =>
                     typeof row?.toJSON === "function" ? row.toJSON() : row
                 )
-            return normalizeSqlRows(rows)
+            return applyRowCap(normalizeSqlRows(rows), options?.rowCap)
         },
         async dispose() {
             await disposeDuckDb(db, conn)
