@@ -236,9 +236,18 @@ function createTelemetrySessionId(): string {
     if (typeof globalThis.crypto?.randomUUID === "function") {
         return globalThis.crypto.randomUUID()
     }
-    return `dleng_${Date.now().toString(36)}_${Math.random()
-        .toString(36)
-        .slice(2)}`
+    if (typeof globalThis.crypto?.getRandomValues === "function") {
+        const buf = new Uint8Array(12)
+        globalThis.crypto.getRandomValues(buf)
+        const hex = Array.from(buf, (b) =>
+            b.toString(16).padStart(2, "0")
+        ).join("")
+        return `dleng_${Date.now().toString(36)}_${hex}`
+    }
+    // Last-resort fallback for runtimes without WebCrypto. Telemetry
+    // session IDs are correlation tokens, not authentication tokens —
+    // collision tolerance, not unpredictability, is what matters here.
+    return `dleng_${Date.now().toString(36)}_${process.hrtime?.bigint?.().toString(36) ?? "0"}`
 }
 
 function getBrowserLocalStorage(): TelemetryStorage | undefined {
@@ -251,12 +260,13 @@ function nowMs(): number {
 }
 
 /**
- * Crypto-grade fallback for the sampling decision. Telemetry sampling
+ * Crypto-grade default for the sampling decision. Telemetry sampling
  * isn't a security context — predicting "will this user be sampled?"
- * has no exploit value — but using `crypto.getRandomValues` here keeps
- * `Math.random` data-flow out of the codebase entirely so static
- * analyzers (CodeQL `js/insecure-randomness`) don't have to reason
- * about intent.
+ * has no exploit value — but keeping `Math.random` out of the data
+ * flow lets static analyzers (CodeQL `js/insecure-randomness`) pass
+ * without dismissals. WebCrypto is present in every supported runtime
+ * (modern browsers + Node 19+); the deterministic fallback exists only
+ * so a missing-crypto runtime degrades gracefully rather than throwing.
  */
 function defaultRandom(): number {
     if (typeof globalThis.crypto?.getRandomValues === "function") {
@@ -264,7 +274,7 @@ function defaultRandom(): number {
         globalThis.crypto.getRandomValues(buf)
         return buf[0] / 0x1_0000_0000
     }
-    return Math.random()
+    return 0
 }
 
 function toRoundedNonNegativeNumber(value: number): number {
