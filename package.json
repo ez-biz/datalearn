@@ -19,6 +19,7 @@
     "test:sql-engine-result-cap": "node --import tsx --test scripts/test-sql-engine-result-cap.ts",
     "test:sql-engine-runtime-controls": "node --import tsx --test scripts/test-sql-engine-runtime-controls.ts",
     "test:sql-engine-telemetry": "node --import tsx --test scripts/test-sql-engine-telemetry.ts",
+    "test:schema-cache-key": "node --import tsx --test scripts/test-schema-cache-key.ts",
     "audit:dialects": "tsx scripts/audit-all-dialects.ts",
     "audit:dialects:ci": "tsx scripts/audit-all-dialects.ts",
     "validate:problem": "tsx scripts/validate-problem.ts",

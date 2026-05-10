@@ -281,7 +281,7 @@ Land Phase 1.6 telemetry first so every Phase 3 PR can attach before/after numbe
 - Telemetry: `engine.init.ready` fires before the workspace renders for warmed sessions.
 - Manual: ten rapid hovers don't spawn ten WASM instances.
 
-### PR 3.2: PGlite IndexedDB Persistence
+### PR 3.2: PGlite IndexedDB Persistence (implemented)
 
 **Goal:** Avoid replaying the same schema for Postgres problems on every visit.
 
@@ -289,18 +289,21 @@ Land Phase 1.6 telemetry first so every Phase 3 PR can attach before/after numbe
 - Modify: `lib/pglite.ts`
 - Modify: `lib/sql-engine/browser-session.ts`
 - Create: `lib/sql-engine/schema-cache-key.ts`
-- Test: `scripts/test-schema-cache-key.mjs`
+- Create: `scripts/test-schema-cache-key.ts`
+- Modify: `tests/e2e/sql-engine.spec.ts` (Postgres reload smoke test)
+- Modify: `.github/workflows/test.yml` (CI step for the new unit suite)
 
 **Design:**
-- Stable cache key: `sha256(slug + schemaSql + pgliteVersion)`. Including the **PGlite package version** is required — a release can break the on-disk format and a stale cache will surface as runtime errors.
-- Initialize PGlite with an IndexedDB-backed data directory.
-- Schema-version metadata table tracks the hash; replay only when hash mismatches.
-- Memory-only fallback for: tests, private browsing (IndexedDB unavailable), and an emergency `dl:pglite-cache:off` localStorage flag.
+- Stable cache key: `sha256(slug + schemaSql + PGLITE_CACHE_VERSION)`. The version constant is bumped manually when `@electric-sql/pglite` crosses a minor version or the seed-replay format changes — bumping invalidates every learner's local cache and forces one slow load on the next visit. (Reading the PGlite package version at runtime isn't reliable; the package's `exports` map doesn't expose `package.json`. Manual version bump is the explicit, robust choice.)
+- The full cache key becomes the IndexedDB database name (`datalearn-pglite-<sanitized-slug>-<sha256-prefix>`). Per-(slug, schemaSql, version) database means schema updates produce a fresh database; stale databases become orphaned and are tolerated until cleanup work lands separately.
+- A small `_dl_pglite_meta` table inside each database holds the `initialized=true` sentinel. Cache-hit detection probes this table; if it errors (table missing) or returns no rows, we treat the open as a fresh init and replay the schema.
+- Memory-only fallback for: SSR (no `window`), missing `indexedDB`, missing `crypto.subtle.digest`, key derivation failure, and the `localStorage.dl:pglite-cache:off` learner opt-out.
+- `reset()` reopens the persisted database — the cache hit path makes timeout recovery cheap. PGlite WAL semantics protect against partial writes from interrupted operations.
 
 **Verification:**
-- Unit test: hash stability, hash version-bump invalidation.
-- Browser E2E: reload Postgres problem; query still works; second load is faster.
-- Telemetry comparison.
+- Unit tests (`npm run test:schema-cache-key`): key stability, schema-change invalidation, version-bump invalidation, slug sanitization, all five fallback branches in `resolvePgliteDataDir`.
+- E2E (`tests/e2e/sql-engine.spec.ts`): Postgres-mode workspace reload — first load runs the schema, second load hits the cache, query still returns the right rows.
+- Manual: open the Postgres dialect for a problem twice; the second `engine.init.ready` event has a noticeably lower `elapsedMs` than the first.
 
 ### PR 3.3: Service Worker / Asset Precache Investigation
 

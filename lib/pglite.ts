@@ -2,6 +2,19 @@
 
 import type { PGlite as PGliteType } from "@electric-sql/pglite"
 
+export type PGliteInitOptions = {
+    /**
+     * Pass `idb://<name>` to persist the database in IndexedDB. Omit (or
+     * pass `undefined`) for an ephemeral in-memory database — same
+     * behavior as before persistence landed.
+     *
+     * The browser-session layer computes a stable name from the problem
+     * slug + schemaSql + cache version so each problem has its own
+     * persisted database. See `lib/sql-engine/schema-cache-key.ts`.
+     */
+    dataDir?: string
+}
+
 /**
  * PGlite (Postgres-WASM) initializer.
  *
@@ -12,11 +25,11 @@ import type { PGlite as PGliteType } from "@electric-sql/pglite"
  *
  * The instance runs entirely in-browser. No server roundtrip per query.
  */
-export async function initPGlite(): Promise<PGliteType> {
+export async function initPGlite(
+    options: PGliteInitOptions = {}
+): Promise<PGliteType> {
     const { PGlite } = await import("@electric-sql/pglite")
-    // No persistence — fresh ephemeral DB per page load, matching the
-    // DuckDB-WASM lifecycle. The schema is replayed on every mount.
-    const db = new PGlite()
+    const db = options.dataDir ? new PGlite(options.dataDir) : new PGlite()
     await db.waitReady
     return db
 }

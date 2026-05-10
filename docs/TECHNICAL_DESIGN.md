@@ -1,6 +1,6 @@
 # Data Learn — Technical Design Document
 
-> **Version:** 2.3
+> **Version:** 2.4
 > **Last updated:** 2026-05-10
 > **Owner:** Anchit Gupta
 > **Repo:** <https://github.com/ez-biz/datalearn>
@@ -331,6 +331,7 @@ Role grants are admin-only via `/api/admin/users/[id]/role`. ADMIN role changes 
 - `lib/sql-engine/result-cap.ts` caps learner-facing query results before they reach React. Normal `Run` uses a 1,000-row display cap; `Submit` uses `max(2 × expected output row count, 1,000)` and returns a local "result too large" verdict if the validation cap is exceeded.
 - `lib/sql-engine/runtime-controls.ts` applies the default 10-second query timeout. On timeout, `useProblemDB` calls the session reset path; DuckDB-WASM and PGlite both recover by disposing and recreating the browser engine, then replaying schema SQL.
 - `lib/sql-engine/telemetry.ts` emits typed timing events from the session boundary: `engine.init.start`, `engine.init.ready`, `engine.firstQuery.ready`, and `engine.dispose`. Development builds log to `console.debug`; production builds send sampled `navigator.sendBeacon` payloads to `/api/telemetry/sql-engine`. Users can opt out in the browser with `localStorage.dl:telemetry:off = "true"`.
+- `lib/sql-engine/schema-cache-key.ts` resolves the per-problem PGlite IndexedDB data dir for Postgres-mode sessions. The cache key is `sha256(slug + schemaSql + PGLITE_CACHE_VERSION)`; matching keys hit the persisted database and skip schema replay, mismatched keys produce a fresh database with a one-time replay. The resolver falls back to memory mode for opt-out (`localStorage.dl:pglite-cache:off`), missing IndexedDB or WebCrypto, and SSR. **Bump `PGLITE_CACHE_VERSION`** when upgrading `@electric-sql/pglite` across minor versions or changing seed-replay format. DuckDB-WASM has no OPFS persistence story — only PGlite is persisted.
 - `lib/sql-engine/dialect-audit.ts` resolves the canonical SQL, expected output, schema SQL, and ordered flag for each `(problem, dialect)` pair. The CI audit script uses it so missing per-dialect authoring data is treated as a build failure, not a skipped check.
 - `lib/use-problem-db.ts` is the React lifecycle wrapper. It creates one engine session per problem page and selected dialect, updates `ready` / `error` / `recovering`, and disposes the session on unmount or dialect change.
 - Two inits on the same page would mean duplicate WASM downloads + duplicate engine state. **Don't initialize outside `useProblemDB` / `createSqlEngineSession`.**

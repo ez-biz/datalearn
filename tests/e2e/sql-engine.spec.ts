@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test"
 
 const DRAFT_PREFIX = "dl:draft:"
 const QUERY_TIMEOUT_OVERRIDE_KEY = "dl:query-timeout-ms"
+const DIALECT_PREFIX = "dl:dialect:"
 const SIMPLE_SELECT_SLUG = "simple-select"
 const SIMPLE_SELECT_DRAFT_KEY = `${DRAFT_PREFIX}${SIMPLE_SELECT_SLUG}`
 
@@ -136,5 +137,47 @@ test.describe("SQL engine telemetry", () => {
                 timeout: 45_000,
             })
             .toBe(true)
+    })
+})
+
+// PGlite IndexedDB persistence (PR 3.2).
+// Asserts the user-visible flow survives a reload: a Postgres-mode
+// learner can run queries on first visit and on the persisted reload.
+// We don't time-assert "second load is faster" because Playwright timing
+// on CI runners is too noisy — the unit tests cover cache-key stability.
+test.describe("SQL engine PGlite persistence", () => {
+    test("Postgres mode survives a reload of the workspace", async ({
+        page,
+    }) => {
+        test.slow()
+
+        await page.addInitScript(
+            ({ dialectKey, draftKey, sql }) => {
+                window.localStorage.setItem(dialectKey, "POSTGRES")
+                window.localStorage.setItem(draftKey, sql)
+            },
+            {
+                dialectKey: `${DIALECT_PREFIX}${SIMPLE_SELECT_SLUG}`,
+                draftKey: SIMPLE_SELECT_DRAFT_KEY,
+                sql: "SELECT id, name FROM users ORDER BY id LIMIT 1;",
+            }
+        )
+
+        await page.goto(`/practice/${SIMPLE_SELECT_SLUG}`)
+        const runButton = page.getByTestId("workspace-run-footer")
+        await expect(runButton).toBeEnabled({ timeout: 60_000 })
+        await runButton.click()
+        await expect(page.getByRole("cell", { name: "Alice" })).toBeVisible({
+            timeout: 60_000,
+        })
+
+        // Reload — IndexedDB persists across the navigation. The schema
+        // replay should be skipped on this load (cache hit).
+        await page.reload()
+        await expect(runButton).toBeEnabled({ timeout: 60_000 })
+        await runButton.click()
+        await expect(page.getByRole("cell", { name: "Alice" })).toBeVisible({
+            timeout: 60_000,
+        })
     })
 })
