@@ -57,8 +57,55 @@ function normalizeCell(v: unknown): unknown {
     if (v instanceof Date) {
         return Number.isNaN(v.getTime()) ? null : v.toISOString()
     }
-    if (typeof v === 'object' && v !== null && 'toString' in v) {
+    if (isJsonLikeValue(v)) {
+        return canonicalJsonValue(v)
+    }
+    if (hasCustomToString(v)) {
         return (v as { toString(): string }).toString()
+    }
+    return v
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+    if (v === null || typeof v !== 'object' || Array.isArray(v)) return false
+    const proto = Object.getPrototypeOf(v)
+    return proto === Object.prototype || proto === null
+}
+
+function isJsonLikeValue(v: unknown): v is unknown[] | Record<string, unknown> {
+    return Array.isArray(v) || isPlainObject(v)
+}
+
+function hasCustomToString(v: unknown): v is { toString(): string } {
+    if (v === null || typeof v !== 'object' || !('toString' in v)) {
+        return false
+    }
+    const toString = (v as { toString?: unknown }).toString
+    return (
+        typeof toString === 'function' &&
+        toString !== Object.prototype.toString &&
+        toString !== Array.prototype.toString
+    )
+}
+
+function canonicalJsonValue(v: unknown): unknown {
+    if (v === null || v === undefined) return null
+    if (typeof v === 'bigint') {
+        if (
+            v <= BigInt(Number.MAX_SAFE_INTEGER) &&
+            v >= BigInt(Number.MIN_SAFE_INTEGER)
+        ) {
+            return Number(v)
+        }
+        return v.toString()
+    }
+    if (Array.isArray(v)) return v.map(canonicalJsonValue)
+    if (isPlainObject(v)) {
+        return Object.fromEntries(
+            Object.keys(v)
+                .sort()
+                .map((key) => [key, canonicalJsonValue(v[key])])
+        )
     }
     return v
 }
@@ -124,6 +171,9 @@ function cellEqual(a: unknown, b: unknown): boolean {
     if (typeof nb === 'number' && typeof na === 'string') {
         const naAsNum = Number(na)
         if (!Number.isNaN(naAsNum)) return Math.abs(naAsNum - nb) < EPSILON
+    }
+    if (isJsonLikeValue(na) || isJsonLikeValue(nb)) {
+        return JSON.stringify(na) === JSON.stringify(nb)
     }
     if (na === nb) return true
     // Last-resort fallback: cross-dialect date equivalence. Run AFTER

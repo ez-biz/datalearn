@@ -348,7 +348,9 @@ Pure function. Compares user rows against `expectedOutput`:
 
 - **Ordered mode** (`SQLProblem.ordered = true`): row-by-row positional comparison.
 - **Set mode** (default): canonicalize rows to a sorted JSON form and compare as multisets.
-- **Float epsilon**: numbers compared with `Math.abs(a - b) < 1e-6` to avoid float-precision false negatives.
+- **Float epsilon**: numbers compared with `Math.abs(a - b) < 1e-9` to avoid float-precision false negatives.
+- **JSON cells**: object/array values are canonicalized recursively with stable object-key ordering, so JSON key order does not matter but nested value differences still fail.
+- **Timestamp cells**: date/timestamp-like values are normalized to ISO instants where possible, including timezone-offset strings such as `2026-05-05 10:00:00+05:30`.
 - **Column projection**: only columns named in `expectedOutput[0]` are compared; extra columns in the user result are flagged.
 
 `validateSubmission` (server action, `actions/submissions.ts`) runs the validator and writes a `Submission` row when the user is signed in.
