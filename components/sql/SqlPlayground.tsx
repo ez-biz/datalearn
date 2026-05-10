@@ -29,8 +29,11 @@ interface SqlPlaygroundProps {
     dbReady: boolean
     /** Init error from the shared DB, if any. */
     dbError: string | null
+    /** True while a timed-out or cancelled engine session is being recreated. */
+    dbRecovering?: boolean
     /** Run a SQL string against the shared connection and return capped rows. */
     runQuery: (sql: string, options?: SqlQueryOptions) => Promise<SqlQueryResult>
+    queryTimeoutMs?: number
     initialSchema?: string
     problemSlug?: string
     query?: string
@@ -51,7 +54,9 @@ type Tab = "results" | "verdict"
 export function SqlPlayground({
     dbReady,
     dbError,
+    dbRecovering = false,
     runQuery,
+    queryTimeoutMs,
     initialSchema,
     problemSlug,
     query: queryProp,
@@ -91,7 +96,7 @@ export function SqlPlayground({
     queryRef.current = query
 
     const handleRun = async () => {
-        if (!dbReady || loading || submitting) return
+        if (!dbReady || dbRecovering || loading || submitting) return
         setLoading(true)
         setError(null)
         setQueryResult(null)
@@ -101,6 +106,7 @@ export function SqlPlayground({
         try {
             const result = await runQuery(queryRef.current, {
                 rowCap: DEFAULT_DISPLAY_ROW_CAP,
+                timeoutMs: queryTimeoutMs,
             })
             setQueryResult(result)
             setHasRunOnce(true)
@@ -114,14 +120,17 @@ export function SqlPlayground({
 
     const handleSubmit = async () => {
         if (!onSubmit || !problemSlug) return
-        if (!dbReady || loading || submitting) return
+        if (!dbReady || dbRecovering || loading || submitting) return
         setSubmitting(true)
         setValidation(null)
         setError(null)
         const t0 = performance.now()
         try {
             const cap = validateRowCap ?? computeValidateRowCap(null)
-            const result = await runQuery(queryRef.current, { rowCap: cap })
+            const result = await runQuery(queryRef.current, {
+                rowCap: cap,
+                timeoutMs: queryTimeoutMs,
+            })
             setQueryResult(
                 limitQueryResultForDisplay(result, DEFAULT_DISPLAY_ROW_CAP)
             )
@@ -166,7 +175,7 @@ export function SqlPlayground({
         window.addEventListener("keydown", onKey)
         return () => window.removeEventListener("keydown", onKey)
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [onSubmit, problemSlug, loading, submitting, dbReady])
+    }, [onSubmit, problemSlug, loading, submitting, dbReady, dbRecovering])
 
     if (dbError) {
         return (
@@ -180,16 +189,21 @@ export function SqlPlayground({
     // Submit are gated below until `dbReady`, so the user can read the
     // problem and start typing immediately while the WASM downloads.
     const showSubmit = Boolean(onSubmit && problemSlug)
-    const runDisabled = !dbReady || loading || submitting
-    const submitDisabled = !dbReady || submitting || loading || !hasRunOnce
+    const runDisabled = !dbReady || dbRecovering || loading || submitting
+    const submitDisabled =
+        !dbReady || dbRecovering || submitting || loading || !hasRunOnce
     const isMac =
         typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
     const modKey = isMac ? "⌘" : "Ctrl"
     const runTitle = !dbReady
         ? "Engine loading… (you can keep typing)"
+        : dbRecovering
+            ? "SQL engine is resetting…"
         : `Run (${modKey} ↵)`
     const submitTitle = !dbReady
         ? "Engine loading… (you can keep typing)"
+        : dbRecovering
+            ? "SQL engine is resetting…"
         : !hasRunOnce
             ? "Run your query at least once before submitting."
             : `Submit (${modKey} ⇧ ↵)`
@@ -300,6 +314,11 @@ export function SqlPlayground({
                         data={results}
                         error={error}
                         loading={loading}
+                        loadingLabel={
+                            dbRecovering
+                                ? "Resetting SQL engine…"
+                                : undefined
+                        }
                         rowCount={queryResult?.rowCount}
                         truncated={queryResult?.truncated}
                         cap={queryResult?.cap}

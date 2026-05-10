@@ -8,6 +8,11 @@ export interface SqlQueryOptions {
      * unbounded result in React.
      */
     rowCap?: number | null
+    /**
+     * Maximum query runtime before the browser session is reset. Defaults to
+     * the shared runtime-control timeout.
+     */
+    timeoutMs?: number | null
 }
 
 export interface SqlQueryResult {
@@ -20,5 +25,7 @@ export interface SqlQueryResult {
 export interface SqlEngineSession {
     dialect: Dialect
     runQuery(sql: string, options?: SqlQueryOptions): Promise<SqlQueryResult>
+    cancel(): Promise<void>
+    reset(): Promise<void>
     dispose(): Promise<void>
 }

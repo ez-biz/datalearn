@@ -60,6 +60,8 @@ interface ProblemClientProps {
 
 const DRAFT_PREFIX = "dl:draft:"
 const SAMPLE_LIMIT = 5
+const QUERY_TIMEOUT_OVERRIDE_KEY = "dl:query-timeout-ms"
+const MAX_QUERY_TIMEOUT_OVERRIDE_MS = 10_000
 
 export function ProblemClient({
     number,
@@ -87,6 +89,7 @@ export function ProblemClient({
     const [history, setHistory] = useState(initialHistory)
     const [solved, setSolved] = useState(isSolved)
     const [discussionPrefill, setDiscussionPrefill] = useState<string | null>(null)
+    const [queryTimeoutMs] = useState(() => getQueryTimeoutOverride())
     const [tableInfos, setTableInfos] = useState<TableInfo[] | null>(
         initialTableInfos
     )
@@ -121,10 +124,12 @@ export function ProblemClient({
         [dialectKey]
     )
 
-    const { ready: dbReady, error: dbError, runQuery } = useProblemDB(
-        schemaSql,
-        dialect
-    )
+    const {
+        ready: dbReady,
+        error: dbError,
+        recovering: dbRecovering,
+        runQuery,
+    } = useProblemDB(schemaSql, dialect)
 
     // Hydrate draft from localStorage
     useEffect(() => {
@@ -291,7 +296,9 @@ export function ProblemClient({
                 <SqlPlayground
                     dbReady={dbReady}
                     dbError={dbError}
+                    dbRecovering={dbRecovering}
                     runQuery={runQuery}
+                    queryTimeoutMs={queryTimeoutMs}
                     initialSchema={schemaSql ?? undefined}
                     problemSlug={slug}
                     query={query}
@@ -306,4 +313,25 @@ export function ProblemClient({
             </section>
         </div>
     )
+}
+
+function parseQueryTimeoutMs(value: string | null): number | undefined {
+    if (!value) return undefined
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed)) return undefined
+    return Math.min(
+        MAX_QUERY_TIMEOUT_OVERRIDE_MS,
+        Math.max(1, Math.floor(parsed))
+    )
+}
+
+function getQueryTimeoutOverride(): number | undefined {
+    if (typeof window === "undefined") return undefined
+    try {
+        return parseQueryTimeoutMs(
+            localStorage.getItem(QUERY_TIMEOUT_OVERRIDE_KEY)
+        )
+    } catch {
+        return undefined
+    }
 }

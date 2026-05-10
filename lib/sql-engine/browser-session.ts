@@ -1,4 +1,5 @@
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm"
+import type { PGlite as PGliteType } from "@electric-sql/pglite"
 import { checkReadOnlyQuery } from "@/lib/sql-restrict"
 import { normalizeSqlRows } from "@/lib/sql-engine/normalize"
 import { applyRowCap, toRowLimitedSql } from "@/lib/sql-engine/result-cap"
@@ -35,22 +36,60 @@ async function createPostgresSession(
     statements: string[]
 ): Promise<SqlEngineSession> {
     const { initPGlite } = await import("@/lib/pglite")
-    const pg = await initPGlite()
-    await replaySchemaStatements("POSTGRES", statements, (statement) =>
-        pg.exec(statement)
+    let pg: PGliteType | null = await createPostgresResources(
+        initPGlite,
+        statements
     )
+    let disposed = false
+    let resetPromise: Promise<void> | null = null
+
+    const reset = async () => {
+        if (disposed) return
+        resetPromise ??= (async () => {
+            const current = pg
+            pg = null
+            if (current) await current.close()
+            if (!disposed) {
+                const next = await createPostgresResources(
+                    initPGlite,
+                    statements
+                )
+                if (disposed) {
+                    await next.close()
+                    return
+                }
+                pg = next
+            }
+        })().finally(() => {
+            resetPromise = null
+        })
+        await resetPromise
+    }
+
+    const currentPg = async () => {
+        if (resetPromise) await resetPromise
+        if (!pg) throw new Error("Postgres engine is not ready yet.")
+        return pg
+    }
 
     return {
         dialect: "POSTGRES",
         async runQuery(sql, options) {
             assertReadOnly(sql)
-            const result = await pg.query<SqlRow>(
+            const result = await (await currentPg()).query<SqlRow>(
                 toRowLimitedSql(sql, options?.rowCap)
             )
             return applyRowCap(normalizeSqlRows(result.rows), options?.rowCap)
         },
+        async cancel() {
+            await reset()
+        },
+        reset,
         async dispose() {
-            await pg.close()
+            disposed = true
+            const current = pg
+            pg = null
+            if (current) await current.close()
         },
     }
 }
@@ -59,16 +98,44 @@ async function createDuckDbSession(
     statements: string[]
 ): Promise<SqlEngineSession> {
     const { initDuckDB } = await import("@/lib/duckdb")
-    const db = await initDuckDB()
-    const conn = await db.connect()
-    await replaySchemaStatements("DUCKDB", statements, (statement) =>
-        conn.query(statement)
+    let resources: DuckDbResources | null = await createDuckDbResources(
+        initDuckDB,
+        statements
     )
+    let disposed = false
+    let resetPromise: Promise<void> | null = null
+
+    const reset = async () => {
+        if (disposed) return
+        resetPromise ??= (async () => {
+            const current = resources
+            resources = null
+            if (current) await disposeDuckDb(current.db, current.conn)
+            if (!disposed) {
+                const next = await createDuckDbResources(initDuckDB, statements)
+                if (disposed) {
+                    await disposeDuckDb(next.db, next.conn)
+                    return
+                }
+                resources = next
+            }
+        })().finally(() => {
+            resetPromise = null
+        })
+        await resetPromise
+    }
+
+    const currentResources = async () => {
+        if (resetPromise) await resetPromise
+        if (!resources) throw new Error("DuckDB engine is not ready yet.")
+        return resources
+    }
 
     return {
         dialect: "DUCKDB",
         async runQuery(sql, options) {
             assertReadOnly(sql)
+            const { conn } = await currentResources()
             const arrowTable = await conn.query(
                 toRowLimitedSql(sql, options?.rowCap)
             )
@@ -76,13 +143,48 @@ async function createDuckDbSession(
                 .toArray()
                 .map((row) =>
                     typeof row?.toJSON === "function" ? row.toJSON() : row
-                )
+            )
             return applyRowCap(normalizeSqlRows(rows), options?.rowCap)
         },
+        async cancel() {
+            await reset()
+        },
+        reset,
         async dispose() {
-            await disposeDuckDb(db, conn)
+            disposed = true
+            const current = resources
+            resources = null
+            if (current) await disposeDuckDb(current.db, current.conn)
         },
     }
+}
+
+async function createPostgresResources(
+    initPGlite: () => Promise<PGliteType>,
+    statements: string[]
+): Promise<PGliteType> {
+    const pg = await initPGlite()
+    await replaySchemaStatements("POSTGRES", statements, (statement) =>
+        pg.exec(statement)
+    )
+    return pg
+}
+
+type DuckDbResources = {
+    db: AsyncDuckDB
+    conn: AsyncDuckDBConnection
+}
+
+async function createDuckDbResources(
+    initDuckDB: () => Promise<AsyncDuckDB>,
+    statements: string[]
+): Promise<DuckDbResources> {
+    const db = await initDuckDB()
+    const conn = await db.connect()
+    await replaySchemaStatements("DUCKDB", statements, (statement) =>
+        conn.query(statement)
+    )
+    return { db, conn }
 }
 
 function assertReadOnly(sql: string): void {
