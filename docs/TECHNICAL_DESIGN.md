@@ -325,6 +325,7 @@ Role grants are admin-only via `/api/admin/users/[id]/role`. ADMIN role changes 
 ### 6.2 Engine sessions (`lib/sql-engine/*`, `lib/use-problem-db.ts`)
 
 - `lib/sql-engine/browser-session.ts` is the browser engine boundary. It lazily initializes DuckDB-WASM or PGlite, replays schema SQL, enforces the read-only guard for learner queries, normalizes rows, and exposes `{ runQuery, dispose }`.
+- `lib/sql-restrict.ts` is the static read-only preflight. It tokenizes learner SQL before execution so semicolons and write keywords inside comments, quoted strings, quoted identifiers, and dollar-quoted literals do not affect statement splitting, while DDL/DML/DCL, engine configuration, CTE-wrapped DML, and `EXPLAIN ANALYZE` around DML are rejected before either browser engine sees them.
 - `lib/sql-engine/normalize.ts` converts engine-specific values such as `Date`, `bigint`, and object wrappers into JSON-safe scalar values before rows reach React or submission validation.
 - `lib/sql-engine/result-cap.ts` caps learner-facing query results before they reach React. Normal `Run` uses a 1,000-row display cap; `Submit` uses `max(2 × expected output row count, 1,000)` and returns a local "result too large" verdict if the validation cap is exceeded.
 - `lib/sql-engine/runtime-controls.ts` applies the default 10-second query timeout. On timeout, `useProblemDB` calls the session reset path; DuckDB-WASM and PGlite both recover by disposing and recreating the browser engine, then replaying schema SQL.
