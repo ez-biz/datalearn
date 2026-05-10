@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import { PrismaClient } from '@prisma/client'
+import { Dialect, PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 
@@ -17,6 +17,115 @@ const USERS_SCHEMA = [
     "INSERT INTO users VALUES (1, 'Alice', 'Engineer')",
     "INSERT INTO users VALUES (2, 'Bob', 'Sales')"
 ].join(';\n') + ';'
+
+const SIMPLE_SELECT_OUTPUT = '[{"id":1,"name":"Alice","role":"Engineer"},{"id":2,"name":"Bob","role":"Sales"}]'
+const SIMPLE_SELECT_SOLUTION = 'SELECT id, name, role FROM users;'
+
+const TOTAL_REVENUE_OUTPUT = '[{"name":"John Doe","total_revenue":1450},{"name":"Alice Johnson","total_revenue":1350},{"name":"Jane Smith","total_revenue":800}]'
+const TOTAL_REVENUE_SOLUTION = `
+SELECT c.name, SUM(o.total_amount) AS total_revenue
+FROM customers c
+JOIN orders o ON o.customer_id = c.customer_id
+GROUP BY c.name
+ORDER BY total_revenue DESC;
+`.trim()
+
+const TOP_SELLING_PRODUCTS_OUTPUT = '[{"name":"Desk Chair","total_sold":2},{"name":"Laptop","total_sold":2},{"name":"Headphones","total_sold":1}]'
+const TOP_SELLING_PRODUCTS_SOLUTION = `
+SELECT p.name, SUM(oi.quantity) AS total_sold
+FROM products p
+JOIN order_items oi ON oi.product_id = p.product_id
+GROUP BY p.name
+ORDER BY total_sold DESC, p.name ASC
+LIMIT 3;
+`.trim()
+
+const CUSTOMERS_BY_COUNTRY_OUTPUT = '[{"customer_id":1,"name":"John Doe","email":"john@example.com","country":"USA"},{"customer_id":4,"name":"Bob Brown","email":"bob@example.com","country":"USA"}]'
+const CUSTOMERS_BY_COUNTRY_SOLUTION = `
+SELECT customer_id, name, email, country
+FROM customers
+WHERE country = 'USA';
+`.trim()
+
+const JANUARY_ORDERS_OUTPUT = '[{"order_count":2}]'
+const JANUARY_ORDERS_SOLUTION = `
+SELECT COUNT(*) AS order_count
+FROM orders
+WHERE order_date BETWEEN DATE '2023-01-01' AND DATE '2023-01-31';
+`.trim()
+
+const AVERAGE_ORDER_VALUE_OUTPUT = '[{"avg_amount":900}]'
+const AVERAGE_ORDER_VALUE_SOLUTION = 'SELECT AVG(total_amount) AS avg_amount FROM orders;'
+
+const MULTIPLE_ORDERS_OUTPUT = '[{"customer_id":1,"order_count":2}]'
+const MULTIPLE_ORDERS_SOLUTION = `
+SELECT customer_id, COUNT(*) AS order_count
+FROM orders
+GROUP BY customer_id
+HAVING COUNT(*) > 1;
+`.trim()
+
+const PRODUCTS_NEVER_ORDERED_OUTPUT = '[{"product_id":104,"name":"Coffee Table"}]'
+const PRODUCTS_NEVER_ORDERED_SOLUTION = `
+SELECT p.product_id, p.name
+FROM products p
+LEFT JOIN order_items oi ON oi.product_id = p.product_id
+WHERE oi.product_id IS NULL;
+`.trim()
+
+const EMPLOYEES_HIRED_2025_OUTPUT = '[{"id":1,"name":"Alice"},{"id":3,"name":"Charlie"},{"id":5,"name":"Eve"}]'
+const EMPLOYEES_HIRED_2025_SOLUTION = `
+SELECT id, name
+FROM employees
+WHERE hire_date >= DATE '2025-01-01'
+  AND hire_date < DATE '2026-01-01';
+`.trim()
+
+const HIGHEST_PAID_OUTPUT = '[{"department_name":"Engineering","employee_name":"Bob","salary":120000},{"department_name":"Sales","employee_name":"Diana","salary":110000},{"department_name":"Marketing","employee_name":"Eve","salary":70000}]'
+const HIGHEST_PAID_SOLUTION = `
+WITH ranked AS (
+    SELECT
+        d.name AS department_name,
+        e.name AS employee_name,
+        s.amount AS salary,
+        ROW_NUMBER() OVER (
+            PARTITION BY d.id
+            ORDER BY s.amount DESC, e.name ASC
+        ) AS rn
+    FROM departments d
+    JOIN employees e ON e.department_id = d.id
+    JOIN salaries s ON s.employee_id = e.id
+)
+SELECT department_name, employee_name, salary
+FROM ranked
+WHERE rn = 1;
+`.trim()
+
+const LARGEST_DEPARTMENT_OUTPUT = '[{"department_name":"Engineering","employee_count":4}]'
+const LARGEST_DEPARTMENT_SOLUTION = `
+SELECT d.name AS department_name, COUNT(*) AS employee_count
+FROM departments d
+JOIN employees e ON e.department_id = d.id
+GROUP BY d.name
+ORDER BY employee_count DESC, department_name ASC
+LIMIT 1;
+`.trim()
+
+function problemAuditFields(solutionSql: string, expectedOutput: string) {
+    return {
+        dialects: [Dialect.DUCKDB, Dialect.POSTGRES],
+        solutionSql,
+        solutions: {
+            DUCKDB: solutionSql,
+            POSTGRES: solutionSql,
+        },
+        expectedOutput,
+        expectedOutputs: {
+            DUCKDB: expectedOutput,
+            POSTGRES: expectedOutput,
+        },
+    }
+}
 
 async function main() {
     // SECURITY: do not seed the admin row at role=ADMIN.
@@ -194,6 +303,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
         where: { slug: 'simple-select' },
         update: {
             schemaId: usersSchema.id,
+            ...problemAuditFields(SIMPLE_SELECT_SOLUTION, SIMPLE_SELECT_OUTPUT),
         },
         create: {
             number: 1,
@@ -203,7 +313,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             description: 'Select all columns from the users table.',
             schemaDescription: 'Table `users` with columns: id, name, role',
             schemaId: usersSchema.id,
-            expectedOutput: '[{"id":1,"name":"Alice","role":"Engineer"},{"id":2,"name":"Bob","role":"Sales"}]'
+            ...problemAuditFields(SIMPLE_SELECT_SOLUTION, SIMPLE_SELECT_OUTPUT),
         }
     })
 
@@ -212,6 +322,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
         update: {
             schemaId: ecommerceSchema.id,
             ordered: true,
+            ...problemAuditFields(TOTAL_REVENUE_SOLUTION, TOTAL_REVENUE_OUTPUT),
         },
         create: {
             number: 2,
@@ -222,7 +333,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             schemaId: ecommerceSchema.id,
             schemaDescription: 'Tables: customers, orders, order_items, products',
             ordered: true,
-            expectedOutput: '[{"name":"John Doe","total_revenue":1450},{"name":"Alice Johnson","total_revenue":1350},{"name":"Jane Smith","total_revenue":800}]'
+            ...problemAuditFields(TOTAL_REVENUE_SOLUTION, TOTAL_REVENUE_OUTPUT),
         }
     })
 
@@ -231,6 +342,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
         update: {
             schemaId: ecommerceSchema.id,
             ordered: true,
+            ...problemAuditFields(TOP_SELLING_PRODUCTS_SOLUTION, TOP_SELLING_PRODUCTS_OUTPUT),
         },
         create: {
             number: 3,
@@ -241,7 +353,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             schemaId: ecommerceSchema.id,
             schemaDescription: 'Tables: products, order_items',
             ordered: true,
-            expectedOutput: '[{"name":"Desk Chair","total_sold":2},{"name":"Laptop","total_sold":2},{"name":"Headphones","total_sold":1}]'
+            ...problemAuditFields(TOP_SELLING_PRODUCTS_SOLUTION, TOP_SELLING_PRODUCTS_OUTPUT),
         }
     })
 
@@ -252,7 +364,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             ordered: false,
             description: 'Return every customer whose `country` is `USA`. Return columns `customer_id`, `name`, `email`, `country`.',
             schemaDescription: 'Table `customers` with columns: customer_id, name, email, country',
-            expectedOutput: '[{"customer_id":1,"name":"John Doe","email":"john@example.com","country":"USA"},{"customer_id":4,"name":"Bob Brown","email":"bob@example.com","country":"USA"}]'
+            ...problemAuditFields(CUSTOMERS_BY_COUNTRY_SOLUTION, CUSTOMERS_BY_COUNTRY_OUTPUT),
         },
         create: {
             number: 4,
@@ -263,7 +375,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             schemaDescription: 'Table `customers` with columns: customer_id, name, email, country',
             schemaId: ecommerceSchema.id,
             ordered: false,
-            expectedOutput: '[{"customer_id":1,"name":"John Doe","email":"john@example.com","country":"USA"},{"customer_id":4,"name":"Bob Brown","email":"bob@example.com","country":"USA"}]'
+            ...problemAuditFields(CUSTOMERS_BY_COUNTRY_SOLUTION, CUSTOMERS_BY_COUNTRY_OUTPUT),
         }
     })
 
@@ -272,6 +384,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
         update: {
             schemaId: ecommerceSchema.id,
             ordered: false,
+            ...problemAuditFields(JANUARY_ORDERS_SOLUTION, JANUARY_ORDERS_OUTPUT),
         },
         create: {
             number: 5,
@@ -282,7 +395,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             schemaDescription: 'Table `orders` with columns: order_id, customer_id, order_date, total_amount',
             schemaId: ecommerceSchema.id,
             ordered: false,
-            expectedOutput: '[{"order_count":2}]'
+            ...problemAuditFields(JANUARY_ORDERS_SOLUTION, JANUARY_ORDERS_OUTPUT),
         }
     })
 
@@ -291,6 +404,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
         update: {
             schemaId: ecommerceSchema.id,
             ordered: false,
+            ...problemAuditFields(AVERAGE_ORDER_VALUE_SOLUTION, AVERAGE_ORDER_VALUE_OUTPUT),
         },
         create: {
             number: 6,
@@ -301,7 +415,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             schemaDescription: 'Table `orders` with columns: order_id, customer_id, order_date, total_amount',
             schemaId: ecommerceSchema.id,
             ordered: false,
-            expectedOutput: '[{"avg_amount":900}]'
+            ...problemAuditFields(AVERAGE_ORDER_VALUE_SOLUTION, AVERAGE_ORDER_VALUE_OUTPUT),
         }
     })
 
@@ -310,6 +424,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
         update: {
             schemaId: ecommerceSchema.id,
             ordered: false,
+            ...problemAuditFields(MULTIPLE_ORDERS_SOLUTION, MULTIPLE_ORDERS_OUTPUT),
         },
         create: {
             number: 7,
@@ -320,7 +435,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             schemaDescription: 'Tables: customers, orders',
             schemaId: ecommerceSchema.id,
             ordered: false,
-            expectedOutput: '[{"customer_id":1,"order_count":2}]'
+            ...problemAuditFields(MULTIPLE_ORDERS_SOLUTION, MULTIPLE_ORDERS_OUTPUT),
         }
     })
 
@@ -329,6 +444,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
         update: {
             schemaId: ecommerceSchema.id,
             ordered: false,
+            ...problemAuditFields(PRODUCTS_NEVER_ORDERED_SOLUTION, PRODUCTS_NEVER_ORDERED_OUTPUT),
         },
         create: {
             number: 8,
@@ -339,7 +455,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             schemaDescription: 'Tables: products, order_items',
             schemaId: ecommerceSchema.id,
             ordered: false,
-            expectedOutput: '[{"product_id":104,"name":"Coffee Table"}]'
+            ...problemAuditFields(PRODUCTS_NEVER_ORDERED_SOLUTION, PRODUCTS_NEVER_ORDERED_OUTPUT),
         }
     })
 
@@ -348,6 +464,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
         update: {
             schemaId: hrSchema.id,
             ordered: false,
+            ...problemAuditFields(EMPLOYEES_HIRED_2025_SOLUTION, EMPLOYEES_HIRED_2025_OUTPUT),
         },
         create: {
             number: 9,
@@ -358,7 +475,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             schemaDescription: 'Table `employees` with columns: id, name, department_id, hire_date',
             schemaId: hrSchema.id,
             ordered: false,
-            expectedOutput: '[{"id":1,"name":"Alice"},{"id":3,"name":"Charlie"},{"id":5,"name":"Eve"}]'
+            ...problemAuditFields(EMPLOYEES_HIRED_2025_SOLUTION, EMPLOYEES_HIRED_2025_OUTPUT),
         }
     })
 
@@ -367,6 +484,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
         update: {
             schemaId: hrSchema.id,
             ordered: false,
+            ...problemAuditFields(HIGHEST_PAID_SOLUTION, HIGHEST_PAID_OUTPUT),
         },
         create: {
             number: 10,
@@ -377,7 +495,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             schemaDescription: 'Tables: departments, employees, salaries',
             schemaId: hrSchema.id,
             ordered: false,
-            expectedOutput: '[{"department_name":"Engineering","employee_name":"Bob","salary":120000},{"department_name":"Sales","employee_name":"Diana","salary":110000},{"department_name":"Marketing","employee_name":"Eve","salary":70000}]'
+            ...problemAuditFields(HIGHEST_PAID_SOLUTION, HIGHEST_PAID_OUTPUT),
         }
     })
 
@@ -386,6 +504,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
         update: {
             schemaId: hrSchema.id,
             ordered: true,
+            ...problemAuditFields(LARGEST_DEPARTMENT_SOLUTION, LARGEST_DEPARTMENT_OUTPUT),
         },
         create: {
             number: 11,
@@ -396,7 +515,7 @@ Postgres with extensions (Citus, TimescaleDB) and DuckDB embedded in apps blur t
             schemaDescription: 'Tables: departments, employees',
             schemaId: hrSchema.id,
             ordered: true,
-            expectedOutput: '[{"department_name":"Engineering","employee_count":4}]'
+            ...problemAuditFields(LARGEST_DEPARTMENT_SOLUTION, LARGEST_DEPARTMENT_OUTPUT),
         }
     })
 

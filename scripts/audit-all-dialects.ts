@@ -18,6 +18,9 @@ import pg from "pg"
 import { PGlite } from "@electric-sql/pglite"
 import { DuckDBInstance } from "@duckdb/node-api"
 import { compareResults } from "../lib/sql-validator"
+import { resolveDialectAuditPair } from "../lib/sql-engine/dialect-audit"
+import { normalizeSqlRows } from "../lib/sql-engine/normalize"
+import { splitSqlStatements } from "../lib/sql-engine/statements"
 
 main().catch((e) => {
     console.error("Audit failed:", e)
@@ -58,73 +61,41 @@ async function main() {
         console.log(`Auditing ${problems.length} PUBLISHED problems across all listed dialects…\n`)
 
         for (const p of problems) {
-            const solutions =
-                (p.solutions as Record<string, string>) ?? {}
-            const expectedOutputs =
-                (p.expectedOutputs as Record<string, string>) ?? {}
-
             for (const dialect of p.dialects) {
                 totalChecks++
-                const label = `#${p.number} ${p.slug} [${dialect}]`
-
-                const solutionSql =
-                    solutions[dialect] || p.solutionSql || ""
-                const expectedRaw =
-                    expectedOutputs[dialect] || p.expectedOutput || ""
-
-                if (!solutionSql.trim()) {
-                    failures.push({ label, reason: "no solution for this dialect" })
-                    console.log(`SKIP ${label} :: no solution for this dialect`)
-                    continue
-                }
-                if (!p.schema?.sql) {
-                    failures.push({ label, reason: "no schema attached" })
-                    console.log(`FAIL ${label} :: no schema attached`)
+                const pair = resolveDialectAuditPair(p, dialect)
+                if (!pair.ok) {
+                    failures.push({ label: pair.label, reason: pair.reason })
+                    console.log(`FAIL ${pair.label} :: ${pair.reason}`)
                     totalFailed++
                     continue
                 }
 
-                let expected: unknown
-                try {
-                    expected = JSON.parse(expectedRaw)
-                } catch {
-                    failures.push({
-                        label,
-                        reason: "expectedOutput is not valid JSON",
-                    })
-                    console.log(`FAIL ${label} :: expectedOutput not JSON`)
-                    totalFailed++
-                    continue
-                }
-
-                const stmts = p.schema.sql
-                    .split(/;\s*\n|;\s*$/)
-                    .map((s) => s.trim())
-                    .filter((s) => s.length > 0)
+                const stmts = splitSqlStatements(pair.schemaSql)
 
                 try {
                     const rows =
                         dialect === "DUCKDB"
-                            ? await runDuckDB(stmts, solutionSql)
-                            : await runPGlite(stmts, solutionSql)
-                    const verdict = compareResults(rows, expected, {
-                        ordered: p.ordered,
+                            ? await runDuckDB(stmts, pair.solutionSql)
+                            : await runPGlite(stmts, pair.solutionSql)
+                    const verdict = compareResults(rows, pair.expectedRows, {
+                        ordered: pair.ordered,
                     })
                     if (verdict.ok) {
-                        console.log(`OK   ${label}`)
+                        console.log(`OK   ${pair.label}`)
                     } else {
-                        failures.push({ label, reason: verdict.reason })
-                        console.log(`FAIL ${label} :: ${verdict.reason}`)
+                        failures.push({ label: pair.label, reason: verdict.reason })
+                        console.log(`FAIL ${pair.label} :: ${verdict.reason}`)
                         totalFailed++
                     }
-                } catch (e: any) {
+                } catch (e: unknown) {
+                    const message =
+                        e instanceof Error ? e.message : String(e)
                     failures.push({
-                        label,
-                        reason: e?.message ?? String(e),
+                        label: pair.label,
+                        reason: message,
                     })
-                    console.log(
-                        `FAIL ${label} :: ${truncate(e?.message ?? String(e))}`
-                    )
+                    console.log(`FAIL ${pair.label} :: ${truncate(message)}`)
                     totalFailed++
                 }
             }
@@ -154,18 +125,25 @@ async function runDuckDB(stmts: string[], sql: string) {
     try {
         for (const s of stmts) await conn.run(s)
         const reader = await conn.runAndReadAll(sql)
-        return reader.getRowObjectsJson() as Record<string, unknown>[]
+        return normalizeSqlRows(
+            reader.getRowObjectsJson() as Record<string, unknown>[]
+        )
     } finally {
         conn.disconnectSync()
+        inst.closeSync()
     }
 }
 
 async function runPGlite(stmts: string[], sql: string) {
     const db = new PGlite()
-    await db.waitReady
-    for (const s of stmts) await db.exec(s)
-    const r = await db.query(sql)
-    return r.rows as Record<string, unknown>[]
+    try {
+        await db.waitReady
+        for (const s of stmts) await db.exec(s)
+        const r = await db.query(sql)
+        return normalizeSqlRows(r.rows as Record<string, unknown>[])
+    } finally {
+        await db.close()
+    }
 }
 
 function truncate(s: string, n = 200) {

@@ -68,6 +68,9 @@ jobs:
       - name: Seed
         run: npx tsx prisma/seed.ts
 
+      - name: Audit SQL dialect outputs
+        run: npm run audit:dialects:ci
+
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         with:

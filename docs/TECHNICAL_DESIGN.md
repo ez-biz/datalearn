@@ -110,7 +110,7 @@ Data Learn is a single Next.js 16 application backed by Postgres. The runtime ar
 |---|---|
 | **Playwright** | E2E test harness (~41 tests, runs in 2s); CI gate |
 | **`node:test` + tsx** | Unit tests for pure helpers (`schema-parser`, `profile-stats`); zero new deps |
-| **GitHub Actions** | Postgres service container, `npx tsc --noEmit`, `npm run build`, `npx playwright test` on every PR |
+| **GitHub Actions** | Postgres service container, seeded data, dialect audit, `npx tsc --noEmit`, `npm run build`, `npx playwright test` on every PR |
 | **CodeQL** | High-severity static analysis (e.g., the clear-text-logging finding caught on the MCP harness) |
 | **`tsup`** | Bundles `mcp-server/` to a single `dist/index.js` |
 | **`vitest`** | MCP server unit tests (40 cases) |
@@ -181,6 +181,8 @@ datalearn/
 ├── tests/e2e/                    Playwright E2E tests
 ├── scripts/
 │   ├── mcp-e2e-test.mjs          End-to-end harness for the MCP server
+│   ├── audit-all-dialects.ts     Runs every published problem/dialect canonical solution through DuckDB-Node or PGlite-Node
+│   ├── test-dialect-audit-helpers.ts Pure helper coverage for per-dialect audit input resolution
 │   ├── test-schema-parser.ts     node:test for the parser
 │   └── test-profile-stats.ts     node:test for heatmap + streak helpers
 └── docs/                         This document, ROADMAP, API, ADMIN, etc.
@@ -324,10 +326,21 @@ Role grants are admin-only via `/api/admin/users/[id]/role`. ADMIN role changes 
 
 - `lib/sql-engine/browser-session.ts` is the browser engine boundary. It lazily initializes DuckDB-WASM or PGlite, replays schema SQL, enforces the read-only guard for learner queries, normalizes rows, and exposes `{ runQuery, dispose }`.
 - `lib/sql-engine/normalize.ts` converts engine-specific values such as `Date`, `bigint`, and object wrappers into JSON-safe scalar values before rows reach React or submission validation.
+- `lib/sql-engine/dialect-audit.ts` resolves the canonical SQL, expected output, schema SQL, and ordered flag for each `(problem, dialect)` pair. The CI audit script uses it so missing per-dialect authoring data is treated as a build failure, not a skipped check.
 - `lib/use-problem-db.ts` is the React lifecycle wrapper. It creates one engine session per problem page and selected dialect, updates `ready` / `error`, and disposes the session on unmount or dialect change.
 - Two inits on the same page would mean duplicate WASM downloads + duplicate engine state. **Don't initialize outside `useProblemDB` / `createSqlEngineSession`.**
 
-### 6.3 Validator (`lib/sql-validator.ts`)
+### 6.3 Dialect audit (`scripts/audit-all-dialects.ts`)
+
+`npm run audit:dialects` and `npm run audit:dialects:ci` load PUBLISHED problems from Prisma, then execute each listed dialect's canonical solution against the matching local engine:
+
+- `DUCKDB` uses `@duckdb/node-api`.
+- `POSTGRES` uses `@electric-sql/pglite`.
+- Results are normalized with `normalizeSqlRows()` before comparison.
+- Missing solution SQL, missing schema SQL, malformed expected output JSON, execution errors, and validator mismatches are failures.
+- The GitHub Actions test workflow runs the CI variant immediately after migrations and seed, before typecheck/build/E2E.
+
+### 6.4 Validator (`lib/sql-validator.ts`)
 
 Pure function. Compares user rows against `expectedOutput`:
 
@@ -338,14 +351,14 @@ Pure function. Compares user rows against `expectedOutput`:
 
 `validateSubmission` (server action, `actions/submissions.ts`) runs the validator and writes a `Submission` row when the user is signed in.
 
-### 6.4 Workspace UX (`components/practice/ProblemClient.tsx`, `components/sql/SqlPlayground.tsx`)
+### 6.5 Workspace UX (`components/practice/ProblemClient.tsx`, `components/sql/SqlPlayground.tsx`)
 
 - Editor renders immediately; **only `Run` and `Submit` are gated on `dbReady`** so the user can read the problem and start typing while DuckDB downloads (PR #20).
 - Layout-matched skeleton (`SqlPlaygroundSkeleton`) covers the brief dynamic-import window so the right pane never collapses to blank.
 - Draft autosave: localStorage `dl:draft:<slug>`, debounced 400 ms.
 - Submission history is fetched server-side and threaded down; updated optimistically on submit.
 
-### 6.5 Limitations
+### 6.6 Limitations
 
 - Cold start can take 1–3 s on a fresh visit (WASM download). Subsequent visits are ~200 ms.
 - DuckDB and PGlite are both browser-local. Larger datasets, hidden test cases, and heavier dialects would still need an optional server-side sandbox runner.

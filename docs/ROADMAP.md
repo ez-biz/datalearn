@@ -11,6 +11,7 @@
 - **Browser engine session boundary** — added `lib/sql-engine/browser-session.ts` so DuckDB-WASM and PGlite now sit behind the same `{ runQuery, dispose }` contract. `useProblemDB` remains the React lifecycle wrapper instead of owning engine-specific initialization and row conversion.
 - **Shared result normalization** — new `lib/sql-engine/normalize.ts` converts engine-specific row values (`Date`, safe/unsafe `bigint`, object wrappers) into JSON-safe values before rows reach the results table or submission payload.
 - **Schema statement helper** — schema replay now uses a tested `splitSqlStatements()` helper in `lib/sql-engine/statements.ts`, keeping browser engine setup behavior explicit.
+- **Dialect audit CI gate** — `npm run audit:dialects:ci` now runs in the GitHub Actions test workflow after migrations and seed. Published `(problem, dialect)` pairs fail the build when canonical SQL, schema, or expected output is missing or mismatched. Seed problems 1-11 now include per-dialect `solutions` / `expectedOutputs` so fresh CI data is fully auditable.
 - Design/plan docs: [`docs/superpowers/specs/2026-05-05-sql-engine-v2-foundation-design.md`](./superpowers/specs/2026-05-05-sql-engine-v2-foundation-design.md) and [`docs/superpowers/plans/2026-05-05-sql-engine-v2-foundation.md`](./superpowers/plans/2026-05-05-sql-engine-v2-foundation.md).
 - Broader roadmap docs: [`docs/superpowers/specs/2026-05-05-sql-engine-v2-roadmap-design.md`](./superpowers/specs/2026-05-05-sql-engine-v2-roadmap-design.md) and [`docs/superpowers/plans/2026-05-05-sql-engine-v2-roadmap.md`](./superpowers/plans/2026-05-05-sql-engine-v2-roadmap.md).
 
@@ -88,8 +89,8 @@ Build the **go-to open platform** for data engineering education — combining i
 | News Aggregator (RSS) | ✅ Done | Data Engineering Weekly feed |
 | User Profile Page | ✅ Done | Shows session data |
 | Problem Discussions | ✅ Done | Problem-level tab with replies, votes, reports, moderation queue, and per-problem modes |
-| Testing | ✅ Partial | Playwright E2E coverage plus targeted helper tests for core shipped flows |
-| CI/CD | ❌ None | No GitHub Actions or deployment pipeline |
+| Testing | ✅ Partial | Playwright E2E coverage plus targeted helper tests for core shipped flows; dialect audit helper coverage |
+| CI/CD | ✅ Done | GitHub Actions test workflow runs typecheck, build, E2E, and SQL dialect audit |
 
 ---
 
@@ -157,8 +158,8 @@ Build the **go-to open platform** for data engineering education — combining i
 
 | Task | Status | Priority |
 |------|--------|----------|
-| **Testing suite (unit + integration + E2E)** | ⬜ Todo | P0 |
-| **CI/CD pipeline (GitHub Actions)** | ⬜ Todo | P0 |
+| **Testing suite (unit + integration + E2E)** | ✅ Done | P0 |
+| **CI/CD pipeline (GitHub Actions)** | ✅ Done | P0 |
 | **Vercel deployment with preview environments** | ⬜ Todo | P0 |
 | **User analytics dashboard (admin)** | ⬜ Todo | P1 |
 | **Problem discussion moderation tools** | ✅ Done | P2 |
