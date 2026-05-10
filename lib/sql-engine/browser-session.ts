@@ -3,7 +3,15 @@ import type { PGlite as PGliteType } from "@electric-sql/pglite"
 import { checkReadOnlyQuery } from "@/lib/sql-restrict"
 import { normalizeSqlRows } from "@/lib/sql-engine/normalize"
 import { applyRowCap, toRowLimitedSql } from "@/lib/sql-engine/result-cap"
+import {
+    resolvePgliteDataDir,
+    type ResolvedDataDir,
+} from "@/lib/sql-engine/schema-cache-key"
 import { splitSqlStatements } from "@/lib/sql-engine/statements"
+import {
+    createSqlEngineTelemetrySession,
+    type SqlEngineTelemetrySession,
+} from "@/lib/sql-engine/telemetry"
 import type { Dialect, SqlEngineSession, SqlRow } from "@/lib/sql-engine/types"
 
 const DEFAULT_FALLBACK_SCHEMA = `
@@ -16,29 +24,47 @@ INSERT INTO users VALUES (3, 'Charlie', 'Manager');
 type CreateSqlEngineSessionInput = {
     schemaSql: string | null | undefined
     dialect: Dialect
+    problemSlug?: string
 }
 
 export async function createSqlEngineSession({
     schemaSql,
     dialect,
+    problemSlug,
 }: CreateSqlEngineSessionInput): Promise<SqlEngineSession> {
     const schema = schemaSql || DEFAULT_FALLBACK_SCHEMA
     const statements = splitSqlStatements(schema)
+    const telemetry = createSqlEngineTelemetrySession({
+        dialect,
+        problemSlug,
+        schemaStatementCount: statements.length,
+    })
 
-    if (dialect === "POSTGRES") {
-        return createPostgresSession(statements)
-    }
+    telemetry.emit("engine.init.start")
 
-    return createDuckDbSession(statements)
+    const session =
+        dialect === "POSTGRES"
+            ? await createPostgresSession(schema, statements, problemSlug)
+            : await createDuckDbSession(statements)
+
+    telemetry.emit("engine.init.ready")
+    return instrumentSqlEngineSession(session, telemetry)
 }
 
 async function createPostgresSession(
-    statements: string[]
+    schemaSql: string,
+    statements: string[],
+    problemSlug: string | undefined
 ): Promise<SqlEngineSession> {
     const { initPGlite } = await import("@/lib/pglite")
+    const persistence = problemSlug
+        ? await resolvePgliteDataDir({ slug: problemSlug, schemaSql })
+        : ({ mode: "memory", reason: "no problem slug" } as const)
+
     let pg: PGliteType | null = await createPostgresResources(
         initPGlite,
-        statements
+        statements,
+        persistence
     )
     let disposed = false
     let resetPromise: Promise<void> | null = null
@@ -52,7 +78,8 @@ async function createPostgresSession(
             if (!disposed) {
                 const next = await createPostgresResources(
                     initPGlite,
-                    statements
+                    statements,
+                    persistence
                 )
                 if (disposed) {
                     await next.close()
@@ -160,14 +187,66 @@ async function createDuckDbSession(
 }
 
 async function createPostgresResources(
-    initPGlite: () => Promise<PGliteType>,
-    statements: string[]
+    initPGlite: (options?: { dataDir?: string }) => Promise<PGliteType>,
+    statements: string[],
+    persistence: ResolvedDataDir
 ): Promise<PGliteType> {
-    const pg = await initPGlite()
+    const dataDir =
+        persistence.mode === "indexeddb"
+            ? `idb://${persistence.name}`
+            : undefined
+
+    const pg = await initPGlite({ dataDir })
+
+    if (persistence.mode === "indexeddb" && (await isPersistedSchemaReady(pg))) {
+        if (process.env.NODE_ENV !== "production") {
+            console.debug(
+                "[sql-engine] PGlite cache hit",
+                { dataDir: persistence.name }
+            )
+        }
+        return pg
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+        console.debug("[sql-engine] PGlite fresh init", {
+            mode: persistence.mode,
+            dataDir: persistence.mode === "indexeddb" ? persistence.name : null,
+            reason: persistence.mode === "memory" ? persistence.reason : "first-time",
+        })
+    }
+
     await replaySchemaStatements("POSTGRES", statements, (statement) =>
         pg.exec(statement)
     )
+
+    if (persistence.mode === "indexeddb") {
+        await writePersistedSchemaMetadata(pg)
+    }
+
     return pg
+}
+
+const PERSISTED_SCHEMA_TABLE = "_dl_pglite_meta"
+
+async function isPersistedSchemaReady(pg: PGliteType): Promise<boolean> {
+    try {
+        const result = await pg.query<{ initialized: string }>(
+            `SELECT value AS initialized FROM ${PERSISTED_SCHEMA_TABLE} WHERE key = 'initialized' LIMIT 1`
+        )
+        return result.rows.length > 0
+    } catch {
+        return false
+    }
+}
+
+async function writePersistedSchemaMetadata(pg: PGliteType): Promise<void> {
+    await pg.exec(
+        `CREATE TABLE IF NOT EXISTS ${PERSISTED_SCHEMA_TABLE} (key TEXT PRIMARY KEY, value TEXT NOT NULL)`
+    )
+    await pg.exec(
+        `INSERT INTO ${PERSISTED_SCHEMA_TABLE} (key, value) VALUES ('initialized', 'true') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`
+    )
 }
 
 type DuckDbResources = {
@@ -191,6 +270,49 @@ function assertReadOnly(sql: string): void {
     const guard = checkReadOnlyQuery(sql)
     if (!guard.ok) {
         throw new Error(guard.reason)
+    }
+}
+
+/**
+ * Telemetry tracks the lifecycle of the React-side session, not each
+ * recycle of the inner engine. `session.reset()` (e.g. after a query
+ * timeout) replaces the underlying DuckDB / PGlite instance but does not
+ * emit `engine.dispose` — only navigation away from the page does.
+ * `engine.firstQuery.ready` is one-shot for the same reason: if the user
+ * keeps querying after a reset, we don't re-emit it.
+ */
+function instrumentSqlEngineSession(
+    session: SqlEngineSession,
+    telemetry: SqlEngineTelemetrySession
+): SqlEngineSession {
+    let firstQueryReady = false
+    let disposed = false
+
+    return {
+        dialect: session.dialect,
+        async runQuery(sql, options) {
+            const queryStartedAtMs = telemetry.now()
+            const result = await session.runQuery(sql, options)
+            if (!firstQueryReady) {
+                firstQueryReady = true
+                telemetry.emit("engine.firstQuery.ready", {
+                    queryElapsedMs: telemetry.elapsedSince(queryStartedAtMs),
+                })
+            }
+            return result
+        },
+        cancel: () => session.cancel(),
+        reset: () => session.reset(),
+        async dispose() {
+            try {
+                await session.dispose()
+            } finally {
+                if (!disposed) {
+                    disposed = true
+                    telemetry.emit("engine.dispose")
+                }
+            }
+        },
     }
 }
 
