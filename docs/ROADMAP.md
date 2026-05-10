@@ -1,12 +1,21 @@
 # 🚀 Antigravity Data Learning Platform — Long-Term Roadmap
 
-> **Last updated:** 2026-05-03
+> **Last updated:** 2026-05-05
 > **Status:** Live — <https://www.learndatanow.com>
-> **Version:** 0.4.2 (deployed)
+> **Version:** 0.4.4 (deployed)
 
 ## Recently shipped / ready for release
 
-### May 2026 — unreleased: problem discussions v1
+### May 2026 — unreleased: SQL Engine v2 foundation
+
+- **Browser engine session boundary** — added `lib/sql-engine/browser-session.ts` so DuckDB-WASM and PGlite now sit behind the same `{ runQuery, dispose }` contract. `useProblemDB` remains the React lifecycle wrapper instead of owning engine-specific initialization and row conversion.
+- **Shared result normalization** — new `lib/sql-engine/normalize.ts` converts engine-specific row values (`Date`, safe/unsafe `bigint`, object wrappers) into JSON-safe values before rows reach the results table or submission payload.
+- **Schema statement helper** — schema replay now uses a tested `splitSqlStatements()` helper in `lib/sql-engine/statements.ts`, keeping browser engine setup behavior explicit.
+- **Dialect audit CI gate** — `npm run audit:dialects:ci` now runs in the GitHub Actions test workflow after migrations and seed. Published `(problem, dialect)` pairs fail the build when canonical SQL, schema, or expected output is missing or mismatched. Seed problems 1-11 now include per-dialect `solutions` / `expectedOutputs` so fresh CI data is fully auditable.
+- Design/plan docs: [`docs/superpowers/specs/2026-05-05-sql-engine-v2-foundation-design.md`](./superpowers/specs/2026-05-05-sql-engine-v2-foundation-design.md) and [`docs/superpowers/plans/2026-05-05-sql-engine-v2-foundation.md`](./superpowers/plans/2026-05-05-sql-engine-v2-foundation.md).
+- Broader roadmap docs: [`docs/superpowers/specs/2026-05-05-sql-engine-v2-roadmap-design.md`](./superpowers/specs/2026-05-05-sql-engine-v2-roadmap-design.md) and [`docs/superpowers/plans/2026-05-05-sql-engine-v2-roadmap.md`](./superpowers/plans/2026-05-05-sql-engine-v2-roadmap.md).
+
+### May 2026 — v0.4.4: problem discussions v1 + workspace safety
 
 - **Learner Discussion tab** — added to the practice workspace next to Description, Hints, and History. Published problems show Discussion when global discussions are enabled and the problem is not `HIDDEN`. Signed-out learners can read; signed-in learners can post comments, reply one level deep, vote, report, edit inside the edit window, and soft-delete their own visible comments.
 - **Markdown + code formatting** — comments and replies use the shared safe Markdown renderer with inline code, fenced code blocks, and SQL highlighting where available. Accepted submissions expose `Share approach`, which pre-fills a discussion comment with the accepted SQL in a fenced code block.
@@ -15,6 +24,7 @@
 - **Moderator role with assignable permissions** — `MODERATOR` is a separate role, but capabilities are permission-based: view queue, hide/restore comments, dismiss reports, mark spam, lock problem discussions, and hide problem discussions. Only admins can grant/revoke moderator permissions through `/admin/moderators`.
 - **Per-problem controls** — problem edit forms and moderator APIs can set discussion mode to `OPEN`, `LOCKED`, or `HIDDEN`. `LOCKED` keeps discussion readable but blocks new mutations; `HIDDEN` removes the learner-facing tab.
 - **Default availability fix** — discussions are enabled by default at the DB/schema level, while admins can still disable globally from settings or hide/lock individual problems.
+- **Workspace read-only guard** — learner `Run` and `Submit` now reject DDL/DML/DCL, transaction-control, extension/config, and procedure-execution statements before they reach the browser database, preserving seeded schema state and blocking mutation-based answer-key bypasses.
 - Verification coverage: `npm run test:discussion` plus targeted E2E coverage for learner discussion flows, signed-out gating, locked/hidden modes, report queue threshold, moderator permissions, and admin API security.
 - Design/plan docs: [`docs/superpowers/specs/2026-05-03-problem-discussions-design.md`](./superpowers/specs/2026-05-03-problem-discussions-design.md) and [`docs/superpowers/plans/2026-05-03-problem-discussions.md`](./superpowers/plans/2026-05-03-problem-discussions.md).
 
@@ -79,8 +89,8 @@ Build the **go-to open platform** for data engineering education — combining i
 | News Aggregator (RSS) | ✅ Done | Data Engineering Weekly feed |
 | User Profile Page | ✅ Done | Shows session data |
 | Problem Discussions | ✅ Done | Problem-level tab with replies, votes, reports, moderation queue, and per-problem modes |
-| Testing | ✅ Partial | Playwright E2E coverage plus targeted helper tests for core shipped flows |
-| CI/CD | ❌ None | No GitHub Actions or deployment pipeline |
+| Testing | ✅ Partial | Playwright E2E coverage plus targeted helper tests for core shipped flows; dialect audit helper coverage |
+| CI/CD | ✅ Done | GitHub Actions test workflow runs typecheck, build, E2E, and SQL dialect audit |
 
 ---
 
@@ -148,8 +158,8 @@ Build the **go-to open platform** for data engineering education — combining i
 
 | Task | Status | Priority |
 |------|--------|----------|
-| **Testing suite (unit + integration + E2E)** | ⬜ Todo | P0 |
-| **CI/CD pipeline (GitHub Actions)** | ⬜ Todo | P0 |
+| **Testing suite (unit + integration + E2E)** | ✅ Done | P0 |
+| **CI/CD pipeline (GitHub Actions)** | ✅ Done | P0 |
 | **Vercel deployment with preview environments** | ⬜ Todo | P0 |
 | **User analytics dashboard (admin)** | ⬜ Todo | P1 |
 | **Problem discussion moderation tools** | ✅ Done | P2 |
