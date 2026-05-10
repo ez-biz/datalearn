@@ -159,24 +159,28 @@ Phase 1 protects every later phase. Authoring gates (1.1) and validator correctn
 
 This PR closes the optional hardening slot from the roadmap and ships as part of the SQL Engine v2 foundation work.
 
-### PR 1.6: Engine Timing Telemetry Harness
+### PR 1.6: Engine Timing Telemetry Harness (implemented)
 
 **Goal:** Make Phase 3's "before/after" measurable. Without this, startup work is unfalsifiable.
 
 **Files:**
 - Create: `lib/sql-engine/telemetry.ts`
+- Create: `app/api/telemetry/sql-engine/route.ts`
+- Create: `scripts/test-sql-engine-telemetry.ts`
 - Modify: `lib/sql-engine/browser-session.ts`
 - Modify: `lib/use-problem-db.ts`
+- Modify: `components/practice/ProblemClient.tsx`
 
 **Design:**
 - Emit timing events: `engine.init.start`, `engine.init.ready`, `engine.firstQuery.ready`, `engine.dispose`.
 - Sink: `console.debug` in dev, `navigator.sendBeacon` to `/api/telemetry/sql-engine` in prod (no-op handler initially — just log to stdout). Keep server route trivial; we can wire it to Vercel Analytics later.
 - Sampled — opt out via `localStorage.dl:telemetry:off`.
 - Strict types so future histograms / percentiles can hang off the same events.
+- Payloads include dialect, session id, optional public problem slug, schema statement count, session elapsed ms, and first-query runtime ms. They intentionally do not include learner SQL, schema SQL, result rows, or answer-key data.
 
 **Verification:**
-- Unit test event payload shape.
-- Manual: open workspace, see four events in console, confirm beacon payload in network tab.
+- Unit test event payload shape, opt-out, deterministic sampling, endpoint, and session sink.
+- Manual: open workspace, see events in console in development; production builds send beacon payloads to `/api/telemetry/sql-engine`.
 
 ---
 

@@ -4,6 +4,10 @@ import { checkReadOnlyQuery } from "@/lib/sql-restrict"
 import { normalizeSqlRows } from "@/lib/sql-engine/normalize"
 import { applyRowCap, toRowLimitedSql } from "@/lib/sql-engine/result-cap"
 import { splitSqlStatements } from "@/lib/sql-engine/statements"
+import {
+    createSqlEngineTelemetrySession,
+    type SqlEngineTelemetrySession,
+} from "@/lib/sql-engine/telemetry"
 import type { Dialect, SqlEngineSession, SqlRow } from "@/lib/sql-engine/types"
 
 const DEFAULT_FALLBACK_SCHEMA = `
@@ -16,20 +20,31 @@ INSERT INTO users VALUES (3, 'Charlie', 'Manager');
 type CreateSqlEngineSessionInput = {
     schemaSql: string | null | undefined
     dialect: Dialect
+    problemSlug?: string
 }
 
 export async function createSqlEngineSession({
     schemaSql,
     dialect,
+    problemSlug,
 }: CreateSqlEngineSessionInput): Promise<SqlEngineSession> {
     const schema = schemaSql || DEFAULT_FALLBACK_SCHEMA
     const statements = splitSqlStatements(schema)
+    const telemetry = createSqlEngineTelemetrySession({
+        dialect,
+        problemSlug,
+        schemaStatementCount: statements.length,
+    })
 
-    if (dialect === "POSTGRES") {
-        return createPostgresSession(statements)
-    }
+    telemetry.emit("engine.init.start")
 
-    return createDuckDbSession(statements)
+    const session =
+        dialect === "POSTGRES"
+            ? await createPostgresSession(statements)
+            : await createDuckDbSession(statements)
+
+    telemetry.emit("engine.init.ready")
+    return instrumentSqlEngineSession(session, telemetry)
 }
 
 async function createPostgresSession(
@@ -191,6 +206,49 @@ function assertReadOnly(sql: string): void {
     const guard = checkReadOnlyQuery(sql)
     if (!guard.ok) {
         throw new Error(guard.reason)
+    }
+}
+
+/**
+ * Telemetry tracks the lifecycle of the React-side session, not each
+ * recycle of the inner engine. `session.reset()` (e.g. after a query
+ * timeout) replaces the underlying DuckDB / PGlite instance but does not
+ * emit `engine.dispose` — only navigation away from the page does.
+ * `engine.firstQuery.ready` is one-shot for the same reason: if the user
+ * keeps querying after a reset, we don't re-emit it.
+ */
+function instrumentSqlEngineSession(
+    session: SqlEngineSession,
+    telemetry: SqlEngineTelemetrySession
+): SqlEngineSession {
+    let firstQueryReady = false
+    let disposed = false
+
+    return {
+        dialect: session.dialect,
+        async runQuery(sql, options) {
+            const queryStartedAtMs = telemetry.now()
+            const result = await session.runQuery(sql, options)
+            if (!firstQueryReady) {
+                firstQueryReady = true
+                telemetry.emit("engine.firstQuery.ready", {
+                    queryElapsedMs: telemetry.elapsedSince(queryStartedAtMs),
+                })
+            }
+            return result
+        },
+        cancel: () => session.cancel(),
+        reset: () => session.reset(),
+        async dispose() {
+            try {
+                await session.dispose()
+            } finally {
+                if (!disposed) {
+                    disposed = true
+                    telemetry.emit("engine.dispose")
+                }
+            }
+        },
     }
 }
 
