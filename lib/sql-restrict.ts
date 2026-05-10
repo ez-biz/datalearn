@@ -35,6 +35,12 @@
  * quoted identifiers, and dollar-quoted literals before splitting statements
  * on `;` and checking keyword tokens. This is not a full SQL parser; it is a
  * defensive preflight before the browser database parses the query.
+ *
+ * Known limitation: Postgres `E'…'` strings with backslash-escaped quotes
+ * (`E'a\'b'`) are not parsed — the tokenizer treats `\` as ordinary text and
+ * may close the string at the first standalone `'`. Pathological E-strings
+ * therefore over-reject (the engine would have run them, the guard rejects).
+ * Over-rejection is the safe failure mode here; the guard never under-rejects.
  */
 
 const ALLOWED_FIRST_KEYWORDS = new Set([
