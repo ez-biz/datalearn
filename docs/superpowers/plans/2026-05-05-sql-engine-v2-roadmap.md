@@ -17,7 +17,7 @@
 | 0 | Foundation (shipped) | Session boundary + normalization | Low |
 | 1 | PR 1.1 (shipped) | Dialect audit in CI | Low |
 | 2 | PR 1.2 (implemented) | Result row cap with display/validate split | Low |
-| 3 | PR 1.3 | Query timeout, cancel, reset | Medium |
+| 3 | PR 1.3 (implemented) | Query timeout, cancel, reset | Medium |
 | 4 | PR 1.4 | JSON + TIMESTAMPTZ validator robustness | Low |
 | 5 | PR 1.5 | Read-only guard tokenizer (optional) | Low |
 | 6 | PR 1.6 | Engine timing telemetry harness | Low |
@@ -94,6 +94,8 @@ Phase 1 protects every later phase. Authoring gates (1.1) and validator correctn
 
 ### PR 1.3: Query Timeout, Cancel, and Reset
 
+**Status:** Implemented in `feat/sql-engine-timeout-reset`.
+
 **Goal:** A runaway learner query must not lock the tab.
 
 **Files:**
@@ -102,7 +104,8 @@ Phase 1 protects every later phase. Authoring gates (1.1) and validator correctn
 - Create: `lib/sql-engine/runtime-controls.ts`
 - Modify: `lib/use-problem-db.ts`
 - Modify: `components/sql/SqlPlayground.tsx`
-- Test: `scripts/test-sql-engine-runtime-controls.mjs`
+- Test: `scripts/test-sql-engine-runtime-controls.ts`
+- Test: `tests/e2e/sql-engine.spec.ts`
 
 **Design:**
 - Add `cancel(): Promise<void>` and `reset(): Promise<void>` to `SqlEngineSession`.
@@ -113,7 +116,7 @@ Phase 1 protects every later phase. Authoring gates (1.1) and validator correctn
 
 **Verification:**
 - Unit test `runWithTimeout()` with a never-resolving promise.
-- Playwright: deterministic slow query (cross join on a sized seed) triggers the timeout path.
+- Playwright: deterministic slow aggregate with a test-only timeout override triggers the timeout path, then verifies a simple follow-up query runs after reset.
 - `npm run build`, `npm run lint`, `npm run test:e2e`.
 
 ### PR 1.4: JSON and TIMESTAMPTZ Validator Robustness

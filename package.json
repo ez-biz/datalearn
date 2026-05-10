@@ -16,6 +16,7 @@
     "test:discussion": "tsx scripts/test-discussion-helpers.ts",
     "test:dialect-audit": "tsx scripts/test-dialect-audit-helpers.ts",
     "test:sql-engine-result-cap": "node --import tsx --test scripts/test-sql-engine-result-cap.ts",
+    "test:sql-engine-runtime-controls": "node --import tsx --test scripts/test-sql-engine-runtime-controls.ts",
     "audit:dialects": "tsx scripts/audit-all-dialects.ts",
     "audit:dialects:ci": "tsx scripts/audit-all-dialects.ts",
     "validate:problem": "tsx scripts/validate-problem.ts",

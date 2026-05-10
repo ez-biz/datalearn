@@ -24,3 +24,40 @@ test.describe("SQL engine result caps", () => {
         ).toBeVisible()
     })
 })
+
+test.describe("SQL engine runtime controls", () => {
+    test("timed out learner query resets the engine for the next run", async ({
+        page,
+    }) => {
+        test.slow()
+
+        await page.addInitScript(() => {
+            window.localStorage.setItem("dl:query-timeout-ms", "1")
+        })
+        await page.goto("/practice/simple-select")
+
+        const runButton = page.getByTestId("workspace-run-footer")
+        await expect(runButton).toBeEnabled({ timeout: 45_000 })
+
+        await page.locator(".monaco-editor").click()
+        await page.keyboard.press("Control+A")
+        await page.keyboard.type(
+            "SELECT SUM(random()) AS total FROM range(0, 100000000);"
+        )
+        await runButton.click()
+
+        await expect(
+            page.getByText(/query timed out.*engine session was reset/i)
+        ).toBeVisible({ timeout: 5_000 })
+
+        await page.locator(".monaco-editor").click()
+        await page.keyboard.press("Control+A")
+        await page.keyboard.type("SELECT 1 AS ok;")
+        await runButton.click()
+
+        await expect(page.getByRole("columnheader", { name: "ok" })).toBeVisible({
+            timeout: 45_000,
+        })
+        await expect(page.getByRole("cell", { name: "1" }).last()).toBeVisible()
+    })
+})

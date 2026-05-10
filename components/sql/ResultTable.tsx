@@ -6,6 +6,7 @@ interface ResultTableProps {
     data: any[]
     error?: string | null
     loading?: boolean
+    loadingLabel?: string
     rowCount?: number
     truncated?: boolean
     cap?: number | null
@@ -15,6 +16,7 @@ export function ResultTable({
     data,
     error,
     loading,
+    loadingLabel,
     rowCount,
     truncated,
     cap,
@@ -23,7 +25,7 @@ export function ResultTable({
         return (
             <div className="h-full flex items-center justify-center text-sm text-muted-foreground bg-surface">
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Running query…
+                {loadingLabel ?? "Running query…"}
             </div>
         )
     }

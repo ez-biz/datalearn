@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react"
 import { createSqlEngineSession } from "@/lib/sql-engine/browser-session"
+import {
+    DEFAULT_QUERY_TIMEOUT_MS,
+    runWithTimeout,
+} from "@/lib/sql-engine/runtime-controls"
 import type {
     Dialect,
     SqlQueryOptions,
@@ -19,7 +23,10 @@ export type {
 export interface ProblemDBState {
     ready: boolean
     error: string | null
+    recovering: boolean
     runQuery: (sql: string, options?: SqlQueryOptions) => Promise<SqlQueryResult>
+    reset: () => Promise<void>
+    cancel: () => Promise<void>
 }
 
 /**
@@ -37,11 +44,13 @@ export function useProblemDB(
     const sessionRef = useRef<SqlEngineSession | null>(null)
     const [ready, setReady] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [recovering, setRecovering] = useState(false)
 
     useEffect(() => {
         let cancelled = false
         setReady(false)
         setError(null)
+        setRecovering(false)
 
         async function load() {
             try {
@@ -86,11 +95,45 @@ export function useProblemDB(
         sql: string,
         options?: SqlQueryOptions
     ): Promise<SqlQueryResult> {
-        if (!sessionRef.current) throw new Error("Database is not ready yet.")
-        return sessionRef.current.runQuery(sql, options)
+        const session = sessionRef.current
+        if (!session) throw new Error("Database is not ready yet.")
+        return runWithTimeout({
+            operation: () => session.runQuery(sql, options),
+            timeoutMs: options?.timeoutMs ?? DEFAULT_QUERY_TIMEOUT_MS,
+            onTimeout: async () => {
+                setRecovering(true)
+                try {
+                    await session.reset()
+                } finally {
+                    setRecovering(false)
+                }
+            },
+        })
     }
 
-    return { ready, error, runQuery }
+    async function reset(): Promise<void> {
+        const session = sessionRef.current
+        if (!session) return
+        setRecovering(true)
+        try {
+            await session.reset()
+        } finally {
+            setRecovering(false)
+        }
+    }
+
+    async function cancel(): Promise<void> {
+        const session = sessionRef.current
+        if (!session) return
+        setRecovering(true)
+        try {
+            await session.cancel()
+        } finally {
+            setRecovering(false)
+        }
+    }
+
+    return { ready, error, recovering, runQuery, reset, cancel }
 }
 
 /** Pull `CREATE TABLE <name>` identifiers out of schema SQL. */
