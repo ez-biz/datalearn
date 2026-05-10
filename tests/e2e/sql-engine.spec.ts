@@ -1,19 +1,29 @@
 import { expect, test } from "@playwright/test"
 
+const DRAFT_PREFIX = "dl:draft:"
+const SIMPLE_SELECT_SLUG = "simple-select"
+const SIMPLE_SELECT_DRAFT_KEY = `${DRAFT_PREFIX}${SIMPLE_SELECT_SLUG}`
+
 test.describe("SQL engine result caps", () => {
     test("large learner results are truncated in the workspace", async ({
         page,
     }) => {
         test.slow()
 
-        await page.goto("/practice/simple-select")
+        await page.addInitScript(
+            ({ key, sql }) => {
+                window.localStorage.setItem(key, sql)
+            },
+            {
+                key: SIMPLE_SELECT_DRAFT_KEY,
+                sql: "SELECT * FROM range(0, 1105) AS t(id);",
+            }
+        )
+        await page.goto(`/practice/${SIMPLE_SELECT_SLUG}`)
 
         const readyRunButton = page.getByTestId("workspace-run-footer")
         await expect(readyRunButton).toBeEnabled({ timeout: 45_000 })
 
-        await page.locator(".monaco-editor").click()
-        await page.keyboard.press("Control+A")
-        await page.keyboard.type("SELECT * FROM range(0, 1105) AS t(id);")
         await readyRunButton.click()
 
         await expect(
