@@ -77,6 +77,9 @@ test.describe("SQL engine runtime controls", () => {
     })
 })
 
+// Note: this suite requires a production-mode build (`next start`).
+// `next dev` routes telemetry through console.debug instead of the
+// network, so the beacon assertions below would never resolve.
 test.describe("SQL engine telemetry", () => {
     test("emits production beacons for init, first query, and disposal", async ({
         page,

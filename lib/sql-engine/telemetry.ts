@@ -214,9 +214,9 @@ export function isSqlEngineTelemetryEvent(
     return (
         event.version === SQL_ENGINE_TELEMETRY_VERSION &&
         typeof event.sessionId === "string" &&
-        typeof event.schemaStatementCount === "number" &&
-        typeof event.timestampMs === "number" &&
-        typeof event.elapsedMs === "number" &&
+        isFiniteNonNegative(event.schemaStatementCount) &&
+        isFiniteNonNegative(event.timestampMs) &&
+        isFiniteNonNegative(event.elapsedMs) &&
         SQL_ENGINE_TELEMETRY_EVENT_NAMES.includes(
             event.name as SqlEngineTelemetryEventName
         ) &&
@@ -224,8 +224,12 @@ export function isSqlEngineTelemetryEvent(
         (event.problemSlug === undefined ||
             typeof event.problemSlug === "string") &&
         (event.queryElapsedMs === undefined ||
-            typeof event.queryElapsedMs === "number")
+            isFiniteNonNegative(event.queryElapsedMs))
     )
+}
+
+function isFiniteNonNegative(value: unknown): value is number {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0
 }
 
 function createTelemetrySessionId(): string {

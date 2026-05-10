@@ -2,6 +2,10 @@ import { isSqlEngineTelemetryEvent } from "@/lib/sql-engine/telemetry"
 
 export const runtime = "nodejs"
 
+// Intentionally unauthenticated and unmetered for now: the handler only
+// validates payload shape and writes to stdout (Vercel function logs).
+// TODO: add rate-limiting / origin checks when this gets wired to a real
+// telemetry sink (Vercel Analytics, Datadog, etc.).
 export async function POST(request: Request) {
     const event = await readTelemetryEvent(request)
     if (event) {

@@ -209,6 +209,14 @@ function assertReadOnly(sql: string): void {
     }
 }
 
+/**
+ * Telemetry tracks the lifecycle of the React-side session, not each
+ * recycle of the inner engine. `session.reset()` (e.g. after a query
+ * timeout) replaces the underlying DuckDB / PGlite instance but does not
+ * emit `engine.dispose` — only navigation away from the page does.
+ * `engine.firstQuery.ready` is one-shot for the same reason: if the user
+ * keeps querying after a reset, we don't re-emit it.
+ */
 function instrumentSqlEngineSession(
     session: SqlEngineSession,
     telemetry: SqlEngineTelemetrySession
