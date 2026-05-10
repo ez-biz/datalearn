@@ -74,6 +74,9 @@ jobs:
       - name: Test SQL read-only guard
         run: npm run test:sql-restrict
 
+      - name: Test SQL engine telemetry
+        run: npm run test:sql-engine-telemetry
+
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         with:

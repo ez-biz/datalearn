@@ -29,6 +29,10 @@ export interface ProblemDBState {
     cancel: () => Promise<void>
 }
 
+export type UseProblemDBOptions = {
+    problemSlug?: string
+}
+
 /**
  * Per-dialect SQL engine hook. Dynamically imports the right engine
  * (DuckDB-WASM or PGlite) so users only download the bundle they pick.
@@ -39,9 +43,11 @@ export interface ProblemDBState {
  */
 export function useProblemDB(
     schemaSql: string | null | undefined,
-    dialect: Dialect = "DUCKDB"
+    dialect: Dialect = "DUCKDB",
+    options: UseProblemDBOptions = {}
 ): ProblemDBState {
     const sessionRef = useRef<SqlEngineSession | null>(null)
+    const problemSlug = options.problemSlug
     const [ready, setReady] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [recovering, setRecovering] = useState(false)
@@ -57,6 +63,7 @@ export function useProblemDB(
                 const session = await createSqlEngineSession({
                     schemaSql,
                     dialect,
+                    problemSlug,
                 })
                 if (cancelled) {
                     await session.dispose()
@@ -89,7 +96,7 @@ export function useProblemDB(
                 })
             }
         }
-    }, [schemaSql, dialect])
+    }, [schemaSql, dialect, problemSlug])
 
     async function runQuery(
         sql: string,

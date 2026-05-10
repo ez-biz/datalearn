@@ -129,7 +129,7 @@ export function ProblemClient({
         error: dbError,
         recovering: dbRecovering,
         runQuery,
-    } = useProblemDB(schemaSql, dialect)
+    } = useProblemDB(schemaSql, dialect, { problemSlug: slug })
 
     // Hydrate draft from localStorage
     useEffect(() => {

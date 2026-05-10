@@ -76,3 +76,62 @@ test.describe("SQL engine runtime controls", () => {
         await expect(page.getByRole("cell", { name: "Alice" }).first()).toBeVisible()
     })
 })
+
+test.describe("SQL engine telemetry", () => {
+    test("emits production beacons for init, first query, and disposal", async ({
+        page,
+    }) => {
+        test.slow()
+
+        const eventNames: string[] = []
+        page.on("request", (request) => {
+            if (!request.url().endsWith("/api/telemetry/sql-engine")) return
+            if (request.method() !== "POST") return
+            const body = request.postData()
+            if (!body) return
+
+            try {
+                const event = JSON.parse(body) as { name?: unknown }
+                if (typeof event.name === "string") eventNames.push(event.name)
+            } catch {}
+        })
+
+        await page.addInitScript((dialectKey) => {
+            window.localStorage.removeItem(dialectKey)
+        }, `dl:dialect:${SIMPLE_SELECT_SLUG}`)
+        await page.goto(`/practice/${SIMPLE_SELECT_SLUG}`)
+
+        const runButton = page.getByTestId("workspace-run-footer")
+        await expect(runButton).toBeEnabled({ timeout: 45_000 })
+
+        await expect
+            .poll(() => eventNames.includes("engine.init.start"), {
+                timeout: 45_000,
+            })
+            .toBe(true)
+        await expect
+            .poll(() => eventNames.includes("engine.init.ready"), {
+                timeout: 45_000,
+            })
+            .toBe(true)
+
+        await runButton.click()
+        await expect(
+            page.getByRole("columnheader", { name: "id" }).first()
+        ).toBeVisible({
+            timeout: 45_000,
+        })
+        await expect
+            .poll(() => eventNames.includes("engine.firstQuery.ready"), {
+                timeout: 45_000,
+            })
+            .toBe(true)
+
+        await page.getByRole("button", { name: /switch engine to postgres/i }).click()
+        await expect
+            .poll(() => eventNames.includes("engine.dispose"), {
+                timeout: 45_000,
+            })
+            .toBe(true)
+    })
+})
