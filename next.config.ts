@@ -37,6 +37,29 @@ const nextConfig: NextConfig = {
                 source: "/:path*",
                 headers: securityHeaders,
             },
+            // Self-hosted SQL engine bundle (PR 3.3 Phase 1). Vercel's
+            // default for `public/` assets is `max-age=0, must-revalidate`,
+            // which forces a revalidation round-trip on every visit and
+            // defeats most of the win from self-hosting. The URL is NOT
+            // content-hashed (yet — TODO when we ship Phase 2 or upgrade
+            // the package routinely), so we can't use `immutable` safely:
+            // a package upgrade would otherwise be invisible to returning
+            // visitors for the whole max-age window.
+            //
+            // Compromise: 1-day max-age. Cuts the revalidation round-trip
+            // out of the typical practice session entirely, and a package
+            // upgrade propagates to returning visitors within ~24 hours.
+            // Move to immutable + hashed URLs alongside the Phase 2 SW
+            // work if/when telemetry shows we need it.
+            {
+                source: "/_dl/sql-engine/:path*",
+                headers: [
+                    {
+                        key: "Cache-Control",
+                        value: "public, max-age=86400",
+                    },
+                ],
+            },
         ]
     },
     images: {
