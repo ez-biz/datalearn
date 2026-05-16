@@ -19,6 +19,7 @@
     "test:sql-restrict": "tsx scripts/test-sql-restrict.ts",
     "test:sql-validator-json-time": "node --import tsx --test scripts/test-sql-validator-json-time.ts",
     "test:sql-engine-result-cap": "node --import tsx --test scripts/test-sql-engine-result-cap.ts",
+    "test:duckdb-init": "node --import tsx --test scripts/test-duckdb-init.ts",
     "test:sql-engine-runtime-controls": "node --import tsx --test scripts/test-sql-engine-runtime-controls.ts",
     "test:sql-engine-telemetry": "node --import tsx --test scripts/test-sql-engine-telemetry.ts",
     "test:sql-engine-warmup": "node --import tsx --test scripts/test-sql-engine-warmup.ts",
