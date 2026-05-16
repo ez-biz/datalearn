@@ -1,14 +1,14 @@
 /**
  * Pure SQL-to-TableInfo parser for the constrained `CREATE TABLE` +
- * single-row `INSERT INTO ... VALUES (...)` shape used by every seeded
- * schema in this project. Lets the problem page render the Schema tab
- * and INPUT example previews server-side, removing the DuckDB-WASM
- * download from the first-paint critical path on the left pane.
+ * `INSERT INTO ... VALUES (...)` shape used by every seeded schema in
+ * this project. Lets the problem page render the Schema tab and INPUT
+ * example previews server-side, removing the DuckDB-WASM download from
+ * the first-paint critical path on the left pane.
  *
- * The parser deliberately handles only the shape we actually emit. Any
- * schema with multi-row VALUES, computed defaults, subqueries, or
- * unfamiliar DDL forms returns `null` from the top-level entry point so
- * the caller falls back to the existing DuckDB-introspection path.
+ * Supports single-row and multi-row INSERT (`VALUES (...), (...), ...`).
+ * Any schema with computed defaults, subqueries, or unfamiliar DDL forms
+ * returns `null` from the top-level entry point so the caller falls back
+ * to the existing DuckDB-introspection path.
  *
  * No external deps. Pure function. Safe to run inside a server component.
  */
@@ -49,8 +49,11 @@ export function parseSchema(sql: string | null | undefined): ParsedTable[] | nul
 
     if (tables.size === 0) return null
 
-    // INSERT INTO <name> VALUES (...) ;
-    const insertRe = /\bINSERT\s+INTO\s+(?:"([^"]+)"|([A-Za-z_][\w]*))\s*(?:\(([^)]*)\)\s*)?VALUES\s*\(([^;]*?)\)\s*;/gi
+    // INSERT INTO <name> [(col, ...)] VALUES (...) [, (...)]* ;
+    // Capture everything after VALUES up to the terminating semicolon so we
+    // can hand it to `splitInsertTuples` and handle both single-row and
+    // multi-row INSERTs in one path.
+    const insertRe = /\bINSERT\s+INTO\s+(?:"([^"]+)"|([A-Za-z_][\w]*))\s*(?:\(([^)]*)\)\s*)?VALUES\s+([^;]+);/gi
     while ((match = insertRe.exec(stripped)) !== null) {
         const name = match[1] ?? match[2]
         let targetCols: string[] | null = null
@@ -59,27 +62,87 @@ export function parseSchema(sql: string | null | undefined): ParsedTable[] | nul
             if (!split) return null
             targetCols = split.map((c) => c.trim().replace(/^"|"$/g, ""))
         }
-        const valuesBody = match[4]
         const table = tables.get(name)
         if (!table) continue // INSERT against unknown table — skip silently
-        if (table.sampleRows.length >= SAMPLE_ROW_LIMIT) continue
 
-        const rawValues = splitCommaAware(valuesBody)
-        if (!rawValues) return null
+        const tuples = splitInsertTuples(match[4])
+        if (!tuples) return null
 
-        const values = rawValues.map(parseLiteral)
-        // Pair values with column names. Honor explicit (col,...) list when
-        // present, else fall back to the table's column order.
         const columnNames = targetCols ?? table.columns.map((c) => c.name)
-        if (values.length !== columnNames.length) return null
-        const row: Record<string, unknown> = {}
-        for (let i = 0; i < columnNames.length; i++) {
-            row[columnNames[i]] = values[i]
+
+        for (const tuple of tuples) {
+            if (table.sampleRows.length >= SAMPLE_ROW_LIMIT) break
+            const rawValues = splitCommaAware(tuple)
+            if (!rawValues) return null
+            const values = rawValues.map(parseLiteral)
+            if (values.length !== columnNames.length) return null
+            const row: Record<string, unknown> = {}
+            for (let i = 0; i < columnNames.length; i++) {
+                row[columnNames[i]] = values[i]
+            }
+            table.sampleRows.push(row)
         }
-        table.sampleRows.push(row)
     }
 
     return Array.from(tables.values())
+}
+
+/**
+ * Split a multi-row INSERT VALUES body — e.g. `(1, 'a'), (2, 'b')` — into
+ * the inner content of each tuple: `["1, 'a'", "2, 'b'"]`. Respects
+ * single-quoted string contents (so commas inside strings don't split a
+ * tuple) and balances parentheses (in case a value itself is parenthesized).
+ *
+ * Returns `null` on malformed input so the caller falls back to DuckDB.
+ */
+function splitInsertTuples(body: string): string[] | null {
+    const tuples: string[] = []
+    let i = 0
+    const len = body.length
+
+    while (i < len) {
+        // Skip whitespace + an optional separator comma between tuples.
+        while (i < len && /\s/.test(body[i])) i++
+        if (i >= len) break
+        if (body[i] === ",") {
+            i++
+            continue
+        }
+
+        // Each tuple must start with `(`.
+        if (body[i] !== "(") return null
+        i++
+
+        let depth = 1
+        let inString = false
+        const start = i
+        while (i < len && depth > 0) {
+            const c = body[i]
+            if (inString) {
+                if (c === "'" && body[i + 1] === "'") {
+                    i += 2
+                    continue
+                }
+                if (c === "'") inString = false
+                i++
+                continue
+            }
+            if (c === "'") {
+                inString = true
+                i++
+                continue
+            }
+            if (c === "(") depth++
+            else if (c === ")") depth--
+            if (depth === 0) break
+            i++
+        }
+        if (depth !== 0) return null
+        tuples.push(body.slice(start, i))
+        i++ // consume the closing `)`
+    }
+
+    return tuples.length ? tuples : null
 }
 
 /** Strip line + block SQL comments. */

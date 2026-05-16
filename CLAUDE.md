@@ -53,7 +53,7 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor; querie
 - **Don't seed the local DB with the wrong Postgres user.** Local trust auth uses `anchitgupta`, not `postgres`.
 - **Don't add Prisma or Next/server imports to `lib/admin-validation.ts`.** The MCP server bundles this file via tsup; pulling in Prisma would balloon the bundle and break the stdio runtime. Comment at the top of the file states this contract.
 - **Don't bypass the MCP `create_problem` DRAFT guard.** The tool input schema deliberately omits `status`; the handler hardcodes `status: "DRAFT"` after spreading user input. If you add a new write tool, follow the same omit-then-inject pattern for any field that must be controlled by humans.
-- **Don't add INSERT shapes the schema parser doesn't recognize without falling back gracefully.** `lib/schema-parser.ts` handles only single-row `INSERT INTO foo VALUES (...)` because that's the seed format we emit. If you add multi-row INSERTs or computed defaults to `SqlSchema.sql`, the parser returns `null` and the page transparently falls back to DuckDB introspection — but you'll regress the first-paint UX win. Either keep the seed shape consistent or extend the parser + tests in `scripts/test-schema-parser.ts`.
+- **Don't add INSERT shapes the schema parser doesn't recognize without falling back gracefully.** `lib/schema-parser.ts` handles single-row and multi-row `INSERT INTO foo VALUES (...)`. If you add computed defaults, subqueries, or other unfamiliar DDL forms, the parser returns `null` and the page transparently falls back to DuckDB introspection — but you'll regress the first-paint UX win. Extend the parser + tests in `scripts/test-schema-parser.ts` rather than ship a fallback regression.
 
 ## Running locally
 

@@ -48,7 +48,20 @@ export async function createSqlEngineSession({
             ? await createPostgresSession(schema, statements, problemSlug)
             : await createDuckDbSession(statements)
 
-    telemetry.emit("engine.init.ready")
+    // For DUCKDB, attach where the bundle was fetched from so we can
+    // split self-host vs. CDN performance in the dashboard. POSTGRES
+    // skips this — PGlite bundling is uniform.
+    if (dialect === "DUCKDB") {
+        const { getLastDuckDbBundleSource } = await import("@/lib/duckdb")
+        const bundleSource = getLastDuckDbBundleSource()
+        if (bundleSource) {
+            telemetry.emit("engine.init.ready", { bundleSource })
+        } else {
+            telemetry.emit("engine.init.ready")
+        }
+    } else {
+        telemetry.emit("engine.init.ready")
+    }
     return instrumentSqlEngineSession(session, telemetry)
 }
 

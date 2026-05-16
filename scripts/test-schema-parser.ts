@@ -176,6 +176,77 @@ describe("parseSchema", () => {
         assert.deepEqual(result![0].sampleRows[0], { a: 1, c: 3 })
     })
 
+    it("parses multi-row INSERT with implicit column order", () => {
+        const sql = `
+            CREATE TABLE t (id INTEGER, name VARCHAR);
+            INSERT INTO t VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Carol');
+        `
+        const result = parseSchema(sql)
+        assert.equal(result?.length, 1)
+        assert.equal(result![0].sampleRows.length, 3)
+        assert.deepEqual(result![0].sampleRows[0], { id: 1, name: "Alice" })
+        assert.deepEqual(result![0].sampleRows[1], { id: 2, name: "Bob" })
+        assert.deepEqual(result![0].sampleRows[2], { id: 3, name: "Carol" })
+    })
+
+    it("parses multi-row INSERT with explicit (col, ...) list", () => {
+        const sql = `
+            CREATE TABLE t (a INTEGER, b INTEGER, c INTEGER);
+            INSERT INTO t (a, c) VALUES (1, 10), (2, 20);
+        `
+        const result = parseSchema(sql)
+        assert.equal(result?.length, 1)
+        assert.equal(result![0].sampleRows.length, 2)
+        assert.deepEqual(result![0].sampleRows[0], { a: 1, c: 10 })
+        assert.deepEqual(result![0].sampleRows[1], { a: 2, c: 20 })
+    })
+
+    it("mixes single-row and multi-row INSERT for the same table", () => {
+        const sql = `
+            CREATE TABLE t (id INTEGER, name VARCHAR);
+            INSERT INTO t VALUES (1, 'Alice');
+            INSERT INTO t VALUES (2, 'Bob'), (3, 'Carol');
+        `
+        const result = parseSchema(sql)
+        assert.equal(result![0].sampleRows.length, 3)
+        assert.equal(result![0].sampleRows[0].id, 1)
+        assert.equal(result![0].sampleRows[2].id, 3)
+    })
+
+    it("multi-row INSERT still respects SAMPLE_ROW_LIMIT", () => {
+        const tuples = Array.from({ length: 20 }, (_, i) => `(${i})`).join(", ")
+        const sql = `
+            CREATE TABLE t (id INTEGER);
+            INSERT INTO t VALUES ${tuples};
+        `
+        const result = parseSchema(sql)
+        assert.equal(result![0].sampleRows.length, 8)
+        assert.equal(result![0].sampleRows[0].id, 0)
+        assert.equal(result![0].sampleRows[7].id, 7)
+    })
+
+    it("multi-row INSERT with mismatched arity in one tuple bails to fallback", () => {
+        const sql = `
+            CREATE TABLE t (a INTEGER, b INTEGER);
+            INSERT INTO t VALUES (1, 2), (3);
+        `
+        // The second tuple has the wrong arity. Parser must return null so
+        // the caller falls back to DuckDB introspection rather than render
+        // a malformed sample row.
+        assert.equal(parseSchema(sql), null)
+    })
+
+    it("multi-row INSERT preserves escaped quotes inside string literals", () => {
+        const sql = `
+            CREATE TABLE t (id INTEGER, name VARCHAR);
+            INSERT INTO t VALUES (1, 'O''Brien'), (2, 'X, Y');
+        `
+        const result = parseSchema(sql)
+        assert.equal(result![0].sampleRows[0].name, "O'Brien")
+        // The comma inside the string must not split the second tuple.
+        assert.equal(result![0].sampleRows[1].name, "X, Y")
+    })
+
     it("parses the actual seed-data ECOMMERCE_SCHEMA shape", async () => {
         const { ECOMMERCE_SCHEMA } = await import("../lib/seed-data")
         const result = parseSchema(ECOMMERCE_SCHEMA)
