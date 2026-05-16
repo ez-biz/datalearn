@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
-import { createWarmupRegistry } from "../lib/sql-engine/warmup"
+import { createWarmupRegistry, shouldWarmPostgres } from "../lib/sql-engine/warmup"
 
 /**
  * Test helpers: synthetic DuckDB and PGlite module placeholders. We never
@@ -260,5 +260,79 @@ describe("SQL engine warmup registry", () => {
         const claimed = registry.claim("DUCKDB")
         assert.equal(claimed?.id, "duck-retry-2")
         assert.equal(terminateCalls.length, 0)
+    })
+})
+
+/**
+ * `shouldWarmPostgres` reads the per-problem dialect choice that
+ * `components/practice/ProblemClient.tsx` writes to localStorage under
+ * `dl:dialect:<slug>`. Returning true means we should preemptively
+ * warm the PGlite module on practice-list mount because this learner
+ * has used Postgres mode on at least one problem.
+ */
+function fakeStorage(entries: Record<string, string>): Storage {
+    return {
+        get length() {
+            return Object.keys(entries).length
+        },
+        key(i: number) {
+            return Object.keys(entries)[i] ?? null
+        },
+        getItem(k: string) {
+            return entries[k] ?? null
+        },
+        setItem() {},
+        removeItem() {},
+        clear() {},
+    }
+}
+
+describe("shouldWarmPostgres", () => {
+    it("returns false when no dialect keys exist", () => {
+        assert.equal(shouldWarmPostgres(fakeStorage({})), false)
+    })
+
+    it("returns false when all dialect keys are DUCKDB", () => {
+        const storage = fakeStorage({
+            "dl:dialect:simple-select": "DUCKDB",
+            "dl:dialect:customers-by-country": "DUCKDB",
+        })
+        assert.equal(shouldWarmPostgres(storage), false)
+    })
+
+    it("returns true when at least one dialect key is POSTGRES", () => {
+        const storage = fakeStorage({
+            "dl:dialect:simple-select": "DUCKDB",
+            "dl:dialect:total-revenue-per-customer": "POSTGRES",
+        })
+        assert.equal(shouldWarmPostgres(storage), true)
+    })
+
+    it("ignores unrelated localStorage keys", () => {
+        const storage = fakeStorage({
+            "dl:draft:simple-select": "SELECT * FROM users",
+            "dl:dialect-other": "POSTGRES",
+            "random:key": "POSTGRES",
+        })
+        assert.equal(shouldWarmPostgres(storage), false)
+    })
+
+    it("returns false when storage is undefined (SSR / no-window)", () => {
+        assert.equal(shouldWarmPostgres(undefined), false)
+        assert.equal(shouldWarmPostgres(null), false)
+    })
+
+    it("swallows storage exceptions (Safari private-mode quota throw)", () => {
+        const throwing: Storage = {
+            length: 1,
+            key: () => {
+                throw new Error("QuotaExceededError")
+            },
+            getItem: () => null,
+            setItem: () => {},
+            removeItem: () => {},
+            clear: () => {},
+        }
+        assert.equal(shouldWarmPostgres(throwing), false)
     })
 })

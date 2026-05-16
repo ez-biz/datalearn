@@ -210,3 +210,47 @@ export function warmSqlEngine(dialect: Dialect): void {
 export function claimWarmDuckDB(): AsyncDuckDB | null {
     return getDefaultWarmupRegistry().claim("DUCKDB")
 }
+
+/**
+ * localStorage key prefix written by `components/practice/ProblemClient.tsx`
+ * when the learner picks a dialect for a specific problem. Format:
+ * `dl:dialect:<slug>` → `"DUCKDB" | "POSTGRES"`.
+ *
+ * Exported for tests; consumers should call `shouldWarmPostgres()` rather
+ * than scan keys directly.
+ */
+export const DIALECT_STORAGE_KEY_PREFIX = "dl:dialect:"
+
+/**
+ * Heuristic for whether to preemptively warm PGlite on practice-list
+ * mount. Returns true if **any** previously-visited problem had its
+ * dialect set to POSTGRES — that's our signal the learner has at least
+ * sampled Postgres mode and is plausibly going to use it again.
+ *
+ * Returns false (no warm) on:
+ * - Missing/null storage (SSR, no-window).
+ * - Any storage exception (Safari private mode can throw QuotaExceeded
+ *   on read in rare cases).
+ * - Empty storage.
+ * - All `dl:dialect:*` entries set to anything other than POSTGRES.
+ *
+ * Pure function modulo the `storage` arg; safe to unit-test with a
+ * synthetic Storage implementation.
+ */
+export function shouldWarmPostgres(
+    storage: Storage | null | undefined
+): boolean {
+    if (!storage) return false
+    try {
+        const total = storage.length
+        for (let i = 0; i < total; i++) {
+            const key = storage.key(i)
+            if (!key || !key.startsWith(DIALECT_STORAGE_KEY_PREFIX)) continue
+            const value = storage.getItem(key)
+            if (value === "POSTGRES") return true
+        }
+        return false
+    } catch {
+        return false
+    }
+}
