@@ -1,9 +1,9 @@
 # DuckDB-WASM Bundle Size Investigation
 
 **Phase:** SQL Engine v2 — PR 3.4
-**Status:** Investigation spec; measurements pending.
+**Status:** Investigated 2026-05-16 — **variant-swap not viable; pivoting lever to PR 3.1 (warm-up) and/or PR 3.3 (service-worker precache).** See "Measurements (2026-05-16)" and "Recommendation" sections below.
 **Owner:** Anchit Gupta
-**Date:** 2026-05-10
+**Date:** 2026-05-10 (spec) · 2026-05-16 (measurements + decision)
 
 ## Goal
 
@@ -114,3 +114,70 @@ Failing any criterion: the variant stays as-is and we document the measurement i
 - PR 3.1 — Engine warm-up. Different lever for the same problem (cold start), starts the bundle download earlier rather than making it smaller.
 - PR 3.2 — PGlite IndexedDB persistence. Closes the repeat-visit cost for Postgres mode; this PR closes the equivalent for DuckDB if a smaller bundle is viable.
 - PR 3.3 — Service worker / asset precache. Caches the bundle locally; orthogonal to bundle size and gated behind its own design doc.
+
+---
+
+## Measurements (2026-05-16)
+
+`@duckdb/duckdb-wasm@1.33.1-dev45.0`. Pre-compressed locally with `gzip -9` and `brotli -q 11`; the CDN serves brotli where supported.
+
+**Step 1 — variants actually published to jsDelivr.** `getJsDelivrBundles()` returns **two**, not three:
+
+```text
+Available bundles: [ 'mvp', 'eh' ]
+```
+
+`coi` exists on disk in the package but is **not** exposed via `getJsDelivrBundles()`, so no learner today can be served `coi` even if their browser supports COOP/COEP. Reaching `coi` would require self-hosting AND enabling cross-origin isolation for the whole site — both meaningfully larger changes than this PR.
+
+**Step 2 — wire-size per variant (local compression, jsDelivr URLs).**
+
+| Variant | wasm raw | wasm gzip-9 | **wasm brotli-11** | worker gzip-9 | worker brotli-11 | **Wire total (br)** |
+|---|---|---|---|---|---|---|
+| `mvp` | 39.18 MB (41,086,840) | 8.71 MB (9,132,030) | **5.68 MB** (5,953,553) | 188 KB (193,052) | 156 KB (159,979) | **5.83 MB** |
+| `eh`  | 34.08 MB (35,738,125) | 7.65 MB (8,016,608) | **5.05 MB** (5,293,795) | 184 KB (188,007) | 152 KB (155,859) | **5.20 MB** |
+| `coi` (not via CDN) | 33.83 MB (35,477,476) | 7.71 MB (8,086,862) | 5.13 MB (5,376,804) | 200 KB (205,267) | 165 KB (169,398) | 5.29 MB |
+
+**Differences relative to current default (`eh`):**
+
+- `mvp` is **+12.1% larger** on the wire (br). Switching `mvp → eh` is the current default; reversing it is a loss.
+- `coi` is **+1.7% larger** than `eh` on the wire and requires self-host + COI. Not a win on bytes.
+
+**Steps 3 (Playwright compat check) and 4 (self-hosting evaluation) — not run.** The Step 2 numbers already rule out the variant-swap path by the decision criteria below; running Playwright against `mvp` would only confirm a regression we don't want to ship. Self-hosting is evaluated as a follow-up in the Recommendation section.
+
+## Decision vs. criteria
+
+| # | Criterion | Result | Notes |
+|---|---|---|---|
+| 1 | Reduces cold-start transfer ≥ 25% in Chrome stable | ❌ | Best alternative (`mvp`) is 12% *larger*; `coi` is also larger. The 25% gate is unachievable by variant swap. |
+| 2 | `npm run audit:dialects` passes | n/a | Not exercised; criterion 1 fails first. |
+| 3 | Playwright per-problem compat passes | n/a | Not exercised; criterion 1 fails first. |
+| 4 | Reversible via 1-line revert in `lib/duckdb.ts` | ✅ | Would have been satisfied, but moot. |
+
+**Verdict: variant-swap is not implementing.** The spec's framing assumed meaningful slack between bundles. Brotli closes that slack: the raw-byte gap (~5 MB between `mvp` and `eh`) collapses to ~0.6 MB after brotli, which is below the 25% threshold and far below the size of unrelated payload on a cold practice page.
+
+## Recommendation
+
+1. **Close out PR 3.4 as investigated-not-implementing.** This doc is the deliverable; no code change ships.
+2. **Pivot the lever.** Two viable replacements for the same cold-start problem:
+   - **PR 3.1 — Engine warm-up.** Kick the bundle fetch as soon as the learner lands on a practice route (or even on hover of a problem link from the list page), so the WASM is already in cache by the time `useProblemDB` runs. Telemetry harness is already in place to measure `engine.init.ready` deltas before/after.
+   - **PR 3.3 — Service worker / asset precache.** Caches the bundle locally after first load, so repeat visits skip the wire entirely. Orthogonal to PR 3.1 and stackable.
+3. **Self-hosting decision.** Independent of bundle size, self-hosting on Vercel gives us deterministic cache-control headers and removes the third-party CDN dependency. Defer this until either: (a) we observe a jsDelivr availability incident hitting real users, or (b) we ship the service worker precache (PR 3.3), at which point self-hosting becomes a precondition for confident cache management. Not blocking anything today.
+4. **Document the finding loudly.** Roadmap update in `docs/superpowers/plans/2026-05-05-sql-engine-v2-roadmap.md` marks PR 3.4 ✅ investigated and deferred-from-implementation, with a forward link to PR 3.1 / 3.3.
+
+## Reproduction
+
+```bash
+# Inventory
+node -e "const d = require('@duckdb/duckdb-wasm'); console.log(Object.keys(d.getJsDelivrBundles()))"
+
+# Sizes
+cd node_modules/@duckdb/duckdb-wasm/dist/
+for f in duckdb-{mvp,eh,coi}.wasm duckdb-browser-{mvp,eh,coi}.worker.js; do
+  raw=$(wc -c < "$f" | tr -d ' ')
+  gz=$(gzip -c -9 "$f" | wc -c | tr -d ' ')
+  br=$(brotli -q 11 -c "$f" | wc -c | tr -d ' ')
+  printf "%-45s raw=%10s gz=%10s br=%10s\n" "$f" "$raw" "$gz" "$br"
+done
+```
+
+The numbers in the table above were captured from this exact command run on 2026-05-16 against `@duckdb/duckdb-wasm@1.33.1-dev45.0` (current `package-lock.json` lock).

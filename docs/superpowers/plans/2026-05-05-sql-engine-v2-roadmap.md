@@ -328,22 +328,23 @@ Land Phase 1.6 telemetry first so every Phase 3 PR can attach before/after numbe
 - Confirm a follow-up deploy invalidates stale engine assets.
 - Confirm `?dl-sw=unregister` clears state cleanly.
 
-### PR 3.4: DuckDB Minimal Bundle Investigation
+### PR 3.4: DuckDB Minimal Bundle Investigation — ✅ Investigated (2026-05-16); not implementing
 
 **Goal:** Reduce the ~30MB cold download if a smaller browser bundle works.
 
-**Files:**
-- Create: `docs/superpowers/specs/2026-05-xx-duckdb-bundle-size-investigation.md`
-- Possibly modify: `lib/duckdb.ts`
+**Outcome:** Measurements appended to [`docs/superpowers/specs/2026-05-10-duckdb-bundle-size-investigation.md`](../specs/2026-05-10-duckdb-bundle-size-investigation.md). Variant-swap is not viable — `getJsDelivrBundles()` only exposes `mvp` and `eh`, and after brotli the wire-size gap between them is ~12% in `mvp`'s *direction* (i.e. larger). The "30 MB worst case" framing in the original spec described the decoded size; on the wire every learner is already in the ~5 MB range. The spec's 25%-reduction decision criterion is unachievable by swapping bundles.
 
-**Design:**
-- Measure current asset sizes (eh / mvp / coi bundles from `@duckdb/duckdb-wasm`).
-- Test against `npm run audit:dialects` — only switch if the smaller bundle handles every published DuckDB problem.
-- Note for the doc: **DuckDB-WASM has no OPFS persistence story today.** Phase 3 only addresses PGlite repeat-load cost. DuckDB asymmetry is acknowledged and not in scope.
+**Pivot:** The same cold-start problem is now addressed by:
+- PR 3.1 — Engine warm-up. Start the bundle fetch as soon as the learner lands on a practice route.
+- PR 3.3 — Service worker / asset precache. Skip the wire entirely on repeat visits.
 
-**Verification:**
-- `npm run audit:dialects` against the candidate bundle.
-- Network panel screenshot or measurement table in the design doc.
+**Self-hosting** is deferred. It does not save bytes today, but becomes a precondition for confident cache management once PR 3.3 ships. Revisit then or sooner if jsDelivr availability becomes an issue for real users.
+
+**Files (delivered):**
+- `docs/superpowers/specs/2026-05-10-duckdb-bundle-size-investigation.md` — measurements, decision vs. criteria, reproduction commands.
+- This roadmap entry — outcome + pivot.
+
+No code changes to `lib/duckdb.ts`.
 
 ---
 
