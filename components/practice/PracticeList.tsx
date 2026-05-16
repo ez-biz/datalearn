@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { cn } from "@/lib/utils"
-import { warmSqlEngine } from "@/lib/sql-engine/warmup"
+import { shouldWarmPostgres, warmSqlEngine } from "@/lib/sql-engine/warmup"
 
 type Difficulty = "EASY" | "MEDIUM" | "HARD"
 type StatusFilter = "ALL" | "SOLVED" | "TODO"
@@ -39,11 +39,18 @@ export function PracticeList({ problems, solvedSlugs }: PracticeListProps) {
     // Prefetch the DuckDB-WASM engine while the learner is still browsing
     // the list. By the time they click into a problem the bundle is
     // typically already instantiated, collapsing `engine.init.ready` from
-    // a few seconds to near zero. PGlite warmup is deferred — Postgres
-    // mode is opt-in per problem and already amortized by PR 3.2's
-    // IndexedDB persistence.
+    // a few seconds to near zero. Also pre-import the PGlite module for
+    // learners who have used Postgres mode on any prior problem — that's
+    // the cheap half of PGlite startup; the instance itself is per-problem
+    // and still constructed lazily.
     useEffect(() => {
         warmSqlEngine("DUCKDB")
+        if (
+            typeof window !== "undefined" &&
+            shouldWarmPostgres(window.localStorage)
+        ) {
+            warmSqlEngine("POSTGRES")
+        }
     }, [])
 
     const counts = useMemo(() => {
