@@ -5,6 +5,7 @@ import { CheckCircle2, Loader2, Play, RotateCcw, Send } from "lucide-react"
 import { SqlEditor } from "./SqlEditor"
 import { ResultTable } from "./ResultTable"
 import { ValidationResult as ValidationResultView } from "./ValidationResult"
+import { SolutionPanel } from "@/components/practice/SolutionPanel"
 import type { ValidationResult } from "@/lib/sql-validator"
 import {
     DEFAULT_DISPLAY_ROW_CAP,
@@ -326,7 +327,16 @@ export function SqlPlayground({
                 ) : (
                     <div className="h-full overflow-auto p-4 scrollbar-thin">
                         {validation ? (
-                            <ValidationResultView result={validation} />
+                            <>
+                                <ValidationResultView result={validation} />
+                                {validation.ok && problemSlug && dialect ? (
+                                    <SolutionPanel
+                                        slug={problemSlug}
+                                        dialects={allowedDialects ?? [dialect]}
+                                        activeDialect={dialect}
+                                    />
+                                ) : null}
+                            </>
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground">
                                 <CheckCircle2 className="h-6 w-6 mb-2 opacity-40" />

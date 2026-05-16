@@ -22,6 +22,7 @@
     "test:sql-engine-runtime-controls": "node --import tsx --test scripts/test-sql-engine-runtime-controls.ts",
     "test:sql-engine-telemetry": "node --import tsx --test scripts/test-sql-engine-telemetry.ts",
     "test:sql-engine-warmup": "node --import tsx --test scripts/test-sql-engine-warmup.ts",
+    "test:solutions": "node --import tsx --test scripts/test-solutions.ts",
     "test:schema-cache-key": "node --import tsx --test scripts/test-schema-cache-key.ts",
     "audit:dialects": "tsx scripts/audit-all-dialects.ts",
     "audit:dialects:ci": "tsx scripts/audit-all-dialects.ts",
