@@ -15,6 +15,17 @@ export const SQL_ENGINE_TELEMETRY_EVENT_NAMES = [
 export type SqlEngineTelemetryEventName =
     (typeof SQL_ENGINE_TELEMETRY_EVENT_NAMES)[number]
 
+/**
+ * Where the DuckDB-WASM bundle was fetched from on this session.
+ * `"self"` — served from `/_dl/sql-engine/` on our own origin.
+ * `"cdn"` — served from jsDelivr (dev fallback or browsers that don't
+ *           pass the self-host bundle's feature check).
+ *
+ * Only attached to `engine.init.ready` for DUCKDB sessions; absent for
+ * POSTGRES events.
+ */
+export type SqlEngineBundleSource = "self" | "cdn"
+
 export type SqlEngineTelemetryEvent = {
     version: typeof SQL_ENGINE_TELEMETRY_VERSION
     name: SqlEngineTelemetryEventName
@@ -25,6 +36,7 @@ export type SqlEngineTelemetryEvent = {
     elapsedMs: number
     problemSlug?: string
     queryElapsedMs?: number
+    bundleSource?: SqlEngineBundleSource
 }
 
 type TelemetryStorage = Pick<Storage, "getItem">
@@ -38,6 +50,7 @@ type BuildSqlEngineTelemetryEventInput = {
     nowMs: number
     problemSlug?: string
     queryElapsedMs?: number
+    bundleSource?: SqlEngineBundleSource
 }
 
 type SamplingOptions = {
@@ -64,7 +77,10 @@ export type SqlEngineTelemetrySession = {
     elapsedSince: (startedAtMs: number) => number
     emit: (
         name: SqlEngineTelemetryEventName,
-        details?: { queryElapsedMs?: number }
+        details?: {
+            queryElapsedMs?: number
+            bundleSource?: SqlEngineBundleSource
+        }
     ) => void
 }
 
@@ -86,6 +102,7 @@ export function buildSqlEngineTelemetryEvent({
     nowMs,
     problemSlug,
     queryElapsedMs,
+    bundleSource,
 }: BuildSqlEngineTelemetryEventInput): SqlEngineTelemetryEvent {
     return {
         version: SQL_ENGINE_TELEMETRY_VERSION,
@@ -99,6 +116,7 @@ export function buildSqlEngineTelemetryEvent({
         ...(queryElapsedMs !== undefined
             ? { queryElapsedMs: toRoundedNonNegativeNumber(queryElapsedMs) }
             : {}),
+        ...(bundleSource ? { bundleSource } : {}),
     }
 }
 
@@ -136,6 +154,7 @@ export function createSqlEngineTelemetrySession({
                     startedAtMs,
                     nowMs: now(),
                     queryElapsedMs: details?.queryElapsedMs,
+                    bundleSource: details?.bundleSource,
                 })
             )
         },
@@ -224,7 +243,10 @@ export function isSqlEngineTelemetryEvent(
         (event.problemSlug === undefined ||
             typeof event.problemSlug === "string") &&
         (event.queryElapsedMs === undefined ||
-            isFiniteNonNegative(event.queryElapsedMs))
+            isFiniteNonNegative(event.queryElapsedMs)) &&
+        (event.bundleSource === undefined ||
+            event.bundleSource === "self" ||
+            event.bundleSource === "cdn")
     )
 }
 
