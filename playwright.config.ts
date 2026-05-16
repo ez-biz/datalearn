@@ -8,7 +8,12 @@ export default defineConfig({
     fullyParallel: false, // tests share a DB; serialize for now
     retries: 0,
     workers: 1,
-    reporter: process.env.CI ? "github" : "list",
+    // CI: github inline annotations + html for the uploaded artifact so
+    // we can inspect traces / browser console for failing tests post-hoc.
+    // Local: plain list output.
+    reporter: process.env.CI
+        ? [["github"], ["html", { open: "never" }]]
+        : "list",
     use: {
         baseURL: BASE_URL,
         trace: "retain-on-failure",
