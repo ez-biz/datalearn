@@ -1,7 +1,9 @@
 # 📋 Antigravity Data Learning Platform — Implementation Plan
 
 > **⚠️ HISTORICAL — kept for context, no longer the source of truth.**
-> This was the working plan as of **2026-02-16**, before the Learn CMS, CONTRIBUTOR role, security hardening, MCP server, UI revamp, and profile redesign shipped. For current architecture see [`TECHNICAL_DESIGN.md`](./TECHNICAL_DESIGN.md). For shipped/planned work see [`ROADMAP.md`](./ROADMAP.md). For per-feature specs and plans see [`superpowers/specs/`](./superpowers/specs/) and [`superpowers/plans/`](./superpowers/plans/).
+> This was the working plan as of **2026-02-16**, before the Learn CMS, CONTRIBUTOR role, security hardening, MCP server, UI revamp, profile redesign, problem discussions, per-dialect engine support, and SQL Engine v2 (foundation + Phase 1 + start of Phase 3) shipped. For current architecture see [`TECHNICAL_DESIGN.md`](./TECHNICAL_DESIGN.md). For shipped/planned work see [`ROADMAP.md`](./ROADMAP.md). For per-feature specs and plans see [`superpowers/specs/`](./superpowers/specs/) and [`superpowers/plans/`](./superpowers/plans/).
+>
+> **Status as of v0.4.6 (2026-05-10):** all seven milestones (Foundation Hardening, Admin Panel v2, SQL Query Validation, UI/UX Polish, Content Expansion, Testing & CI/CD, Deployment) shipped. The current working plan lives at [`docs/superpowers/plans/2026-05-05-sql-engine-v2-roadmap.md`](./superpowers/plans/2026-05-05-sql-engine-v2-roadmap.md).
 
 > **Version:** 1.0
 > **Last updated:** 2026-02-16

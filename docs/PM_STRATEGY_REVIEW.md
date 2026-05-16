@@ -1,7 +1,59 @@
 # 🎯 Product Strategy Review — Antigravity Data Learning Platform
 
 > **⚠️ HISTORICAL — strategic snapshot from 2026-02-16, kept for context.**
-> Some recommendations have shipped (depth-first content focus, contributor onboarding, security hardening); others have evolved (the MCP server is now the AI-authoring path). For current state see [`TECHNICAL_DESIGN.md`](./TECHNICAL_DESIGN.md) and [`ROADMAP.md`](./ROADMAP.md).
+> The 2026-02-16 review's high-priority recommendations (1–8 in §7) have shipped; a few mid-priority items have evolved. For current state see [`TECHNICAL_DESIGN.md`](./TECHNICAL_DESIGN.md) and [`ROADMAP.md`](./ROADMAP.md). Recent strategic checkpoint added at the top of this doc; original review preserved below.
+
+---
+
+## Strategic checkpoint — 2026-05-10 (v0.4.6)
+
+Three months on from the 2026-02-16 review. Status against the original §7 recommendations table:
+
+| # | 2026-02 recommendation | Status as of v0.4.6 |
+|---|---|---|
+| 1 | Deploy to production NOW | ✅ Live at https://www.learndatanow.com (since v0.3.0); Neon Postgres; `production` branch is what's deployed; `/api/health` returns commit + DB latency |
+| 2 | Content first (30+ problems) | 🟡 Partial — 23 PUBLISHED problems; gap is real but no longer the binding constraint. MCP authoring is now the lever. |
+| 3 | Drop Phase 3 (Collaboration) until you have users | ✅ + evolved — real-time collaboration is parked. Async **problem discussions** (forum + voting + moderation) shipped in v0.4.4 instead. |
+| 4 | Add SQL validation | ✅ Submit + cross-dialect validator + rate-limited submissions per user |
+| 5 | Add user progress tracking | ✅ `Submission` model + profile page + accepted-solve reputation events |
+| 6 | SEO: sitemap, meta tags, Open Graph | ✅ Shipped before v0.4.0 |
+| 7 | Add basic analytics | ✅ Vercel Speed Insights + Google Analytics in v0.4.5; SQL engine timing telemetry harness in v0.4.6 |
+| 8 | Add error monitoring (Sentry) | ❌ Still deferred — Vercel function logs are the current floor; consider Sentry when production traffic warrants it |
+| 9 | Cache RSS feed | n/a — RSS feature was removed; learning hub content is server-rendered from Postgres with revalidate |
+| 10 | UI overhaul + dark mode | ✅ Hand-rolled shadcn-style design system, light/dark theme with `next-themes`, full design-system handoff bundle in `docs/design-system/` |
+
+**Net:** 8 of 10 shipped. Sentry and content depth remain. The product has cleared the original "is it real" bar — the open questions are different now.
+
+### What's changed since the 2026-02 review
+
+The architecture is multiple times more sophisticated than the original review assumed:
+
+- **Two SQL engines** (DuckDB-WASM + PGlite Postgres-WASM), per-problem dialect choice, per-dialect canonical solutions and expected outputs, cross-dialect equivalence in the validator, IndexedDB-persisted engine state for repeat visits.
+- **MCP server** for AI-driven problem authoring via Claude Desktop / Cursor — content velocity unblocked by this rather than by a fully built-out admin GUI.
+- **Problem discussions v1** — forum, voting, reputation tiers, moderation queue, MODERATOR role with permission-based capabilities.
+- **Engine v2 plan** in `docs/superpowers/plans/2026-05-05-sql-engine-v2-roadmap.md` is the current working plan. Phases 1 + half of 3 are shipped.
+
+### Open strategic questions (2026-05 era)
+
+1. **Trust boundary on submissions.** `validateSubmission` trusts client-provided `userResult` rows. A forged POST gets marked solved. The fix needs server-side SQL execution (sandboxed) or hidden test cases. Both depend on a server runner that's deliberately out of scope today. **Decision needed:** when does this become urgent enough to invest in?
+2. **Content scaling.** 23 published problems is enough to validate the platform but not enough to retain serious learners. MCP authoring is the lever — does it need a better-curated prompt library or a content QA pass? Hints data is empty everywhere.
+3. **DuckDB cold-start cost.** PGlite persistence (v0.4.6) closes the Postgres repeat-visit cost. DuckDB has no equivalent because there's no upstream OPFS path. PR 3.4 (bundle size investigation, spec shipped) is the next lever; PR 3.1 (warm-up) is the alternative. Both deferred until telemetry has a few weeks of production data.
+4. **Validator UX.** Cross-dialect drift, JSON-key-order, timezone equivalence are now handled. Per-problem validation options (case sensitivity, decimal tolerance, etc.) are queued as Phase 4 PR 4.1 — needed before adding harder problem categories.
+5. **Phase 6 dialect expansion.** SQLite via `sql.js` is the natural next executable dialect. MySQL parked until a production-grade WASM runtime exists. BigQuery / Snowflake / Redshift would be syntax-only modes. **Decision needed:** when (or whether) to invest in non-executable dialect coverage for interview prep value.
+
+### Recommended next slot (v0.5.x era)
+
+In priority order:
+
+1. **Hint/article content backfill** — every problem currently has empty `hints[]`; learning hub articles are still thin. Direct content investment.
+2. **PR 3.1 (engine warm-up)** + **PR 3.4 (DuckDB bundle measurements)** — both close out Phase 3 startup work; needed measurement data is now flowing from the v0.4.6 telemetry harness.
+3. **Phase 4 PR 4.1 (per-problem validation options)** — unlocks JSON / decimal / timezone-heavy problem categories.
+4. **Trust boundary investment** (server-side SQL runner, hidden test cases) — bigger rock; revisit in v0.5.x or v0.6.x when traffic justifies the infra.
+5. **Sentry integration** — small, picks up obvious error noise. Defer unless something burns.
+
+---
+
+## Original review — 2026-02-16 (preserved for archaeology)
 
 > **Reviewer:** PM Analysis
 > **Date:** 2026-02-16
