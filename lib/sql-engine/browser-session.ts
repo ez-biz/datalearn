@@ -13,6 +13,7 @@ import {
     type SqlEngineTelemetrySession,
 } from "@/lib/sql-engine/telemetry"
 import type { Dialect, SqlEngineSession, SqlRow } from "@/lib/sql-engine/types"
+import { claimWarmDuckDB } from "@/lib/sql-engine/warmup"
 
 const DEFAULT_FALLBACK_SCHEMA = `
 CREATE TABLE users (id INTEGER, name VARCHAR, role VARCHAR);
@@ -125,10 +126,13 @@ async function createDuckDbSession(
     statements: string[]
 ): Promise<SqlEngineSession> {
     const { initDuckDB } = await import("@/lib/duckdb")
-    let resources: DuckDbResources | null = await createDuckDbResources(
-        initDuckDB,
-        statements
-    )
+    // First-time creation tries to claim a pre-warmed DuckDB instance.
+    // Reset re-uses the fresh init path — claim is only valid on the
+    // initial session boundary.
+    const warmed = claimWarmDuckDB()
+    let resources: DuckDbResources | null = warmed
+        ? await connectDuckDb(warmed, statements)
+        : await createDuckDbResources(initDuckDB, statements)
     let disposed = false
     let resetPromise: Promise<void> | null = null
 
@@ -259,6 +263,13 @@ async function createDuckDbResources(
     statements: string[]
 ): Promise<DuckDbResources> {
     const db = await initDuckDB()
+    return connectDuckDb(db, statements)
+}
+
+async function connectDuckDb(
+    db: AsyncDuckDB,
+    statements: string[]
+): Promise<DuckDbResources> {
     const conn = await db.connect()
     await replaySchemaStatements("DUCKDB", statements, (statement) =>
         conn.query(statement)
