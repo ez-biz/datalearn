@@ -259,27 +259,30 @@ CI audit (PR 1.1) is now the floor. Phase 2 adds the publish-time and admin-time
 
 Land Phase 1.6 telemetry first so every Phase 3 PR can attach before/after numbers to its description.
 
-### PR 3.1: Engine Warm-Up
+### PR 3.1: Engine Warm-Up — ✅ Implemented (2026-05-16)
 
 **Goal:** Start loading the likely engine before the learner reaches the workspace.
 
-**Files:**
-- Create: `lib/sql-engine/warmup.ts`
-- Modify: `app/page.tsx`
-- Modify: `components/practice/PracticeList.tsx`
-- Modify: `lib/sql-engine/browser-session.ts`
+**Files shipped:**
+- `lib/sql-engine/warmup.ts` — generic `createWarmupRegistry()` factory + default-registry helpers (`warmSqlEngine`, `claimWarmDuckDB`).
+- `lib/sql-engine/browser-session.ts` — `createDuckDbSession()` now calls `claimWarmDuckDB()` first; falls back to fresh init on miss. Reset path unchanged (always fresh init).
+- `components/practice/PracticeList.tsx` — `useEffect` on mount calls `warmSqlEngine("DUCKDB")`.
+- `scripts/test-sql-engine-warmup.ts` — 11 unit tests with injected clock/timers/init (no real WASM in node).
+- `package.json`, `.github/workflows/test.yml` — new `test:sql-engine-warmup` script + CI step.
 
-**Design:**
-- Add `warmSqlEngine(dialect)` that imports the selected engine initializer without creating schema state.
-- Bound concurrency: at most **one warm session per dialect**. Subsequent hover events replace, not stack.
-- Cancel + dispose any warm session that's been idle for >60s without being claimed.
-- Trigger points: practice card hover, practice list mount.
-- Warm DuckDB by default; warm PGlite only if last-picked dialect (from `localStorage`) is Postgres or the problem advertises it.
+**Design notes:**
+- **Idempotent `warm(dialect)`** — repeat calls (mount + hover + nav) don't stack instances.
+- **60s idle TTL** — unclaimed warm DuckDB instances get terminated after a minute so we don't hold a WASM worker indefinitely for a learner who navigated away from the list.
+- **`claim(DUCKDB)` only** — the warm DuckDB is handed off to the next session and removed from the registry. The session takes ownership of `dispose()`.
+- **PGlite is module-only** — PGlite instances are bound to a per-problem `dataDir`, which warmup can't know ahead of time. The registry instead pre-imports `@electric-sql/pglite` so the JS bundle is cached when the real session arrives.
+- **v1 only warms DuckDB on practice-list mount.** Hover triggers, last-dialect-aware PGlite warmup, and homepage warmup are deferred — they add complexity for marginal extra coverage and can be stacked later without changing the registry contract.
 
 **Verification:**
-- E2E: no UI regression.
-- Telemetry: `engine.init.ready` fires before the workspace renders for warmed sessions.
-- Manual: ten rapid hovers don't spawn ten WASM instances.
+- ✅ Unit: `npm run test:sql-engine-warmup` (11 tests pass; cover idempotence, claim-while-warming, idle TTL, re-warm after claim, init-failure isolation, disposeAll).
+- ✅ Typecheck: `npx tsc --noEmit` clean.
+- ✅ Build: `npm run build` clean (no new warnings).
+- Telemetry: `engine.init.ready` for warmed sessions will be faster than for cold sessions on the existing harness — measured via production telemetry over the next release window.
+- Manual: cold-load `/practice/<slug>` after a warm `/practice` mount and confirm `engine.init.ready` elapsed time in console drops vs. direct cold load.
 
 ### PR 3.2: PGlite IndexedDB Persistence (implemented)
 
@@ -328,22 +331,23 @@ Land Phase 1.6 telemetry first so every Phase 3 PR can attach before/after numbe
 - Confirm a follow-up deploy invalidates stale engine assets.
 - Confirm `?dl-sw=unregister` clears state cleanly.
 
-### PR 3.4: DuckDB Minimal Bundle Investigation
+### PR 3.4: DuckDB Minimal Bundle Investigation — ✅ Investigated (2026-05-16); not implementing
 
 **Goal:** Reduce the ~30MB cold download if a smaller browser bundle works.
 
-**Files:**
-- Create: `docs/superpowers/specs/2026-05-xx-duckdb-bundle-size-investigation.md`
-- Possibly modify: `lib/duckdb.ts`
+**Outcome:** Measurements appended to [`docs/superpowers/specs/2026-05-10-duckdb-bundle-size-investigation.md`](../specs/2026-05-10-duckdb-bundle-size-investigation.md). Variant-swap is not viable — `getJsDelivrBundles()` only exposes `mvp` and `eh`, and after brotli the wire-size gap between them is ~12% in `mvp`'s *direction* (i.e. larger). The "30 MB worst case" framing in the original spec described the decoded size; on the wire every learner is already in the ~5 MB range. The spec's 25%-reduction decision criterion is unachievable by swapping bundles.
 
-**Design:**
-- Measure current asset sizes (eh / mvp / coi bundles from `@duckdb/duckdb-wasm`).
-- Test against `npm run audit:dialects` — only switch if the smaller bundle handles every published DuckDB problem.
-- Note for the doc: **DuckDB-WASM has no OPFS persistence story today.** Phase 3 only addresses PGlite repeat-load cost. DuckDB asymmetry is acknowledged and not in scope.
+**Pivot:** The same cold-start problem is now addressed by:
+- PR 3.1 — Engine warm-up. Start the bundle fetch as soon as the learner lands on a practice route.
+- PR 3.3 — Service worker / asset precache. Skip the wire entirely on repeat visits.
 
-**Verification:**
-- `npm run audit:dialects` against the candidate bundle.
-- Network panel screenshot or measurement table in the design doc.
+**Self-hosting** is deferred. It does not save bytes today, but becomes a precondition for confident cache management once PR 3.3 ships. Revisit then or sooner if jsDelivr availability becomes an issue for real users.
+
+**Files (delivered):**
+- `docs/superpowers/specs/2026-05-10-duckdb-bundle-size-investigation.md` — measurements, decision vs. criteria, reproduction commands.
+- This roadmap entry — outcome + pivot.
+
+No code changes to `lib/duckdb.ts`.
 
 ---
 
