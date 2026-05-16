@@ -308,28 +308,29 @@ Land Phase 1.6 telemetry first so every Phase 3 PR can attach before/after numbe
 - E2E (`tests/e2e/sql-engine.spec.ts`): Postgres-mode workspace reload — first load runs the schema, second load hits the cache, query still returns the right rows.
 - Manual: open the Postgres dialect for a problem twice; the second `engine.init.ready` event has a noticeably lower `elapsedMs` than the first.
 
-### PR 3.3: Service Worker / Asset Precache Investigation
+### PR 3.3: Service Worker / Asset Precache — 🟡 Design done (2026-05-16); Phase 1 ready to implement
 
 **Goal:** Cache WASM assets without creating sticky broken deploys.
 
-**Files:**
-- Create: `docs/superpowers/specs/2026-05-xx-sql-engine-asset-caching-design.md`
-- Possibly create: `public/sw.js`
-- Possibly create: `components/layout/ServiceWorkerRegistration.tsx`
+**Spec:** [`docs/superpowers/specs/2026-05-16-sql-engine-asset-caching-design.md`](../specs/2026-05-16-sql-engine-asset-caching-design.md)
 
-**Design:**
-- Investigation phase first — produce the design doc before touching `public/`.
-- Prefer `fetch()` warming into the HTTP cache over a service worker.
-- If a service worker is unavoidable:
-  - Restrict scope to `/_dl/sql-engine/` (or similar dedicated path) so it cannot intercept Next.js's own asset routes.
-  - Version cache names with the build SHA.
-  - Ship a `?dl-sw=unregister` query handler that unregisters and clears caches — emergency lever for a stuck deploy.
-  - Document the unregister path in `docs/DEPLOY.md`.
+**Decision (Phase 1):** Self-host the DuckDB-WASM bundle under `public/_dl/sql-engine/` and add `<link rel="preload">` on `/practice` routes. **No service worker.** SW is deferred to a conditional Phase 2 gated on telemetry showing HTTP-cache eviction is the binding constraint — we don't have evidence of that today, and SW's sticky-broken-deploy risk outweighs its win until we do.
 
-**Verification:**
-- Lighthouse / Application tab check.
-- Confirm a follow-up deploy invalidates stale engine assets.
-- Confirm `?dl-sw=unregister` clears state cleanly.
+**Files (Phase 1):**
+- `scripts/copy-sql-engine-assets.ts` (new — prebuild step)
+- `package.json` (prebuild hook)
+- `lib/duckdb.ts` (return self-hosted bundle URLs in prod, jsDelivr fallback in dev)
+- `app/practice/layout.tsx` (`<link rel="preload">` for the wasm + worker)
+- `lib/sql-engine/telemetry.ts` (add `bundleSource: "self" | "cdn"`)
+- `docs/DEPLOY.md` (note the new public path)
+
+**Verification (Phase 1):**
+- `npm run build` produces the assets under `.next/standalone/public/_dl/sql-engine/`.
+- `curl -I` against the production URL returns `Content-Type: application/wasm` and immutable cache headers.
+- Network tab on a cold `/practice/<slug>` shows the wasm fetch hitting our origin, not jsDelivr.
+- `engine.init.ready` events carry `bundleSource: "self"` post-deploy.
+
+**Phase 2 (conditional, not in this PR):** Service worker, gated on the 4 decision criteria in the spec.
 
 ### PR 3.4: DuckDB Minimal Bundle Investigation — ✅ Investigated (2026-05-16); not implementing
 
