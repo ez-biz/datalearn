@@ -15,11 +15,21 @@ export function getLastDuckDbBundleSource(): "self" | "cdn" | null {
     return lastBundleSource
 }
 
+/** Marker substring in self-hosted bundle URLs — used for telemetry source detection. */
+const SELF_HOSTED_PATH = "/_dl/sql-engine/"
+
 /**
  * In a production browser build, ship the bundle from our own origin
  * (`public/_dl/sql-engine/` populated by `scripts/copy-sql-engine-assets.ts`).
  * Dev / SSR / fallback path uses jsDelivr — the prebuild copy doesn't run
  * under `next dev`, so dev still loads from the CDN exactly as before.
+ *
+ * **URLs must be absolute.** The Worker is constructed from a Blob URL
+ * (`blob:https://…/<uuid>`), and `importScripts` inside that worker
+ * resolves relative paths against the *blob* origin, not the page origin
+ * — so a path like `/_dl/sql-engine/…` ends up invalid. Same for the
+ * wasm fetch in `db.instantiate()`. Building absolute URLs against
+ * `window.location.origin` matches what jsDelivr used to provide.
  *
  * See `docs/superpowers/specs/2026-05-16-sql-engine-asset-caching-design.md`
  * for the rationale (cache-partitioning + opportunistic-eviction trade-offs).
@@ -27,14 +37,15 @@ export function getLastDuckDbBundleSource(): "self" | "cdn" | null {
 function getSelfHostedBundles(): duckdb.DuckDBBundles | null {
     if (typeof window === "undefined") return null
     if (process.env.NODE_ENV !== "production") return null
+    const origin = window.location.origin
     return {
         mvp: {
-            mainModule: "/_dl/sql-engine/duckdb-mvp.wasm",
-            mainWorker: "/_dl/sql-engine/duckdb-browser-mvp.worker.js",
+            mainModule: `${origin}${SELF_HOSTED_PATH}duckdb-mvp.wasm`,
+            mainWorker: `${origin}${SELF_HOSTED_PATH}duckdb-browser-mvp.worker.js`,
         },
         eh: {
-            mainModule: "/_dl/sql-engine/duckdb-eh.wasm",
-            mainWorker: "/_dl/sql-engine/duckdb-browser-eh.worker.js",
+            mainModule: `${origin}${SELF_HOSTED_PATH}duckdb-eh.wasm`,
+            mainWorker: `${origin}${SELF_HOSTED_PATH}duckdb-browser-eh.worker.js`,
         },
     }
 }
@@ -51,7 +62,7 @@ export async function initDuckDB() {
     if (selfHosted) {
         try {
             bundle = await duckdb.selectBundle(selfHosted)
-            if (bundle?.mainModule?.startsWith("/_dl/")) {
+            if (bundle?.mainModule?.includes(SELF_HOSTED_PATH)) {
                 source = "self"
             } else {
                 bundle = null
