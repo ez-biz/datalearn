@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { ArrowRight, CheckCircle2, Search } from "lucide-react"
 import { Input } from "@/components/ui/Input"
@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { cn } from "@/lib/utils"
+import { warmSqlEngine } from "@/lib/sql-engine/warmup"
 
 type Difficulty = "EASY" | "MEDIUM" | "HARD"
 type StatusFilter = "ALL" | "SOLVED" | "TODO"
@@ -34,6 +35,16 @@ export function PracticeList({ problems, solvedSlugs }: PracticeListProps) {
     const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL")
     const [query, setQuery] = useState("")
     const [filter, setFilter] = useState<"ALL" | Difficulty>("ALL")
+
+    // Prefetch the DuckDB-WASM engine while the learner is still browsing
+    // the list. By the time they click into a problem the bundle is
+    // typically already instantiated, collapsing `engine.init.ready` from
+    // a few seconds to near zero. PGlite warmup is deferred — Postgres
+    // mode is opt-in per problem and already amortized by PR 3.2's
+    // IndexedDB persistence.
+    useEffect(() => {
+        warmSqlEngine("DUCKDB")
+    }, [])
 
     const counts = useMemo(() => {
         const c = { EASY: 0, MEDIUM: 0, HARD: 0 }

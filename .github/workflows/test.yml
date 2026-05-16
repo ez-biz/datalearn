@@ -77,6 +77,9 @@ jobs:
       - name: Test SQL engine telemetry
         run: npm run test:sql-engine-telemetry
 
+      - name: Test SQL engine warmup registry
+        run: npm run test:sql-engine-warmup
+
       - name: Test PGlite schema cache key
         run: npm run test:schema-cache-key
 
