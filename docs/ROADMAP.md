@@ -2,22 +2,32 @@
 
 > **Last updated:** 2026-05-10
 > **Status:** Live — <https://www.learndatanow.com>
-> **Version:** 0.4.4 (deployed)
+> **Version:** 0.4.6 (deployed)
 
-## Recently shipped / ready for release
+## Recently shipped
 
-### May 2026 — unreleased: SQL Engine v2 foundation
+### May 2026 — v0.4.6: PGlite persistence + telemetry + dep hardening
 
-- **Browser engine session boundary** — added `lib/sql-engine/browser-session.ts` so DuckDB-WASM and PGlite now sit behind the same `{ runQuery, dispose }` contract. `useProblemDB` remains the React lifecycle wrapper instead of owning engine-specific initialization and row conversion.
-- **Shared result normalization** — new `lib/sql-engine/normalize.ts` converts engine-specific row values (`Date`, safe/unsafe `bigint`, object wrappers) into JSON-safe values before rows reach the results table or submission payload.
-- **Schema statement helper** — schema replay now uses a tested `splitSqlStatements()` helper in `lib/sql-engine/statements.ts`, keeping browser engine setup behavior explicit.
-- **Dialect audit CI gate** — `npm run audit:dialects:ci` now runs in the GitHub Actions test workflow after migrations and seed. Published `(problem, dialect)` pairs fail the build when canonical SQL, schema, or expected output is missing or mismatched. Seed problems 1-11 now include per-dialect `solutions` / `expectedOutputs` so fresh CI data is fully auditable.
-- **Result row cap with display/validate split** — learner `Run` caps rendered results at 1,000 rows and shows a truncation warning instead of letting large result sets overload the results table. `Submit` uses a per-problem validation cap of `max(2 × expectedOutput rows, 1,000)`; if that cap is exceeded, the workspace returns a "result too large" verdict locally instead of silently truncating into an incorrect answer.
-- **Query timeout and engine reset** — learner queries now time out after 10 seconds by default. Timed-out DuckDB-WASM/PGlite sessions reset by disposing and recreating the in-browser engine, then the workspace shows a clear timeout message and allows the next query to run against a fresh replayed schema.
-- **JSON + TIMESTAMPTZ validator robustness** — expected-output validation now deep-compares JSON object/array cells with stable key ordering, rejects nested JSON value mismatches correctly, and treats equivalent timezone timestamp strings as the same instant.
-- **Tokenizer-aware read-only guard** — learner `Run` and `Submit` now split statements with a lightweight tokenizer that ignores semicolons and write keywords inside comments, string literals, quoted identifiers, and dollar-quoted literals. It still rejects mutating statements, including CTE-wrapped DML and `EXPLAIN ANALYZE` around DML.
-- **Engine timing telemetry harness** — browser engine sessions now emit typed timing events for init start, init ready, first successful query, and disposal. Dev builds log to `console.debug`; production builds send sampled beacons to `/api/telemetry/sql-engine`, with `localStorage.dl:telemetry:off` as the learner opt-out. This gives Phase 3 startup-responsiveness PRs before/after measurement infrastructure.
-- **PGlite IndexedDB persistence** — Postgres-mode workspaces now persist their per-problem PGlite database in IndexedDB, keyed by `sha256(slug + schemaSql + cacheVersion)`. Schema replay only runs on first visit and after schema or PGlite-version changes; subsequent visits hit the persisted database. Memory-mode fallback covers private browsing, missing platform APIs, and the `localStorage.dl:pglite-cache:off` learner opt-out. DuckDB-WASM persistence is intentionally out of scope today — DuckDB-WASM has no OPFS persistence story.
+GitHub Release: <https://github.com/ez-biz/datalearn/releases/tag/v0.4.6>. Bundles the SQL Engine v2 Phase 1 close-out (telemetry harness) plus the first Phase 3 slice (PGlite IndexedDB persistence) and security/housekeeping work.
+
+- **PGlite IndexedDB persistence (PR #86)** — Postgres-mode workspaces now persist their per-problem PGlite database in IndexedDB, keyed by `sha256(slug + schemaSql + PGLITE_CACHE_VERSION)`. Schema replay only runs on first visit and after schema or PGlite-version changes; subsequent visits hit the persisted database. Memory-mode fallback covers private browsing, missing platform APIs, and the `localStorage.dl:pglite-cache:off` learner opt-out. DuckDB-WASM persistence is intentionally out of scope today — DuckDB-WASM has no OPFS persistence story.
+- **Engine timing telemetry harness (PR #85)** — browser engine sessions now emit typed timing events for init start, init ready, first successful query, and disposal. Dev builds log to `console.debug`; production builds send sampled beacons to `/api/telemetry/sql-engine`, with `localStorage.dl:telemetry:off` as the learner opt-out. Phase 3 startup-responsiveness PRs use this for before/after measurement.
+- **DuckDB bundle size investigation spec (PR #87)** — design doc for PR 3.4 covering measurement methodology, decision criteria, and out-of-scope items. Follow-up PR runs the actual measurements and decides whether to switch the variant or self-host.
+- **Dependabot alert clearance + override pin (PR #84 + #88)** — bumped transitive `fast-uri`, `hono`, `ip-address` to patched versions and added `overrides` blocks in both root `package.json` and `mcp-server/package.json` so future installs cannot drift back.
+
+### May 2026 — v0.4.5: SQL Engine v2 foundation + Phase 1 hardening
+
+GitHub Release: <https://github.com/ez-biz/datalearn/releases/tag/v0.4.5>.
+
+- **Browser engine session boundary (PR #75)** — added `lib/sql-engine/browser-session.ts` so DuckDB-WASM and PGlite now sit behind the same `{ runQuery, dispose }` contract. `useProblemDB` remains the React lifecycle wrapper instead of owning engine-specific initialization and row conversion.
+- **Shared result normalization (PR #75)** — new `lib/sql-engine/normalize.ts` converts engine-specific row values (`Date`, safe/unsafe `bigint`, object wrappers) into JSON-safe values before rows reach the results table or submission payload.
+- **Schema statement helper (PR #75)** — schema replay now uses a tested `splitSqlStatements()` helper in `lib/sql-engine/statements.ts`, keeping browser engine setup behavior explicit.
+- **Dialect audit CI gate (PR #75)** — `npm run audit:dialects:ci` now runs in the GitHub Actions test workflow after migrations and seed. Published `(problem, dialect)` pairs fail the build when canonical SQL, schema, or expected output is missing or mismatched. Seed problems 1-11 now include per-dialect `solutions` / `expectedOutputs` so fresh CI data is fully auditable.
+- **Result row cap with display/validate split (PR #76)** — learner `Run` caps rendered results at 1,000 rows and shows a truncation warning instead of letting large result sets overload the results table. `Submit` uses a per-problem validation cap of `max(2 × expectedOutput rows, 1,000)`; if that cap is exceeded, the workspace returns a "result too large" verdict locally instead of silently truncating into an incorrect answer.
+- **Query timeout and engine reset (PR #77)** — learner queries now time out after 10 seconds by default. Timed-out DuckDB-WASM/PGlite sessions reset by disposing and recreating the in-browser engine, then the workspace shows a clear timeout message and allows the next query to run against a fresh replayed schema.
+- **JSON + TIMESTAMPTZ validator robustness (PR #79)** — expected-output validation now deep-compares JSON object/array cells with stable key ordering, rejects nested JSON value mismatches correctly, and treats equivalent timezone timestamp strings as the same instant.
+- **Tokenizer-aware read-only guard (PR #80)** — learner `Run` and `Submit` now split statements with a lightweight tokenizer that ignores semicolons and write keywords inside comments, string literals, quoted identifiers, and dollar-quoted literals. It still rejects mutating statements, including CTE-wrapped DML and `EXPLAIN ANALYZE` around DML.
+- **Vercel Speed Insights + Google Analytics (PR #81)** — observability instrumentation in `app/layout.tsx` (`G-B9RFQWH2JC`).
 - Design/plan docs: [`docs/superpowers/specs/2026-05-05-sql-engine-v2-foundation-design.md`](./superpowers/specs/2026-05-05-sql-engine-v2-foundation-design.md) and [`docs/superpowers/plans/2026-05-05-sql-engine-v2-foundation.md`](./superpowers/plans/2026-05-05-sql-engine-v2-foundation.md).
 - Broader roadmap docs: [`docs/superpowers/specs/2026-05-05-sql-engine-v2-roadmap-design.md`](./superpowers/specs/2026-05-05-sql-engine-v2-roadmap-design.md) and [`docs/superpowers/plans/2026-05-05-sql-engine-v2-roadmap.md`](./superpowers/plans/2026-05-05-sql-engine-v2-roadmap.md).
 
