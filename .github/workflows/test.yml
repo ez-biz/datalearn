@@ -77,8 +77,14 @@ jobs:
       - name: Test SQL engine telemetry
         run: npm run test:sql-engine-telemetry
 
+      - name: Test DuckDB browser init fallback
+        run: npm run test:duckdb-init
+
       - name: Test SQL engine warmup registry
         run: npm run test:sql-engine-warmup
+
+      - name: Test solution resolver
+        run: npm run test:solutions
 
       - name: Test PGlite schema cache key
         run: npm run test:schema-cache-key

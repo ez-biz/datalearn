@@ -15,11 +15,21 @@ export function getLastDuckDbBundleSource(): "self" | "cdn" | null {
     return lastBundleSource
 }
 
+/** Marker substring in self-hosted bundle URLs — used for telemetry source detection. */
+const SELF_HOSTED_PATH = "/_dl/sql-engine/"
+
 /**
  * In a production browser build, ship the bundle from our own origin
  * (`public/_dl/sql-engine/` populated by `scripts/copy-sql-engine-assets.ts`).
  * Dev / SSR / fallback path uses jsDelivr — the prebuild copy doesn't run
  * under `next dev`, so dev still loads from the CDN exactly as before.
+ *
+ * **URLs must be absolute.** The Worker is constructed from a Blob URL
+ * (`blob:https://…/<uuid>`), and `importScripts` inside that worker
+ * resolves relative paths against the *blob* origin, not the page origin
+ * — so a path like `/_dl/sql-engine/…` ends up invalid. Same for the
+ * wasm fetch in `db.instantiate()`. Building absolute URLs against
+ * `window.location.origin` matches what jsDelivr used to provide.
  *
  * See `docs/superpowers/specs/2026-05-16-sql-engine-asset-caching-design.md`
  * for the rationale (cache-partitioning + opportunistic-eviction trade-offs).
@@ -27,56 +37,111 @@ export function getLastDuckDbBundleSource(): "self" | "cdn" | null {
 function getSelfHostedBundles(): duckdb.DuckDBBundles | null {
     if (typeof window === "undefined") return null
     if (process.env.NODE_ENV !== "production") return null
+    const origin = window.location.origin
     return {
         mvp: {
-            mainModule: "/_dl/sql-engine/duckdb-mvp.wasm",
-            mainWorker: "/_dl/sql-engine/duckdb-browser-mvp.worker.js",
+            mainModule: `${origin}${SELF_HOSTED_PATH}duckdb-mvp.wasm`,
+            mainWorker: `${origin}${SELF_HOSTED_PATH}duckdb-browser-mvp.worker.js`,
         },
         eh: {
-            mainModule: "/_dl/sql-engine/duckdb-eh.wasm",
-            mainWorker: "/_dl/sql-engine/duckdb-browser-eh.worker.js",
+            mainModule: `${origin}${SELF_HOSTED_PATH}duckdb-eh.wasm`,
+            mainWorker: `${origin}${SELF_HOSTED_PATH}duckdb-browser-eh.worker.js`,
         },
     }
 }
 
-export async function initDuckDB() {
-    const selfHosted = getSelfHostedBundles()
+type DuckDbInstanceLike = {
+    instantiate: (
+        mainModule: string,
+        pthreadWorker?: string | null
+    ) => Promise<unknown>
+}
 
-    // Try the self-hosted bundle first when we have one. `selectBundle`
-    // still does its feature check (WASM exception handling). If the
-    // browser doesn't pass that check, fall through to the full jsDelivr
-    // set, which includes the `mvp` variant for very old browsers.
-    let bundle: duckdb.DuckDBBundle | null = null
-    let source: "self" | "cdn" = "cdn"
-    if (selfHosted) {
-        try {
-            bundle = await duckdb.selectBundle(selfHosted)
-            if (bundle?.mainModule?.startsWith("/_dl/")) {
-                source = "self"
-            } else {
-                bundle = null
-            }
-        } catch {
-            bundle = null
+type DuckDbInitializerDeps<TDb extends DuckDbInstanceLike> = {
+    getSelfHostedBundles: () => duckdb.DuckDBBundles | null
+    getJsDelivrBundles: () => duckdb.DuckDBBundles
+    selectBundle: (bundles: duckdb.DuckDBBundles) => Promise<duckdb.DuckDBBundle>
+    createWorkerBlobUrl: (mainWorker: string) => string
+    revokeWorkerBlobUrl: (url: string) => void
+    createWorker: (url: string) => Worker
+    createDatabase: (worker: Worker) => TDb
+    warn: (message: string, error: unknown) => void
+}
+
+async function instantiateBundle<TDb extends DuckDbInstanceLike>(
+    deps: DuckDbInitializerDeps<TDb>,
+    bundle: duckdb.DuckDBBundle,
+    source: "self" | "cdn"
+): Promise<TDb> {
+    if (!bundle.mainWorker) {
+        throw new Error("DuckDB bundle is missing mainWorker")
+    }
+
+    let workerUrl: string | null = null
+    let worker: Worker | null = null
+    try {
+        workerUrl = deps.createWorkerBlobUrl(bundle.mainWorker)
+        worker = deps.createWorker(workerUrl)
+        const db = deps.createDatabase(worker)
+        await db.instantiate(bundle.mainModule, bundle.pthreadWorker)
+        lastBundleSource = source
+        return db
+    } catch (error) {
+        worker?.terminate()
+        throw error
+    } finally {
+        if (workerUrl) {
+            deps.revokeWorkerBlobUrl(workerUrl)
         }
     }
-    if (!bundle) {
-        bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles())
-        source = "cdn"
+}
+
+async function instantiateSelectedBundle<TDb extends DuckDbInstanceLike>(
+    deps: DuckDbInitializerDeps<TDb>,
+    bundles: duckdb.DuckDBBundles,
+    source: "self" | "cdn"
+): Promise<TDb> {
+    const bundle = await deps.selectBundle(bundles)
+    return instantiateBundle(deps, bundle, source)
+}
+
+export function createDuckDbInitializer<TDb extends DuckDbInstanceLike>(
+    deps: DuckDbInitializerDeps<TDb>
+) {
+    return async function initDuckDBFromDeps(): Promise<TDb> {
+        lastBundleSource = null
+        const selfHosted = deps.getSelfHostedBundles()
+
+        if (selfHosted) {
+            try {
+                return await instantiateSelectedBundle(deps, selfHosted, "self")
+            } catch (error) {
+                deps.warn(
+                    "[duckdb] self-hosted initialization failed; falling back to CDN",
+                    error
+                )
+            }
+        }
+
+        return instantiateSelectedBundle(deps, deps.getJsDelivrBundles(), "cdn")
     }
+}
 
-    const worker_url = URL.createObjectURL(
-        new Blob([`importScripts("${bundle.mainWorker!}");`], {
-            type: "text/javascript",
-        })
-    )
-
-    const worker = new Worker(worker_url)
-    const logger = new duckdb.ConsoleLogger()
-    const db = new duckdb.AsyncDuckDB(logger, worker)
-    await db.instantiate(bundle.mainModule, bundle.pthreadWorker)
-    URL.revokeObjectURL(worker_url)
-
-    lastBundleSource = source
-    return db
+export async function initDuckDB(): Promise<duckdb.AsyncDuckDB> {
+    return createDuckDbInitializer<duckdb.AsyncDuckDB>({
+        getSelfHostedBundles,
+        getJsDelivrBundles: duckdb.getJsDelivrBundles,
+        selectBundle: duckdb.selectBundle,
+        createWorkerBlobUrl: (mainWorker) =>
+            URL.createObjectURL(
+                new Blob([`importScripts("${mainWorker}");`], {
+                    type: "text/javascript",
+                })
+            ),
+        revokeWorkerBlobUrl: (url) => URL.revokeObjectURL(url),
+        createWorker: (url) => new Worker(url),
+        createDatabase: (worker) =>
+            new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker),
+        warn: (message, error) => console.warn(message, error),
+    })()
 }
