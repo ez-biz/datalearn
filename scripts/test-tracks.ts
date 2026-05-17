@@ -314,16 +314,18 @@ describe("track progress", () => {
             completedCount: 0,
             totalCount: 3,
             nextItemId: firstItemId,
+            completedItemIds: [],
         })
     })
 
-    it("counts distinct accepted problems and picks the first unsolved item", async () => {
+    it("counts distinct accepted problems and returns solved item ids", async () => {
         const progress = await getTrackProgressForUser(publishedTrackId, userId)
 
         assert.deepEqual(progress, {
             completedCount: 2,
             totalCount: 3,
             nextItemId: secondItemId,
+            completedItemIds: [firstItemId, thirdItemId],
         })
     })
 })

@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ArrowRight, BookOpen } from "lucide-react"
+import { ArrowRight, BookOpen, Route } from "lucide-react"
 import { getTopics } from "@/actions/content"
 import { Container } from "@/components/ui/Container"
 import { Card, CardContent } from "@/components/ui/Card"
@@ -19,13 +19,23 @@ export default async function LearnPage() {
 
     return (
         <Container width="lg" className="py-10 sm:py-14">
-            <header className="mb-8">
-                <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-                    Learning hub
-                </h1>
-                <p className="mt-2 text-muted-foreground max-w-2xl">
-                    Short, focused lessons that explain the concepts behind each problem.
-                </p>
+            <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+                        Learning hub
+                    </h1>
+                    <p className="mt-2 text-muted-foreground max-w-2xl">
+                        Short, focused lessons that explain the concepts behind
+                        each problem.
+                    </p>
+                </div>
+                <Link
+                    href="/learn/tracks"
+                    className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                    <Route className="h-3.5 w-3.5" />
+                    Tracks
+                </Link>
             </header>
 
             {list.length === 0 ? (
@@ -37,7 +47,11 @@ export default async function LearnPage() {
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {list.map((topic: any) => (
-                        <Link key={topic.id} href={`/learn/${topic.slug}`} className="group">
+                        <Link
+                            key={topic.id}
+                            href={`/learn/${topic.slug}`}
+                            className="group"
+                        >
                             <Card className="h-full transition-[border-color,box-shadow,translate] duration-200 ease-out hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5">
                                 <CardContent className="p-6">
                                     <div className="flex items-start justify-between gap-3 mb-3">
@@ -45,7 +59,10 @@ export default async function LearnPage() {
                                             <BookOpen className="h-5 w-5" />
                                         </div>
                                         <Badge variant="secondary">
-                                            {topic._count.articles} {topic._count.articles === 1 ? "article" : "articles"}
+                                            {topic._count.articles}{" "}
+                                            {topic._count.articles === 1
+                                                ? "article"
+                                                : "articles"}
                                         </Badge>
                                     </div>
                                     <h2 className="text-lg font-semibold tracking-tight group-hover:text-primary transition-colors">
