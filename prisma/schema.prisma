@@ -199,6 +199,7 @@ model SQLProblem {
   reports           ProblemReport[]
   relatedArticles   Article[]  @relation("ArticleProblems")
   listItems         ProblemListItem[]
+  trackItems        TrackItem[]
   dailyProblems     DailyProblem[]
   discussionComments DiscussionComment[]
   discussionState   ProblemDiscussionState?
@@ -228,6 +229,49 @@ model Tag {
 enum TagKind {
   TOPIC
   COMPANY
+}
+
+model Track {
+  id               String          @id @default(cuid())
+  slug             String          @unique
+  name             String
+  summary          String          @db.Text
+  description      String          @db.Text
+  difficulty       TrackDifficulty @default(MEDIUM)
+  status           TrackStatus     @default(DRAFT)
+  estimatedMinutes Int             @default(60)
+  coverImageUrl    String?
+  items            TrackItem[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([status])
+}
+
+model TrackItem {
+  id        String     @id @default(cuid())
+  trackId   String
+  track     Track      @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  problemId String
+  problem   SQLProblem @relation(fields: [problemId], references: [id])
+  position  Int
+
+  @@unique([trackId, problemId])
+  @@unique([trackId, position])
+  @@index([trackId])
+}
+
+enum TrackDifficulty {
+  EASY
+  MEDIUM
+  HARD
+  MIXED
+}
+
+enum TrackStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
 }
 
 enum Difficulty {
