@@ -89,6 +89,9 @@ jobs:
       - name: Test PGlite schema cache key
         run: npm run test:schema-cache-key
 
+      - name: Test tag-discovery actions
+        run: npm run test:tag-discovery
+
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         with:

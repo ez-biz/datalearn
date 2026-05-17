@@ -25,6 +25,10 @@ export async function getProblems() {
                 description: true,
                 difficulty: true,
                 dialects: true,
+                tags: {
+                    select: { slug: true, name: true },
+                    orderBy: { name: "asc" },
+                },
             },
         })
         return { success: true, data: problems }
@@ -102,5 +106,114 @@ export async function getProblem(slug: string) {
         return { success: true, data: problem }
     } catch (error) {
         return { success: false, data: null }
+    }
+}
+
+export type PublicTagSummary = {
+    slug: string
+    name: string
+    problemCount: number
+}
+
+/**
+ * Tags that have at least one PUBLISHED problem, sorted by published
+ * problem count (desc) then name (asc). Drives the `/practice/tags`
+ * index. Tags with zero PUBLISHED problems are excluded so the index
+ * never shows ghost entries (a DRAFT-only tag would be confusing for
+ * learners and create dead pages for SEO crawlers).
+ *
+ * NOTE: counts only published. If the catalog grows past ~500 problems
+ * and this becomes a hotspot, denormalize `publishedProblemCount` onto
+ * `Tag`. Not pre-optimizing.
+ */
+export async function getPublicTags(): Promise<PublicTagSummary[]> {
+    try {
+        const tags = await prisma.tag.findMany({
+            select: {
+                slug: true,
+                name: true,
+                _count: {
+                    select: {
+                        problems: { where: { status: "PUBLISHED" } },
+                    },
+                },
+            },
+        })
+        return tags
+            .map((t) => ({
+                slug: t.slug,
+                name: t.name,
+                problemCount: t._count.problems,
+            }))
+            .filter((t) => t.problemCount > 0)
+            .sort((a, b) => {
+                if (b.problemCount !== a.problemCount) {
+                    return b.problemCount - a.problemCount
+                }
+                return a.name.localeCompare(b.name)
+            })
+    } catch {
+        return []
+    }
+}
+
+export type PublicProblemSummary = {
+    id: string
+    number: number
+    slug: string
+    title: string
+    description: string | null
+    difficulty: "EASY" | "MEDIUM" | "HARD"
+    dialects: ("DUCKDB" | "POSTGRES")[]
+    tags: { slug: string; name: string }[]
+}
+
+/**
+ * Tag detail data — the tag metadata plus its PUBLISHED problems in
+ * stable number-asc order (same ordering invariant as `getProblems`).
+ *
+ * Returns `{ tag: null, problems: [] }` when:
+ *   - the slug doesn't match any tag
+ *   - the tag exists but has zero PUBLISHED problems
+ * The caller treats both as 404 so we never render an empty tag page.
+ */
+export async function getProblemsByTag(slug: string): Promise<{
+    tag: { slug: string; name: string } | null
+    problems: PublicProblemSummary[]
+}> {
+    try {
+        const tag = await prisma.tag.findUnique({
+            where: { slug },
+            select: {
+                slug: true,
+                name: true,
+                problems: {
+                    where: { status: "PUBLISHED" },
+                    orderBy: { number: "asc" },
+                    select: {
+                        id: true,
+                        number: true,
+                        slug: true,
+                        title: true,
+                        description: true,
+                        difficulty: true,
+                        dialects: true,
+                        tags: {
+                            select: { slug: true, name: true },
+                            orderBy: { name: "asc" },
+                        },
+                    },
+                },
+            },
+        })
+        if (!tag || tag.problems.length === 0) {
+            return { tag: null, problems: [] }
+        }
+        return {
+            tag: { slug: tag.slug, name: tag.name },
+            problems: tag.problems,
+        }
+    } catch {
+        return { tag: null, problems: [] }
     }
 }

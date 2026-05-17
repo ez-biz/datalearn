@@ -1,4 +1,6 @@
 import type { Metadata } from "next"
+import Link from "next/link"
+import { Tag as TagIcon } from "lucide-react"
 import { getProblems } from "@/actions/problems"
 import { getSolvedSlugs } from "@/actions/submissions"
 import { Container } from "@/components/ui/Container"
@@ -30,12 +32,21 @@ export default async function PracticePage() {
                         problem runs in your browser — no setup, instant feedback.
                     </p>
                 </div>
-                {list.length > 0 && (
-                    <div className="text-sm text-muted-foreground tabular-nums">
-                        <span className="text-foreground font-semibold">{solvedCount}</span>{" "}
-                        / {list.length} solved
-                    </div>
-                )}
+                <div className="flex items-center gap-4">
+                    <Link
+                        href="/practice/tags"
+                        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                        <TagIcon className="h-3.5 w-3.5" />
+                        Browse by tag
+                    </Link>
+                    {list.length > 0 && (
+                        <div className="text-sm text-muted-foreground tabular-nums">
+                            <span className="text-foreground font-semibold">{solvedCount}</span>{" "}
+                            / {list.length} solved
+                        </div>
+                    )}
+                </div>
             </header>
             <PracticeList problems={list} solvedSlugs={solvedSlugs} />
         </Container>
