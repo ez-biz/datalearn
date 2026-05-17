@@ -4,6 +4,7 @@ export type TrackProgress = {
     completedCount: number
     totalCount: number
     nextItemId: string | null
+    completedItemIds: string[]
 }
 
 export async function getTrackProgressForUser(
@@ -19,7 +20,12 @@ export async function getTrackProgressForUser(
         select: { id: true, problemId: true },
     })
     if (items.length === 0) {
-        return { completedCount: 0, totalCount: 0, nextItemId: null }
+        return {
+            completedCount: 0,
+            totalCount: 0,
+            nextItemId: null,
+            completedItemIds: [],
+        }
     }
 
     if (!userId) {
@@ -27,6 +33,7 @@ export async function getTrackProgressForUser(
             completedCount: 0,
             totalCount: items.length,
             nextItemId: items[0].id,
+            completedItemIds: [],
         }
     }
 
@@ -48,5 +55,8 @@ export async function getTrackProgressForUser(
         completedCount: completedProblemIds.size,
         totalCount: items.length,
         nextItemId: nextItem?.id ?? null,
+        completedItemIds: items
+            .filter((item) => completedProblemIds.has(item.problemId))
+            .map((item) => item.id),
     }
 }

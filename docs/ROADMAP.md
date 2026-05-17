@@ -401,21 +401,18 @@ Major platform expansions that take Data Learn from "SQL practice + learning hub
 
 **Coverage shipped:** Pure UTC/selection helper tests plus Playwright E2E for auto-fill redirect, admin manual override, and solved-today state.
 
-### V9 — Study plans / tracks
+### V9 — Study plans / tracks — IN PROGRESS on main
 
-**What:** Curated multi-problem learning paths that the platform itself authors (and possibly contributors via the existing CONTRIBUTOR role). A track is an ordered sequence of problems + articles around a theme — "SQL aggregations from zero to ranking interview", "Window functions deep dive", "Joins for data engineers". Users opt in to a track and get progress, recommended-next, and an estimated completion time.
+**What:** Curated multi-problem learning paths that the platform itself authors. A track is an ordered sequence of published SQL problems around a theme — "SQL aggregations from zero to ranking interview", "Window functions deep dive", "Joins for data engineers". Learners get a focused sequence, computed progress, and a next-problem affordance.
 
 **Why:** Tags and topics describe what content *is*. Tracks describe a *path* — the problem sequence, the order of articles to read in between, the difficulty ramp. Without tracks, a new user faces a wall of 100+ problems and doesn't know where to start. With tracks, they have an opinionated guide.
 
-**Components:**
-- Schema: `Track { id, slug, name, description, difficulty, estimatedMinutes, createdAt }`, `TrackItem { trackId, kind: PROBLEM|ARTICLE, refId, position }`, `UserTrackProgress { userId, trackId, completedItemIds, currentItemId, startedAt, completedAt }`.
-- Author surface: under the existing admin CMS — `/admin/tracks` to create + reorder items.
-- Learner surface: `/learn/tracks` index with cover images and difficulty/length, `/learn/tracks/[slug]` detail showing the sequence + the user's progress, plus a sticky "Next item" affordance.
-- Profile integration: the existing UserHome "Continue" card can promote the next item in an in-progress track ahead of the last individual problem.
+**Shipped / landing:**
+- **Backend + authoring (PR #112)** — `Track` + `TrackItem` Prisma models, admin REST routes, `/admin/tracks` create/edit/reorder UI, MCP `list_tracks` / `get_track` / `create_track` / `update_track`, and `npm run test:tracks` in CI.
+- **Learner surfaces (follow-up PR)** — `/learn/tracks` public index, `/learn/tracks/[slug]` detail page, progress bar, solved item badges, Start/Continue/Review CTA, SEO metadata, and Learn/Practice entry links.
+- **Progress model** — computed from accepted `Submission` rows over the track's published problems. No `UserTrackProgress` table in v1; this keeps progress consistent with normal problem solves and avoids a second write path.
 
-**Dependencies:** Reuses Article + Problem; no new content models. Reuses `getUserStats` for some progress accounting.
-
-**Scope estimate:** Medium. ~600 lines across the new admin and learn surfaces.
+**Deferred to v1.5/v2:** article items, profile/home continuation cards, hard sequencing gates, track tags, AI-recommended tracks, public sharing/forking, and explicit `UserTrackProgress` rows if notifications or recommendation hooks need them.
 
 ### V10 — Marketing & growth
 
