@@ -27,6 +27,7 @@
     "test:schema-cache-key": "node --import tsx --test scripts/test-schema-cache-key.ts",
     "test:tag-discovery": "node --import tsx --test scripts/test-tag-discovery.ts",
     "audit:tags": "tsx scripts/audit-tags.ts",
+    "audit:tags:prod": "bash scripts/audit-tags-prod.sh",
     "audit:dialects": "tsx scripts/audit-all-dialects.ts",
     "audit:dialects:ci": "tsx scripts/audit-all-dialects.ts",
     "validate:problem": "tsx scripts/validate-problem.ts",
