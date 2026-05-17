@@ -32,6 +32,7 @@ export const SlugSchema = z
 export const Difficulty = z.enum(["EASY", "MEDIUM", "HARD"])
 export const ProblemStatus = z.enum(["DRAFT", "BETA", "PUBLISHED", "ARCHIVED"])
 export const Dialect = z.enum(["DUCKDB", "POSTGRES"])
+export const TagKind = z.enum(["TOPIC", "COMPANY"])
 export const ModeratorPermission = z.enum(moderatorPermissionValues)
 export const ProblemDiscussionMode = z.enum(["OPEN", "LOCKED", "HIDDEN"])
 export const ProblemReportKind = z.enum([
@@ -51,6 +52,7 @@ export const SqlSchemaUpdateInput = SqlSchemaCreateInput.partial()
 export const TagCreateInput = z.object({
     name: z.string().min(1).max(50),
     slug: SlugSchema.optional(),
+    kind: TagKind.default("TOPIC"),
 })
 
 /**

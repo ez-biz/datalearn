@@ -3,7 +3,12 @@ import { TagCreateInput } from "../../../lib/admin-validation"
 import { DataLearnClient } from "../client.js"
 import { toMcpError } from "../errors.js"
 
-type Tag = { id: string; slug: string; name: string }
+type Tag = {
+    id: string
+    slug: string
+    name: string
+    kind: "TOPIC" | "COMPANY"
+}
 
 function ok(payload: unknown) {
     return {
@@ -18,40 +23,40 @@ function ok(payload: unknown) {
 
 export function registerTagTools(
     server: McpServer,
-    client: DataLearnClient
+    client: DataLearnClient,
 ): void {
     server.tool(
         "list_tags",
-        "List all tags. Tags label problems by topic (joins, aggregations, window-functions, etc.).",
+        "List all tags. Tags label problems by topic or by company interview source.",
         {},
         async () => {
             try {
                 const tags = await client.request<Tag[]>(
                     "GET",
-                    "/api/admin/tags"
+                    "/api/admin/tags",
                 )
                 return ok(tags)
             } catch (err) {
                 throw toMcpError(err)
             }
-        }
+        },
     )
 
     server.tool(
         "create_tag",
-        "Create a new tag. Slug must be kebab-case and unique.",
+        "Create a new tag. Slug must be kebab-case and unique. Optional kind defaults to TOPIC; use COMPANY for interview-source tags.",
         TagCreateInput.shape,
         async (input) => {
             try {
                 const created = await client.request<Tag>(
                     "POST",
                     "/api/admin/tags",
-                    input
+                    input,
                 )
                 return ok(created)
             } catch (err) {
                 throw toMcpError(err)
             }
-        }
+        },
     )
 }

@@ -32,6 +32,7 @@ async function main() {
             select: {
                 slug: true,
                 name: true,
+                kind: true,
                 _count: {
                     select: {
                         problems: true,
@@ -49,10 +50,14 @@ async function main() {
         const withPublished = tags.filter((t) => t.problems.length > 0)
         const withoutPublished = tags.filter((t) => t.problems.length === 0)
 
-        console.log(`\n── Tag Audit ──────────────────────────────────────────────`)
+        console.log(
+            `\n── Tag Audit ──────────────────────────────────────────────`,
+        )
         console.log(`Total tags: ${totalTags}`)
         console.log(`  With published problems: ${withPublished.length}`)
-        console.log(`  With no published problems (ghost): ${withoutPublished.length}`)
+        console.log(
+            `  With no published problems (ghost): ${withoutPublished.length}`,
+        )
         console.log()
 
         // Sort by published count desc, then name asc
@@ -61,27 +66,25 @@ async function main() {
             return diff !== 0 ? diff : a.name.localeCompare(b.name)
         })
 
-        console.log(`── All tags (by published problem count) ──────────────────`)
-        const maxName = Math.max(...sorted.map((t) => t.name.length), 4)
-        const maxSlug = Math.max(...sorted.map((t) => t.slug.length), 4)
         console.log(
-            `${"NAME".padEnd(maxName)}  ${"SLUG".padEnd(maxSlug)}  TOTAL  PUBLISHED`
+            `── All tags (by kind and published problem count) ─────────`,
         )
-        console.log("─".repeat(maxName + maxSlug + 20))
-        for (const t of sorted) {
-            const total = t._count.problems
-            const published = t.problems.length
-            const ghost = published === 0 ? "  ⚠ no published problems" : ""
-            console.log(
-                `${t.name.padEnd(maxName)}  ${t.slug.padEnd(maxSlug)}  ${String(total).padStart(5)}  ${String(published).padStart(9)}${ghost}`
-            )
-        }
+        printTagTable(
+            "Companies",
+            sorted.filter((t) => t.kind === "COMPANY"),
+        )
+        printTagTable(
+            "Topics",
+            sorted.filter((t) => t.kind === "TOPIC"),
+        )
 
         // Duplicate detection: normalize to lower-case, strip hyphens/spaces
-        console.log(`\n── Potential duplicates ───────────────────────────────────`)
+        console.log(
+            `\n── Potential duplicates ───────────────────────────────────`,
+        )
         const groups = new Map<string, typeof tags>()
         for (const t of tags) {
-            const key = t.name.toLowerCase().replace(/[-_\s]+/g, "")
+            const key = `${t.kind}:${t.name.toLowerCase().replace(/[-_\s]+/g, "")}`
             const group = groups.get(key) ?? []
             group.push(t)
             groups.set(key, group)
@@ -91,30 +94,65 @@ async function main() {
             console.log("No potential duplicates found.")
         } else {
             console.log(
-                `${dupes.length} group(s) with similar names — consolidate before launch:\n`
+                `${dupes.length} group(s) with similar names — consolidate before launch:\n`,
             )
             for (const group of dupes) {
                 console.log(
-                    `  Group: ${group.map((t) => `"${t.name}" (${t.problems.length} published)`).join(" vs ")}`
+                    `  Group (${group[0]?.kind.toLowerCase()}): ${group.map((t) => `"${t.name}" (${t.problems.length} published)`).join(" vs ")}`,
                 )
-                console.log(
-                    `  Slugs: ${group.map((t) => t.slug).join(", ")}`
-                )
+                console.log(`  Slugs: ${group.map((t) => t.slug).join(", ")}`)
                 console.log()
             }
         }
 
         if (withoutPublished.length > 0) {
-            console.log(`── Ghost tags (0 published problems) ──────────────────────`)
+            console.log(
+                `── Ghost tags (0 published problems) ──────────────────────`,
+            )
             for (const t of withoutPublished) {
-                console.log(`  "${t.name}" (slug: ${t.slug}, total: ${t._count.problems})`)
+                console.log(
+                    `  "${t.name}" (slug: ${t.slug}, total: ${t._count.problems})`,
+                )
             }
             console.log()
         }
 
-        console.log(`── Done ────────────────────────────────────────────────────\n`)
+        console.log(
+            `── Done ────────────────────────────────────────────────────\n`,
+        )
     } finally {
         await prisma.$disconnect()
         await pool.end().catch(() => {})
+    }
+}
+
+function printTagTable(
+    label: string,
+    tags: Array<{
+        slug: string
+        name: string
+        _count: { problems: number }
+        problems: { id: string }[]
+    }>,
+) {
+    console.log(`\n${label}`)
+    if (tags.length === 0) {
+        console.log("  none")
+        return
+    }
+
+    const maxName = Math.max(...tags.map((t) => t.name.length), 4)
+    const maxSlug = Math.max(...tags.map((t) => t.slug.length), 4)
+    console.log(
+        `${"NAME".padEnd(maxName)}  ${"SLUG".padEnd(maxSlug)}  TOTAL  PUBLISHED`,
+    )
+    console.log("─".repeat(maxName + maxSlug + 20))
+    for (const t of tags) {
+        const total = t._count.problems
+        const published = t.problems.length
+        const ghost = published === 0 ? "  ⚠ no published problems" : ""
+        console.log(
+            `${t.name.padEnd(maxName)}  ${t.slug.padEnd(maxSlug)}  ${String(total).padStart(5)}  ${String(published).padStart(9)}${ghost}`,
+        )
     }
 }

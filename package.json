@@ -26,10 +26,12 @@
     "test:solutions": "node --import tsx --test scripts/test-solutions.ts",
     "test:schema-cache-key": "node --import tsx --test scripts/test-schema-cache-key.ts",
     "test:tag-discovery": "node --import tsx --test scripts/test-tag-discovery.ts",
+    "test:companies-tagging": "node --import tsx --test scripts/test-companies-tagging.ts",
     "audit:tags": "tsx scripts/audit-tags.ts",
     "audit:tags:prod": "bash scripts/audit-tags-prod.sh",
     "audit:dialects": "tsx scripts/audit-all-dialects.ts",
     "audit:dialects:ci": "tsx scripts/audit-all-dialects.ts",
+    "mcp:e2e-test": "node scripts/mcp-e2e-test.mjs",
     "validate:problem": "tsx scripts/validate-problem.ts",
     "db:sync-prod": "bash scripts/sync-from-prod.sh"
   },

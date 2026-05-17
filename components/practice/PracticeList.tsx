@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { ArrowRight, CheckCircle2, Search } from "lucide-react"
 import { Input } from "@/components/ui/Input"
-import { DifficultyBadge, Badge } from "@/components/ui/Badge"
+import { DifficultyBadge } from "@/components/ui/Badge"
 import { Card } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { EmptyState } from "@/components/ui/EmptyState"
@@ -22,7 +22,7 @@ interface Problem {
     title: string
     description: string | null
     difficulty: Difficulty
-    tags?: { slug: string; name: string }[]
+    tags?: { slug: string; name: string; kind?: "TOPIC" | "COMPANY" }[]
 }
 
 /** Mobile tag-pill cap — beyond this we just trail off with "+N". */
@@ -206,6 +206,7 @@ export function PracticeList({ problems, solvedSlugs }: PracticeListProps) {
                                                             key={t.slug}
                                                             slug={t.slug}
                                                             name={t.name}
+                                                            kind={t.kind}
                                                             stopPropagation
                                                         />
                                                     ))}
@@ -219,6 +220,7 @@ export function PracticeList({ problems, solvedSlugs }: PracticeListProps) {
                                                                 key={t.slug}
                                                                 slug={t.slug}
                                                                 name={t.name}
+                                                                kind={t.kind}
                                                                 stopPropagation
                                                             />
                                                         ))}
