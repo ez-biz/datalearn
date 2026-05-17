@@ -169,79 +169,86 @@ export function PracticeList({ problems, solvedSlugs }: PracticeListProps) {
                         {filtered.map((p) => {
                             const solved = solvedSet.has(p.slug)
                             return (
-                            <li key={p.id}>
-                                <Link
-                                    href={`/practice/${p.slug}`}
-                                    className="grid grid-cols-[1fr_auto] md:grid-cols-[2.5rem_3rem_1fr_8rem_3rem] items-center gap-4 px-4 md:px-6 py-4 hover:bg-surface-muted/60 transition-colors group"
-                                >
-                                    <span className="hidden md:flex items-center justify-center" aria-label={solved ? "Solved" : "Not solved"}>
-                                        {solved ? (
-                                            <CheckCircle2 className="h-4 w-4 text-easy" />
-                                        ) : (
-                                            <span className="h-2 w-2 rounded-full bg-border-strong" />
-                                        )}
-                                    </span>
-                                    <span className="hidden md:inline text-xs tabular-nums text-muted-foreground">
-                                        {String(p.number).padStart(2, "0")}
-                                    </span>
-                                    <div className="min-w-0">
-                                        <h3 className={cn(
-                                            "font-medium truncate transition-colors",
-                                            solved ? "text-muted-foreground" : "text-foreground group-hover:text-primary"
-                                        )}>
-                                            <span className="md:hidden inline-flex items-center mr-1.5 align-middle">
-                                                {solved ? <CheckCircle2 className="h-3.5 w-3.5 text-easy" /> : null}
-                                            </span>
+                            // Row is a non-link container. The whole row is
+                            // clickable via the title link's ::before overlay
+                            // (Tailwind `before:absolute before:inset-0`).
+                            // Tag pills sit above the overlay (`relative z-10`)
+                            // so each pill is independently clickable without
+                            // nesting <a> inside <a>.
+                            <li
+                                key={p.id}
+                                className="relative grid grid-cols-[1fr_auto] md:grid-cols-[2.5rem_3rem_1fr_8rem_3rem] items-center gap-4 px-4 md:px-6 py-4 hover:bg-surface-muted/60 transition-colors group"
+                            >
+                                <span className="hidden md:flex items-center justify-center" aria-label={solved ? "Solved" : "Not solved"}>
+                                    {solved ? (
+                                        <CheckCircle2 className="h-4 w-4 text-easy" />
+                                    ) : (
+                                        <span className="h-2 w-2 rounded-full bg-border-strong" />
+                                    )}
+                                </span>
+                                <span className="hidden md:inline text-xs tabular-nums text-muted-foreground">
+                                    {String(p.number).padStart(2, "0")}
+                                </span>
+                                <div className="min-w-0">
+                                    <h3 className={cn(
+                                        "font-medium truncate transition-colors",
+                                        solved ? "text-muted-foreground" : "text-foreground group-hover:text-primary"
+                                    )}>
+                                        <span className="md:hidden inline-flex items-center mr-1.5 align-middle">
+                                            {solved ? <CheckCircle2 className="h-3.5 w-3.5 text-easy" /> : null}
+                                        </span>
+                                        <Link
+                                            href={`/practice/${p.slug}`}
+                                            className="before:absolute before:inset-0 before:content-[''] focus-visible:outline-none focus-visible:before:ring-2 focus-visible:before:ring-primary/40"
+                                        >
                                             {p.title}
-                                        </h3>
-                                        <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
-                                            {p.description}
-                                        </p>
-                                        {p.tags && p.tags.length > 0 && (
-                                            <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                                                {/* Desktop: show all tags */}
-                                                <div className="hidden md:flex flex-wrap items-center gap-1.5">
-                                                    {p.tags.map((t) => (
+                                        </Link>
+                                    </h3>
+                                    <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
+                                        {p.description}
+                                    </p>
+                                    {p.tags && p.tags.length > 0 && (
+                                        <div className="relative z-10 flex flex-wrap items-center gap-1.5 mt-2">
+                                            {/* Desktop: show all tags */}
+                                            <div className="hidden md:flex flex-wrap items-center gap-1.5">
+                                                {p.tags.map((t) => (
+                                                    <TagPill
+                                                        key={t.slug}
+                                                        slug={t.slug}
+                                                        name={t.name}
+                                                        kind={t.kind}
+                                                    />
+                                                ))}
+                                            </div>
+                                            {/* Mobile: cap to MOBILE_TAG_LIMIT to avoid wrapping noise */}
+                                            <div className="flex md:hidden flex-wrap items-center gap-1.5">
+                                                {p.tags
+                                                    .slice(0, MOBILE_TAG_LIMIT)
+                                                    .map((t) => (
                                                         <TagPill
                                                             key={t.slug}
                                                             slug={t.slug}
                                                             name={t.name}
                                                             kind={t.kind}
-                                                            stopPropagation
                                                         />
                                                     ))}
-                                                </div>
-                                                {/* Mobile: cap to MOBILE_TAG_LIMIT to avoid wrapping noise */}
-                                                <div className="flex md:hidden flex-wrap items-center gap-1.5">
-                                                    {p.tags
-                                                        .slice(0, MOBILE_TAG_LIMIT)
-                                                        .map((t) => (
-                                                            <TagPill
-                                                                key={t.slug}
-                                                                slug={t.slug}
-                                                                name={t.name}
-                                                                kind={t.kind}
-                                                                stopPropagation
-                                                            />
-                                                        ))}
-                                                    {p.tags.length > MOBILE_TAG_LIMIT && (
-                                                        <span className="text-[10px] text-muted-foreground tabular-nums">
-                                                            +{p.tags.length - MOBILE_TAG_LIMIT}
-                                                        </span>
-                                                    )}
-                                                </div>
+                                                {p.tags.length > MOBILE_TAG_LIMIT && (
+                                                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                                                        +{p.tags.length - MOBILE_TAG_LIMIT}
+                                                    </span>
+                                                )}
                                             </div>
-                                        )}
-                                        <div className="mt-2 md:hidden">
-                                            <DifficultyBadge difficulty={p.difficulty} />
                                         </div>
-                                    </div>
-                                    <div className="hidden md:flex">
+                                    )}
+                                    <div className="mt-2 md:hidden">
                                         <DifficultyBadge difficulty={p.difficulty} />
                                     </div>
-                                    <ArrowRight className="hidden md:block h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-[color,translate] duration-150" />
-                                    <ArrowRight className="md:hidden h-4 w-4 text-muted-foreground" />
-                                </Link>
+                                </div>
+                                <div className="hidden md:flex">
+                                    <DifficultyBadge difficulty={p.difficulty} />
+                                </div>
+                                <ArrowRight className="hidden md:block h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-[color,translate] duration-150" />
+                                <ArrowRight className="md:hidden h-4 w-4 text-muted-foreground" />
                             </li>
                         )
                         })}
