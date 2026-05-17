@@ -92,6 +92,9 @@ jobs:
       - name: Test tag-discovery actions
         run: npm run test:tag-discovery
 
+      - name: Test companies tagging actions
+        run: npm run test:companies-tagging
+
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         with:

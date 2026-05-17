@@ -32,7 +32,11 @@ describe("tags tools", () => {
         const fetch = vi
             .fn()
             .mockResolvedValue(
-                ok({ data: [{ id: "1", slug: "join", name: "Join" }] })
+                ok({
+                    data: [
+                        { id: "1", slug: "join", name: "Join", kind: "TOPIC" },
+                    ],
+                })
             )
         const server = makeServer()
         const client = new DataLearnClient(
@@ -54,7 +58,17 @@ describe("tags tools", () => {
         const fetch = vi
             .fn()
             .mockResolvedValue(
-                ok({ data: { id: "1", slug: "join", name: "Join" } }, 201)
+                ok(
+                    {
+                        data: {
+                            id: "1",
+                            slug: "stripe",
+                            name: "Stripe",
+                            kind: "COMPANY",
+                        },
+                    },
+                    201
+                )
             )
         const server = makeServer()
         const client = new DataLearnClient(
@@ -64,12 +78,16 @@ describe("tags tools", () => {
         )
         registerTagTools(server, client)
         const tool = (server as any)._registeredTools.create_tag
-        await tool.handler({ slug: "join", name: "Join" }, {})
+        await tool.handler({ slug: "stripe", name: "Stripe", kind: "COMPANY" }, {})
         expect(fetch).toHaveBeenCalledWith(
             "http://localhost:3000/api/admin/tags",
             expect.objectContaining({
                 method: "POST",
-                body: JSON.stringify({ slug: "join", name: "Join" }),
+                body: JSON.stringify({
+                    slug: "stripe",
+                    name: "Stripe",
+                    kind: "COMPANY",
+                }),
             })
         )
     })

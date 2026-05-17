@@ -11,11 +11,23 @@ interface PageProps {
     params: Promise<{ slug: string }>
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export const dynamic = "force-dynamic"
+
+export async function generateMetadata({
+    params,
+}: PageProps): Promise<Metadata> {
     const { slug } = await params
     const { tag, problems } = await getProblemsByTag(slug)
     if (!tag) {
         return { title: "Tag not found" }
+    }
+    if (tag.kind === "COMPANY") {
+        return {
+            title: `${tag.name} SQL interview questions`,
+            description: `Practice ${problems.length} SQL ${
+                problems.length === 1 ? "problem" : "problems"
+            } from ${tag.name} interviews — run queries in your browser and get instant validation.`,
+        }
     }
     return {
         title: `${tag.name} SQL problems`,
@@ -36,8 +48,10 @@ export default async function TagDetailPage({ params }: PageProps) {
         notFound()
     }
 
-    const solvedCount = problems.filter((p) => solvedSlugs.includes(p.slug))
-        .length
+    const solvedCount = problems.filter((p) =>
+        solvedSlugs.includes(p.slug),
+    ).length
+    const isCompany = tag.kind === "COMPANY"
 
     return (
         <Container width="lg" className="py-10 sm:py-14">
@@ -52,13 +66,25 @@ export default async function TagDetailPage({ params }: PageProps) {
                 <div className="mt-4 flex items-end justify-between gap-4 flex-wrap">
                     <div>
                         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-                            {tag.name}
+                            {isCompany
+                                ? `${tag.name} SQL interview questions`
+                                : tag.name}
                         </h1>
-                        <p className="mt-2 text-muted-foreground">
-                            {problems.length}{" "}
-                            {problems.length === 1 ? "problem" : "problems"} tagged{" "}
-                            <span className="text-foreground">"{tag.name}"</span>.
-                        </p>
+                        {isCompany ? (
+                            <p className="mt-2 text-muted-foreground">
+                                Common SQL questions from {tag.name} interviews.
+                            </p>
+                        ) : (
+                            <p className="mt-2 text-muted-foreground">
+                                {problems.length}{" "}
+                                {problems.length === 1 ? "problem" : "problems"}{" "}
+                                tagged{" "}
+                                <span className="text-foreground">
+                                    &quot;{tag.name}&quot;
+                                </span>
+                                .
+                            </p>
+                        )}
                     </div>
                     {problems.length > 0 && solvedSlugs.length > 0 && (
                         <div className="text-sm text-muted-foreground tabular-nums">

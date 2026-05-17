@@ -17,28 +17,39 @@ export const POST = withAdmin(async (req) => {
     try {
         body = await req.json()
     } catch {
-        return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 })
+        return NextResponse.json(
+            { error: "Invalid JSON body." },
+            { status: 400 },
+        )
     }
     const parsed = TagCreateInput.safeParse(body)
     if (!parsed.success) {
         return NextResponse.json(
-            { error: "Validation failed", details: z.treeifyError(parsed.error) },
-            { status: 400 }
+            {
+                error: "Validation failed",
+                details: z.treeifyError(parsed.error),
+            },
+            { status: 400 },
         )
     }
     const slug = parsed.data.slug ?? slugify(parsed.data.name)
+    const kindProvided =
+        typeof body === "object" && body !== null && "kind" in body
     try {
         const tag = await prisma.tag.upsert({
             where: { slug },
-            update: { name: parsed.data.name },
-            create: { name: parsed.data.name, slug },
+            update: {
+                name: parsed.data.name,
+                ...(kindProvided ? { kind: parsed.data.kind } : {}),
+            },
+            create: { name: parsed.data.name, slug, kind: parsed.data.kind },
         })
         return NextResponse.json({ data: tag }, { status: 201 })
-    } catch (e: any) {
+    } catch (e) {
         console.error("Create tag failed:", e)
         return NextResponse.json(
             { error: "Failed to create tag." },
-            { status: 500 }
+            { status: 500 },
         )
     }
 })

@@ -6,6 +6,51 @@
 
 ## Recently shipped
 
+### May 2026 — v0.4.11: Companies tagging (V18)
+
+GitHub Release: <https://github.com/ez-biz/datalearn/releases/tag/v0.4.11>. Builds on the v0.4.10 tag infrastructure to let learners browse problems by interviewing company.
+
+- **Schema: `Tag.kind` enum (PR #110)** — added `kind TagKind @default(TOPIC)` with values `TOPIC | COMPANY`. One-column migration, no backfill — every existing tag becomes `TOPIC` automatically. Migration: `20260517080000_add_tag_kind`.
+- **`/practice/tags` split (PR #110)** — Companies above Topics, with a sticky `Companies · Topics` anchor nav when both sections are non-empty. Server-side launch gate: the Companies section stays hidden until ≥ 5 distinct companies have ≥ 3 PUBLISHED problems each. Editorial pass happens after merge; code ships dark and reveals itself automatically once the threshold is met.
+- **`TagPill` kind-aware styling (PR #110)** — `COMPANY` pills render a `<Building2 />` glyph and a subtle primary-tinted border so they're scannable on a busy problem row.
+- **`/practice/tags/[slug]` kind-aware metadata (PR #110)** — `generateMetadata` formats the title as "Stripe SQL interview questions" for companies vs. "Window Functions SQL problems" for topics. Detail page heading + tagline adapt similarly.
+- **Admin + MCP authoring (PR #110)** — new `TagCreateForm` with a kind selector; MCP `create_tag` tool accepts an optional `kind` parameter (default `TOPIC`); `list_tags` returns it.
+- **Tests + audit (PR #110)** — 7 new unit tests in `scripts/test-companies-tagging.ts` covering kind projections + launch-gate maths; 5 new e2e tests in `tests/e2e/companies-tags.spec.ts` covering section visibility, ordering, and per-kind copy. `scripts/audit-tags.ts` now partitions output by kind so editors can spot dupes inside a single namespace.
+
+### May 2026 — v0.4.10: tag-based problem discovery + dependency refresh
+
+GitHub Release: <https://github.com/ez-biz/datalearn/releases/tag/v0.4.10>. First surfaces the existing `Tag` taxonomy to learners and rolls a batch of routine dependency bumps.
+
+- **Tag-based problem discovery (PR #106)** — new `/practice/tags` index of tags with PUBLISHED-problem counts (sorted by count desc / name asc, ghost tags excluded). New `/practice/tags/[slug]` filtered list with `generateMetadata` for SEO. Clickable `TagPill` pills under each problem row on `/practice` and the detail page. New `getPublicTags()` + `getProblemsByTag(slug)` server actions; `getProblems()` projection extended to include tags. New `scripts/audit-tags.ts` (`npm run audit:tags`) for taxonomy hygiene. 9 unit + 3 e2e tests; no schema migration.
+- **Top-level dependency bumps (PR #101)** — 12 minor/patch updates across runtime dependencies.
+- **MCP server dependency bumps (PR #107)** — zod, @types/node, vitest in `mcp-server/`.
+- **eslint 9 → 10 (PR #64)** — major version bump on the dev tool. `eslint-config-next@16.2.4` declares `>=9.0.0` compatibility so the bump is transparent.
+
+### May 2026 — v0.4.9: SQL engine cold-load hotfix
+
+GitHub Release: <https://github.com/ez-biz/datalearn/releases/tag/v0.4.9>. Fixes a P0 regression introduced in v0.4.8 that broke `/practice/<slug>` engine init for every cold-load visitor.
+
+- **Absolute URLs for self-hosted bundle (PR #104)** — `getSelfHostedBundles()` builds full URLs with `window.location.origin`. Blob workers can't resolve root-relative paths through `importScripts`, so v0.4.8's relative URLs silently failed.
+- **Explicit Content-Type headers (PR #104)** — `application/wasm` and `application/javascript; charset=utf-8` on `/_dl/sql-engine/` paths via `next.config.ts`. `next start` doesn't auto-detect MIME for `public/` assets, and our `nosniff` header forces wasm to refuse anything else.
+- **CDN fallback on instantiation failure (PR #104)** — `createDuckDbInitializer(deps)` wraps the self-hosted path in try/catch; on any failure (selectBundle, worker creation, db.instantiate), the failed worker is terminated and the init retries against jsDelivr. Two new unit tests cover both paths.
+- **Wasm preload race removed (PR #104)** — `<link rel="preload" as="fetch">` for the wasm in `app/practice/layout.tsx` was racing the worker's own request on busy CI runners and leaving the engine init hanging. Worker preload remains.
+- **CI trace artifacts (PR #104)** — Playwright now uses `[github, html]` reporter on CI so trace artifacts upload on failure.
+
+### May 2026 — v0.4.8: DuckDB-WASM self-host (Phase 1) + cache headers
+
+GitHub Release: <https://github.com/ez-biz/datalearn/releases/tag/v0.4.8>. Moves the DuckDB-WASM bundle from jsDelivr to our own origin to flatten cold-load latency and cut a third-party dependency from the critical path. **Initial cut shipped broken**; the cold-load fix landed in v0.4.9 the same day — see runbook below.
+
+- **Self-hosted DuckDB-WASM bundle (PR #99)** — `scripts/copy-sql-engine-assets.ts` runs as `prebuild` and copies the `@duckdb/duckdb-wasm` distribution into `public/_dl/sql-engine/`. Production loads from our origin; dev/SSR/fallback still uses jsDelivr.
+- **Cache headers on bundle (PR #103)** — `next.config.ts` sets `Cache-Control: public, max-age=86400` on `/_dl/sql-engine/*.wasm` and `*.js`. URLs aren't content-hashed yet, so `immutable` is deferred until hashed-URL work in Phase 2.
+- **PGlite warm-up (PR #98)** — `lib/sql-engine/warmup.ts` opportunistically pre-imports PGlite for learners who used Postgres mode on any prior problem.
+
+### May 2026 — v0.4.7: solution explanation panel + multi-row schema parser
+
+GitHub Release: <https://github.com/ez-biz/datalearn/releases/tag/v0.4.7>.
+
+- **Solution explanation panel (PR #102)** — after a successful submission, the workspace surfaces the canonical solution alongside the learner's. Per-dialect, copy-button, side-by-side layout. Tied to the per-dialect `solutions` JSON map so the right canonical surfaces for whichever engine the learner solved with.
+- **Multi-row INSERT support in schema parser (PR #96)** — `lib/schema-parser.ts` now handles `INSERT INTO foo VALUES (...), (...), (...);`, unlocking schemas seeded with bulk inserts and keeping the first-paint optimization that pre-computes table info without waiting on DuckDB.
+
 ### May 2026 — v0.4.6: PGlite persistence + telemetry + dep hardening
 
 GitHub Release: <https://github.com/ez-biz/datalearn/releases/tag/v0.4.6>. Bundles the SQL Engine v2 Phase 1 close-out (telemetry harness) plus the first Phase 3 slice (PGlite IndexedDB persistence) and security/housekeeping work.
@@ -513,21 +558,14 @@ The session itself reuses **V4's live-interview platform** (collaborative whiteb
 
 **Scope estimate:** Small-medium. ~400 lines.
 
-### V18 — Companies tagging
+### ✅ V18 — Companies tagging — SHIPPED v0.4.11 (PR #110)
 
-**What:** Tag problems with the companies that ask them in interviews. "Asked at Stripe", "Asked at Meta data team", "Frequent at Snowflake interviews". A top-level filter on `/practice` lets a user generate "the FAANG SQL set" in one click. Companies are also a track (V9) source.
+`Tag` gained a `kind: TOPIC | COMPANY` enum and `/practice/tags` now splits Companies above Topics. Code is gated server-side (≥ 5 companies × ≥ 3 PUBLISHED problems each) so the section reveals itself automatically once editorial catches up. MCP `create_tag` accepts `kind`, so company tagging is part of the AI-authoring flow. Per-company landing pages live at `/practice/tags/<company-slug>` and use kind-aware metadata for SEO.
 
-**Why:** Interview prep is an explicit job-to-be-done for a real fraction of the audience. They don't want every problem; they want the ones their target company asks. Without this, that user goes back to LeetCode (which has it).
-
-**Components:**
-- Schema: extend `Tag` with a `kind: TOPIC | COMPANY` enum (cleaner than a separate model) + display affordances per kind.
-- Source: admin-curated, with optional "user-reported" via a small form on each problem ("Were you asked this in an interview? Which company?") that admins approve.
-- Surfaces: `/practice` filter UI gets a "Companies" facet alongside difficulty + tags. Per-company landing pages (`/practice/companies/[slug]`) that double as SEO entry points.
-- Privacy / accuracy: never publish a single user-reported attribution — require ≥3 independent reports before a company-tag becomes public.
-
-**Dependencies:** None. Reuses Tag.
-
-**Scope estimate:** Small-medium. ~300 lines + a small admin surface.
+**Deferred to v2:**
+- User-reported attribution form on each problem ("Were you asked this in an interview? Which company?") with the ≥ 3-reports-before-public guard. Worth doing once editorial has seeded the canonical company list and we have organic submissions.
+- Top-level inline "Companies" dropdown filter on `/practice` itself (composable with difficulty/search/status). Only worth building if telemetry shows the tag-index page splits learner attention significantly.
+- Brand-alias redirects (`/practice/tags/facebook` → `/practice/tags/meta`). Defer until search traffic justifies a 301 map.
 
 ---
 

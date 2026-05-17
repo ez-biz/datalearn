@@ -4,8 +4,12 @@ import { Container } from "@/components/ui/Container"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Badge } from "@/components/ui/Badge"
 import { EmptyState } from "@/components/ui/EmptyState"
+import { TagCreateForm } from "@/components/admin/TagCreateForm"
 
-export const metadata = { title: "Tags", robots: { index: false, follow: false } }
+export const metadata = {
+    title: "Tags",
+    robots: { index: false, follow: false },
+}
 export const dynamic = "force-dynamic"
 
 export default async function TagsPage() {
@@ -23,10 +27,17 @@ export default async function TagsPage() {
                     Tags
                 </h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    {tags.length} total · created on the fly via the problem editor or{" "}
-                    <code className="font-mono text-xs">POST /api/admin/tags</code>
+                    {tags.length} total · created on the fly via the problem
+                    editor or{" "}
+                    <code className="font-mono text-xs">
+                        POST /api/admin/tags
+                    </code>
                 </p>
             </header>
+
+            <div className="mb-6">
+                <TagCreateForm />
+            </div>
 
             {tags.length === 0 ? (
                 <EmptyState
@@ -44,6 +55,9 @@ export default async function TagsPage() {
                                     className="normal-case tracking-normal text-xs"
                                 >
                                     {t.slug}
+                                    <span className="ml-1 text-muted-foreground">
+                                        {t.kind.toLowerCase()}
+                                    </span>
                                     <span className="ml-1 tabular-nums text-muted-foreground">
                                         {t._count.problems}
                                     </span>
