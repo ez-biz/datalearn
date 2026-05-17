@@ -15,6 +15,15 @@ import {
     getTrackBySlug,
     getTrackProgress,
 } from "../actions/tracks"
+import {
+    addTrackItemToTrack,
+    reorderTrackItems,
+} from "../lib/admin-tracks"
+import {
+    TrackCreateInput,
+    TrackItemAddInput,
+    TrackReorderInput,
+} from "../lib/admin-validation"
 import { getTrackProgressForUser } from "../lib/tracks"
 
 const PREFIX = "tracktest-"
@@ -316,5 +325,92 @@ describe("track progress", () => {
             totalCount: 3,
             nextItemId: secondItemId,
         })
+    })
+})
+
+describe("track admin validation", () => {
+    it("defaults create input to a draft medium track", () => {
+        const parsed = TrackCreateInput.parse({
+            name: `${PREFIX}Validated`,
+            slug: `${PREFIX}validated`,
+            summary: "Validated summary",
+            description: "Validated description",
+        })
+
+        assert.equal(parsed.difficulty, "MEDIUM")
+        assert.equal(parsed.status, "DRAFT")
+        assert.equal(parsed.estimatedMinutes, 60)
+    })
+
+    it("rejects invalid track item and reorder payloads", () => {
+        assert.equal(
+            TrackItemAddInput.safeParse({ problemSlug: "Not Valid" }).success,
+            false,
+        )
+        assert.equal(
+            TrackReorderInput.safeParse({ itemIds: [] }).success,
+            false,
+        )
+    })
+})
+
+describe("track admin item operations", () => {
+    it("rejects adding the same problem twice", async () => {
+        const result = await addTrackItemToTrack(PUBLISHED_SLUG, {
+            problemSlug: `${PREFIX}problem-1`,
+        })
+
+        assert.deepEqual(result, {
+            ok: false,
+            status: 409,
+            error: "Problem already exists in this track.",
+        })
+    })
+
+    it("rejects partial reorder payloads without changing positions", async () => {
+        const result = await reorderTrackItems(PUBLISHED_SLUG, [
+            firstItemId,
+            secondItemId,
+        ])
+
+        assert.deepEqual(result, {
+            ok: false,
+            status: 400,
+            error: "Reorder payload must include every current track item exactly once.",
+        })
+
+        const items = await prisma.trackItem.findMany({
+            where: { trackId: publishedTrackId },
+            orderBy: { position: "asc" },
+            select: { id: true },
+        })
+        assert.deepEqual(
+            items.map((item) => item.id),
+            [firstItemId, secondItemId, thirdItemId],
+        )
+    })
+
+    it("rewrites positions atomically for a complete reorder", async () => {
+        const result = await reorderTrackItems(PUBLISHED_SLUG, [
+            thirdItemId,
+            secondItemId,
+            firstItemId,
+        ])
+
+        assert.deepEqual(result, { ok: true })
+
+        const items = await prisma.trackItem.findMany({
+            where: { trackId: publishedTrackId },
+            orderBy: { position: "asc" },
+            select: { id: true, position: true },
+        })
+        assert.deepEqual(
+            items.map((item) => [item.id, item.position]),
+            [
+                [thirdItemId, 0],
+                [secondItemId, 1],
+                [firstItemId, 2],
+            ],
+        )
     })
 })

@@ -535,6 +535,10 @@ export const ArticleStatus = z.enum([
     "PUBLISHED",
     "ARCHIVED",
 ])
+export const TrackDifficulty = z.enum(["EASY", "MEDIUM", "HARD", "MIXED"])
+export const TrackStatus = z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"])
+
+const CoverImageUrl = z.string().url().max(2_000).optional().nullable()
 
 export const TopicCreateInput = z.object({
     name: z.string().min(1).max(100),
@@ -567,6 +571,37 @@ export const ArticleUpdateInput = z.object({
 
 export const ArticleRejectInput = z.object({
     reviewNotes: z.string().min(1).max(4_000),
+})
+
+export const TrackCreateInput = z.object({
+    name: z.string().min(1).max(120),
+    slug: SlugSchema.optional(),
+    summary: z.string().min(1).max(500),
+    description: z.string().min(1).max(20_000),
+    difficulty: TrackDifficulty.default("MEDIUM"),
+    status: TrackStatus.default("DRAFT"),
+    estimatedMinutes: z.coerce.number().int().min(1).max(10_000).default(60),
+    coverImageUrl: CoverImageUrl,
+})
+
+export const TrackUpdateInput = z.object({
+    name: z.string().min(1).max(120).optional(),
+    slug: SlugSchema.optional(),
+    summary: z.string().min(1).max(500).optional(),
+    description: z.string().min(1).max(20_000).optional(),
+    difficulty: TrackDifficulty.optional(),
+    status: TrackStatus.optional(),
+    estimatedMinutes: z.coerce.number().int().min(1).max(10_000).optional(),
+    coverImageUrl: CoverImageUrl,
+})
+
+export const TrackReorderInput = z.object({
+    itemIds: z.array(z.string().min(1)).min(1).max(200),
+})
+
+export const TrackItemAddInput = z.object({
+    problemSlug: SlugSchema,
+    position: z.coerce.number().int().min(0).optional(),
 })
 
 /**
