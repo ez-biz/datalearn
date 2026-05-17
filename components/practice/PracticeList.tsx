@@ -8,6 +8,7 @@ import { DifficultyBadge, Badge } from "@/components/ui/Badge"
 import { Card } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { EmptyState } from "@/components/ui/EmptyState"
+import { TagPill } from "@/components/ui/TagPill"
 import { cn } from "@/lib/utils"
 import { shouldWarmPostgres, warmSqlEngine } from "@/lib/sql-engine/warmup"
 
@@ -21,7 +22,11 @@ interface Problem {
     title: string
     description: string | null
     difficulty: Difficulty
+    tags?: { slug: string; name: string }[]
 }
+
+/** Mobile tag-pill cap — beyond this we just trail off with "+N". */
+const MOBILE_TAG_LIMIT = 2
 
 const DIFFICULTIES: ("ALL" | Difficulty)[] = ["ALL", "EASY", "MEDIUM", "HARD"]
 
@@ -192,6 +197,39 @@ export function PracticeList({ problems, solvedSlugs }: PracticeListProps) {
                                         <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
                                             {p.description}
                                         </p>
+                                        {p.tags && p.tags.length > 0 && (
+                                            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                                                {/* Desktop: show all tags */}
+                                                <div className="hidden md:flex flex-wrap items-center gap-1.5">
+                                                    {p.tags.map((t) => (
+                                                        <TagPill
+                                                            key={t.slug}
+                                                            slug={t.slug}
+                                                            name={t.name}
+                                                            stopPropagation
+                                                        />
+                                                    ))}
+                                                </div>
+                                                {/* Mobile: cap to MOBILE_TAG_LIMIT to avoid wrapping noise */}
+                                                <div className="flex md:hidden flex-wrap items-center gap-1.5">
+                                                    {p.tags
+                                                        .slice(0, MOBILE_TAG_LIMIT)
+                                                        .map((t) => (
+                                                            <TagPill
+                                                                key={t.slug}
+                                                                slug={t.slug}
+                                                                name={t.name}
+                                                                stopPropagation
+                                                            />
+                                                        ))}
+                                                    {p.tags.length > MOBILE_TAG_LIMIT && (
+                                                        <span className="text-[10px] text-muted-foreground tabular-nums">
+                                                            +{p.tags.length - MOBILE_TAG_LIMIT}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                         <div className="mt-2 md:hidden">
                                             <DifficultyBadge difficulty={p.difficulty} />
                                         </div>
