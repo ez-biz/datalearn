@@ -26,13 +26,13 @@ export async function getProblems() {
                 difficulty: true,
                 dialects: true,
                 tags: {
-                    select: { slug: true, name: true },
+                    select: { slug: true, name: true, kind: true },
                     orderBy: { name: "asc" },
                 },
             },
         })
         return { success: true, data: problems }
-    } catch (error) {
+    } catch {
         return { success: false, data: [] }
     }
 }
@@ -104,7 +104,7 @@ export async function getProblem(slug: string) {
             return { success: true, data: null }
         }
         return { success: true, data: problem }
-    } catch (error) {
+    } catch {
         return { success: false, data: null }
     }
 }
@@ -112,6 +112,7 @@ export async function getProblem(slug: string) {
 export type PublicTagSummary = {
     slug: string
     name: string
+    kind: "TOPIC" | "COMPANY"
     problemCount: number
 }
 
@@ -132,6 +133,7 @@ export async function getPublicTags(): Promise<PublicTagSummary[]> {
             select: {
                 slug: true,
                 name: true,
+                kind: true,
                 _count: {
                     select: {
                         problems: { where: { status: "PUBLISHED" } },
@@ -143,6 +145,7 @@ export async function getPublicTags(): Promise<PublicTagSummary[]> {
             .map((t) => ({
                 slug: t.slug,
                 name: t.name,
+                kind: t.kind,
                 problemCount: t._count.problems,
             }))
             .filter((t) => t.problemCount > 0)
@@ -157,6 +160,13 @@ export async function getPublicTags(): Promise<PublicTagSummary[]> {
     }
 }
 
+export async function getPublicTagsByKind(
+    kind: "TOPIC" | "COMPANY",
+): Promise<PublicTagSummary[]> {
+    const tags = await getPublicTags()
+    return tags.filter((tag) => tag.kind === kind)
+}
+
 export type PublicProblemSummary = {
     id: string
     number: number
@@ -165,7 +175,7 @@ export type PublicProblemSummary = {
     description: string | null
     difficulty: "EASY" | "MEDIUM" | "HARD"
     dialects: ("DUCKDB" | "POSTGRES")[]
-    tags: { slug: string; name: string }[]
+    tags: { slug: string; name: string; kind: "TOPIC" | "COMPANY" }[]
 }
 
 /**
@@ -178,7 +188,7 @@ export type PublicProblemSummary = {
  * The caller treats both as 404 so we never render an empty tag page.
  */
 export async function getProblemsByTag(slug: string): Promise<{
-    tag: { slug: string; name: string } | null
+    tag: { slug: string; name: string; kind: "TOPIC" | "COMPANY" } | null
     problems: PublicProblemSummary[]
 }> {
     try {
@@ -187,6 +197,7 @@ export async function getProblemsByTag(slug: string): Promise<{
             select: {
                 slug: true,
                 name: true,
+                kind: true,
                 problems: {
                     where: { status: "PUBLISHED" },
                     orderBy: { number: "asc" },
@@ -199,7 +210,7 @@ export async function getProblemsByTag(slug: string): Promise<{
                         difficulty: true,
                         dialects: true,
                         tags: {
-                            select: { slug: true, name: true },
+                            select: { slug: true, name: true, kind: true },
                             orderBy: { name: "asc" },
                         },
                     },
@@ -210,7 +221,7 @@ export async function getProblemsByTag(slug: string): Promise<{
             return { tag: null, problems: [] }
         }
         return {
-            tag: { slug: tag.slug, name: tag.name },
+            tag: { slug: tag.slug, name: tag.name, kind: tag.kind },
             problems: tag.problems,
         }
     } catch {

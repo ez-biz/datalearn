@@ -215,8 +215,19 @@ async function main() {
         const tag = await mcp.callTool("create_tag", {
             name: `MCP Test ${stamp}`,
             slug: tagSlug,
+            kind: "COMPANY",
         })
         passes.push(logResult("create_tag", tag))
+        const tagPayload = JSON.parse(tag.result?.content?.[0]?.text ?? "{}")
+        if (tagPayload.kind === "COMPANY") {
+            console.log(`  ✓ create_tag roundtrips kind=COMPANY`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ create_tag expected kind=COMPANY, got ${tagPayload.kind}`
+            )
+            passes.push(false)
+        }
 
         const topicSlug = `mcp-topic-${stamp}`
         const topic = await mcp.callTool("create_topic", {
