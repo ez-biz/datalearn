@@ -4,6 +4,7 @@ import { registerProblemTools } from "./tools/problems.js"
 import { registerSchemaTools } from "./tools/schemas.js"
 import { registerTagTools } from "./tools/tags.js"
 import { registerTopicTools } from "./tools/topics.js"
+import { registerTrackTools } from "./tools/tracks.js"
 
 export interface StartConfig {
     apiKey: string
@@ -29,5 +30,6 @@ export function buildServer(config: StartConfig): {
     registerTagTools(server, client)
     registerSchemaTools(server, client)
     registerProblemTools(server, client)
+    registerTrackTools(server, client)
     return { server, client }
 }

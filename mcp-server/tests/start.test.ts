@@ -20,7 +20,7 @@ describe("buildServer", () => {
         ).toThrow()
     })
 
-    it("returns a server with all 11 tools registered", () => {
+    it("returns a server with all 15 tools registered", () => {
         const { server } = buildServer({
             apiKey: "k",
             baseUrl: "http://localhost:3000",
@@ -35,13 +35,17 @@ describe("buildServer", () => {
                 "create_schema",
                 "create_tag",
                 "create_topic",
+                "create_track",
                 "get_problem",
+                "get_track",
                 "list_problems",
                 "list_schemas",
                 "list_tags",
                 "list_topics",
+                "list_tracks",
                 "update_problem",
                 "update_schema",
+                "update_track",
             ].sort()
         )
     })
