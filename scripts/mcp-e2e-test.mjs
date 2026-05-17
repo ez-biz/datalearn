@@ -2,7 +2,7 @@
 // End-to-end smoke test for the MCP server.
 // 1. Seed a temporary API key in the dev DB.
 // 2. Spawn the MCP server with that key.
-// 3. Send JSON-RPC over stdio for each of the 11 tools.
+// 3. Send JSON-RPC over stdio for each of the registered tools.
 // 4. Revoke the key.
 
 import "dotenv/config"
@@ -79,7 +79,7 @@ class McpClient {
                         this.pending.delete(msg.id)
                         resolve(msg)
                     }
-                } catch (e) {
+                } catch {
                     console.error("[harness] non-JSON line on stdout:", line)
                 }
             }
@@ -165,14 +165,15 @@ async function main() {
         const tools = await mcp.request("tools/list")
         const names = tools.result?.tools?.map((t) => t.name).sort() ?? []
         console.log(`  ✓ tools: ${names.join(", ")}`)
-        if (names.length !== 11) {
-            throw new Error(`expected 11 tools, got ${names.length}`)
+        if (names.length !== 15) {
+            throw new Error(`expected 15 tools, got ${names.length}`)
         }
 
         console.log("\n[harness] read-only tools...")
         const passes = []
         passes.push(logResult("list_topics", await mcp.callTool("list_topics")))
         passes.push(logResult("list_tags", await mcp.callTool("list_tags")))
+        passes.push(logResult("list_tracks", await mcp.callTool("list_tracks")))
         passes.push(logResult("list_schemas", await mcp.callTool("list_schemas")))
         passes.push(logResult("list_problems", await mcp.callTool("list_problems")))
         passes.push(
@@ -209,6 +210,21 @@ async function main() {
             passes.push(true)
         }
 
+        const track404 = await mcp.callTool("get_track", {
+            slug: "definitely-not-real-track",
+        })
+        const track404Text = track404.result?.content?.[0]?.text ?? ""
+        const parsedTrack404 = JSON.parse(track404Text)
+        if (parsedTrack404.found !== false) {
+            console.log(
+                `  ✗ get_track 404 should return {found:false}, got: ${track404Text}`
+            )
+            passes.push(false)
+        } else {
+            console.log(`  ✓ get_track 404 path returns {found:false}`)
+            passes.push(true)
+        }
+
         console.log("\n[harness] write tools (creates real DRAFT records)...")
         const stamp = Date.now()
         const tagSlug = `mcp-test-${stamp}`
@@ -236,6 +252,50 @@ async function main() {
             description: "Created by e2e harness; safe to delete.",
         })
         passes.push(logResult("create_topic", topic))
+
+        const trackSlug = `mcp-track-${stamp}`
+        const track = await mcp.callTool("create_track", {
+            name: `MCP Track ${stamp}`,
+            slug: trackSlug,
+            summary: "Created by e2e harness; safe to delete.",
+            description: "Created by e2e harness; safe to delete.",
+        })
+        passes.push(logResult("create_track", track))
+        const trackPayload = JSON.parse(track.result?.content?.[0]?.text ?? "{}")
+        if (trackPayload.status === "DRAFT") {
+            console.log(`  ✓ create_track defaults status=DRAFT`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ create_track expected status=DRAFT, got ${trackPayload.status}`
+            )
+            passes.push(false)
+        }
+
+        const updatedTrack = await mcp.callTool("update_track", {
+            slug: trackSlug,
+            status: "PUBLISHED",
+            estimatedMinutes: 120,
+        })
+        passes.push(logResult("update_track", updatedTrack))
+        const updatedTrackPayload = JSON.parse(
+            updatedTrack.result?.content?.[0]?.text ?? "{}"
+        )
+        if (
+            updatedTrackPayload.status === "PUBLISHED" &&
+            updatedTrackPayload.estimatedMinutes === 120
+        ) {
+            console.log(`  ✓ update_track publishes and updates minutes`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ update_track expected status=PUBLISHED and estimatedMinutes=120, got ${updatedTrack.result?.content?.[0]?.text}`
+            )
+            passes.push(false)
+        }
+
+        const fetchedTrack = await mcp.callTool("get_track", { slug: trackSlug })
+        passes.push(logResult("get_track(created)", fetchedTrack))
 
         const schema = await mcp.callTool("create_schema", {
             name: `MCP Schema ${stamp}`,
@@ -348,6 +408,7 @@ async function main() {
         await prisma.sqlSchema.delete({ where: { id: schemaId } })
         await prisma.tag.delete({ where: { slug: tagSlug } })
         await prisma.topic.delete({ where: { slug: topicSlug } })
+        await prisma.track.delete({ where: { slug: trackSlug } })
         console.log("  ✓ test records deleted")
 
         const failed = passes.filter((p) => !p).length
