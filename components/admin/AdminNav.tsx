@@ -12,6 +12,7 @@ import {
     Key,
     LayoutDashboard,
     MessageSquareText,
+    Route,
     ShieldCheck,
     Tag,
     Users,
@@ -41,6 +42,7 @@ const items: {
     { href: "/admin/problems", label: "Problems", icon: Database, adminOnly: true },
     { href: "/admin/schemas", label: "Schemas", icon: FileCode, adminOnly: true },
     { href: "/admin/topics", label: "Topics", icon: FolderOpen, adminOnly: true },
+    { href: "/admin/tracks", label: "Tracks", icon: Route, adminOnly: true },
     {
         href: "/admin/articles",
         label: "Articles",

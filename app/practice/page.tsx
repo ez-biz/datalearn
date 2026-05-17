@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { Tag as TagIcon } from "lucide-react"
+import { Route, Tag as TagIcon } from "lucide-react"
 import { getProblems } from "@/actions/problems"
 import { getSolvedSlugs } from "@/actions/submissions"
 import { Container } from "@/components/ui/Container"
@@ -28,11 +28,19 @@ export default async function PracticePage() {
                         Problems
                     </h1>
                     <p className="mt-2 text-muted-foreground max-w-2xl">
-                        Sharpen your SQL with curated problems across realistic schemas. Each
-                        problem runs in your browser — no setup, instant feedback.
+                        Sharpen your SQL with curated problems across realistic
+                        schemas. Each problem runs in your browser — no setup,
+                        instant feedback.
                     </p>
                 </div>
                 <div className="flex items-center gap-4">
+                    <Link
+                        href="/learn/tracks"
+                        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                        <Route className="h-3.5 w-3.5" />
+                        Tracks
+                    </Link>
                     <Link
                         href="/practice/tags"
                         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -42,7 +50,9 @@ export default async function PracticePage() {
                     </Link>
                     {list.length > 0 && (
                         <div className="text-sm text-muted-foreground tabular-nums">
-                            <span className="text-foreground font-semibold">{solvedCount}</span>{" "}
+                            <span className="text-foreground font-semibold">
+                                {solvedCount}
+                            </span>{" "}
                             / {list.length} solved
                         </div>
                     )}

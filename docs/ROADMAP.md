@@ -1,10 +1,21 @@
 # 🚀 Antigravity Data Learning Platform — Long-Term Roadmap
 
-> **Last updated:** 2026-05-10
+> **Last updated:** 2026-05-17
 > **Status:** Live — <https://www.learndatanow.com>
-> **Version:** 0.4.6 (deployed)
+> **Version:** 0.4.12 (deployed)
 
 ## Recently shipped
+
+### May 2026 — v0.4.12: Study plans / tracks (V9)
+
+GitHub Release: <https://github.com/ez-biz/datalearn/releases/tag/v0.4.12>. Curated multi-problem learning paths — the platform's first opinionated entry into the catalog. Shipped as a two-PR sequence: backend ships dark in #112, learner-facing reveal lands in #113.
+
+- **Schema: `Track` + `TrackItem` (PR #112)** — new Prisma models behind migration `add_tracks`. Track holds editorial metadata (`name`, `slug`, `summary`, `description`, `difficulty`, `status`, `estimatedMinutes`, optional `coverImageUrl`). TrackItem references a `SQLProblem` with explicit `position` ordering and a `@@unique([trackId, position])` constraint so reorders are atomic. No `UserTrackProgress` table — progress is computed live from `Submission` rows.
+- **Admin REST + UI (PR #112)** — `/api/admin/tracks/*` endpoints (list, create, update, archive, atomic reorder, item add/remove). `/admin/tracks` index + `/admin/tracks/new` create form + `/admin/tracks/[slug]/edit` editor with drag-handle reordering and the `AddProblemsPicker` borrowed from custom lists.
+- **MCP authoring (PR #112)** — new `list_tracks` / `get_track` / `create_track` / `update_track` tools so editorial track design happens in Claude Desktop the same way problem authoring does.
+- **Learner surfaces (PR #113)** — public `/learn/tracks` card grid (cover image, name, summary, count, difficulty, estimated minutes), `/learn/tracks/[slug]` detail page with description, ordered item rows, computed progress bar, sticky Start/Continue/Review CTA that jumps to the next un-solved problem, per-item solved checkmarks, kind-aware SEO metadata.
+- **Nav surfaces (PR #113)** — "Tracks" CTA on the Learn page header and a "Tracks" link in the Practice page header next to "Browse by tag".
+- **Tests (PRs #112 + #113)** — 11 unit tests in `scripts/test-tracks.ts` (filter PUBLISHED, ordered items, anonymous + signed-in progress, admin validation, reorder atomicity, dup-item rejection), 4 e2e tests in `tests/e2e/tracks.spec.ts` (index, detail, anonymous, signed-in-with-progress, 404). Wired into CI.
 
 ### May 2026 — v0.4.11: Companies tagging (V18)
 
@@ -401,21 +412,11 @@ Major platform expansions that take Data Learn from "SQL practice + learning hub
 
 **Coverage shipped:** Pure UTC/selection helper tests plus Playwright E2E for auto-fill redirect, admin manual override, and solved-today state.
 
-### V9 — Study plans / tracks
+### ✅ V9 — Study plans / tracks — SHIPPED v0.4.12 (PR #112 + #113)
 
-**What:** Curated multi-problem learning paths that the platform itself authors (and possibly contributors via the existing CONTRIBUTOR role). A track is an ordered sequence of problems + articles around a theme — "SQL aggregations from zero to ranking interview", "Window functions deep dive", "Joins for data engineers". Users opt in to a track and get progress, recommended-next, and an estimated completion time.
+Curated multi-problem learning paths. `Track` + `TrackItem` schema shipped behind admin authoring (admin REST, `/admin/tracks` editor, MCP tools) in PR #112; learner-facing `/learn/tracks` index, `/learn/tracks/[slug]` detail with computed progress + Start/Continue/Review CTA, and Learn/Practice entry links landed in PR #113. Progress is computed live from `Submission` rows — no `UserTrackProgress` table in v1, which keeps progress consistent with normal problem solves and avoids a second write path. Editorial seed of 3 starter tracks happens post-deploy via MCP.
 
-**Why:** Tags and topics describe what content *is*. Tracks describe a *path* — the problem sequence, the order of articles to read in between, the difficulty ramp. Without tracks, a new user faces a wall of 100+ problems and doesn't know where to start. With tracks, they have an opinionated guide.
-
-**Components:**
-- Schema: `Track { id, slug, name, description, difficulty, estimatedMinutes, createdAt }`, `TrackItem { trackId, kind: PROBLEM|ARTICLE, refId, position }`, `UserTrackProgress { userId, trackId, completedItemIds, currentItemId, startedAt, completedAt }`.
-- Author surface: under the existing admin CMS — `/admin/tracks` to create + reorder items.
-- Learner surface: `/learn/tracks` index with cover images and difficulty/length, `/learn/tracks/[slug]` detail showing the sequence + the user's progress, plus a sticky "Next item" affordance.
-- Profile integration: the existing UserHome "Continue" card can promote the next item in an in-progress track ahead of the last individual problem.
-
-**Dependencies:** Reuses Article + Problem; no new content models. Reuses `getUserStats` for some progress accounting.
-
-**Scope estimate:** Medium. ~600 lines across the new admin and learn surfaces.
+**Deferred to v1.5/v2:** article items (`TrackItem.kind = ARTICLE`), profile/home continuation cards, hard sequencing gates, track tags (e.g. tagging a "FAANG track" with `kind=COMPANY` slugs), AI-recommended tracks, public sharing/forking, and an explicit `UserTrackProgress` row if notifications or recommendation hooks need it.
 
 ### V10 — Marketing & growth
 
