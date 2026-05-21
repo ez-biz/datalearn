@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js"
 import { z } from "zod"
 import {
     ArticleCreateInput,
@@ -14,7 +15,8 @@ type Article = {
     slug: string
     title: string
     status: "DRAFT" | "SUBMITTED" | "PUBLISHED" | "ARCHIVED"
-    topicSlug?: string
+    /** Nested per the admin REST shape: `include: { topic: { select: { slug, name } } }`. */
+    topic?: { slug: string; name: string } | null
     summary: string | null
     hasVisualBlocks?: boolean
     content?: string
@@ -63,13 +65,21 @@ const ListArticlesShape = {
  * (Prisma-aware) on every PUBLISHED transition; this is just to surface
  * obvious problems (missing alt, foreign URLs, bad callout kind) before
  * the network round-trip.
+ *
+ * Throws `McpError(InvalidParams)` with a multi-line message when the
+ * content has syntactic errors. Returns void on success or when content
+ * is undefined (PATCH calls that don't touch content).
  */
-function preCheckDirectives(content: string | undefined): string[] {
-    if (typeof content !== "string" || content.length === 0) return []
+function ensureDirectivesValid(content: string | undefined): void {
+    if (typeof content !== "string" || content.length === 0) return
     const result = validateArticleDirectivesSyntactic(content)
-    if (result.ok) return []
-    return result.errors.map(
-        (e) => `${e.directive}#${e.index}: ${e.message}`
+    if (result.ok) return
+    const lines = result.errors.map(
+        (e) => `  - ${e.directive}#${e.index}: ${e.message}`
+    )
+    throw new McpError(
+        ErrorCode.InvalidParams,
+        `directive-validation: ${result.errors.length} error(s)\n${lines.join("\n")}`
     )
 }
 
@@ -94,13 +104,15 @@ export function registerArticleTools(
                     : "/api/admin/articles"
                 const articles = await client.request<Article[]>("GET", path)
                 const filtered = input.topicSlug
-                    ? articles.filter((a) => a.topicSlug === input.topicSlug)
+                    ? articles.filter(
+                          (a) => a.topic?.slug === input.topicSlug
+                      )
                     : articles
                 const projected = filtered.map((a) => ({
                     slug: a.slug,
                     title: a.title,
                     status: a.status,
-                    topicSlug: a.topicSlug,
+                    topicSlug: a.topic?.slug ?? null,
                     hasVisualBlocks: a.hasVisualBlocks ?? false,
                     summary: a.summary,
                 }))
@@ -149,15 +161,7 @@ export function registerArticleTools(
         ].join("\n"),
         McpArticleCreateInputShape,
         async (input) => {
-            const errs = preCheckDirectives(input.content)
-            if (errs.length > 0) {
-                throw toMcpError(
-                    new ApiError(400, {
-                        error: "directive-validation",
-                        errors: errs,
-                    })
-                )
-            }
+            ensureDirectivesValid(input.content)
             try {
                 const created = await client.request<Article>(
                     "POST",
@@ -189,15 +193,7 @@ export function registerArticleTools(
         ].join("\n"),
         McpArticleUpdateInputShape,
         async (input) => {
-            const errs = preCheckDirectives(input.content)
-            if (errs.length > 0) {
-                throw toMcpError(
-                    new ApiError(400, {
-                        error: "directive-validation",
-                        errors: errs,
-                    })
-                )
-            }
+            ensureDirectivesValid(input.content)
             const { slug, newSlug, ...rest } = input
             try {
                 const body = newSlug ? { ...rest, slug: newSlug } : rest
