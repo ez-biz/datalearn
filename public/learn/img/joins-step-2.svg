@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280" role="img" aria-labelledby="title desc">
+  <title id="title">Step 2 probe the lookup table</title>
+  <desc id="desc">The selected customer id probes the customer id index.</desc>
+  <style>.bg{fill:hsl(0 0% 100%)}.card{fill:hsl(210 40% 98%);stroke:hsl(214 32% 91%);stroke-width:2}.accent{fill:hsl(173 80% 36%)}.text{fill:hsl(222 47% 11%);font:600 18px ui-sans-serif,system-ui}.mono{fill:hsl(222 47% 11%);font:500 15px ui-monospace,SFMono-Regular,Menlo,monospace}.hilite{fill:hsl(173 80% 36%);opacity:.15}.arrow{stroke:hsl(173 80% 36%);stroke-width:5;fill:none;stroke-linecap:round;marker-end:url(#arrow)}@media (prefers-color-scheme: dark){.bg{fill:hsl(222 47% 7%)}.card{fill:hsl(222 47% 11%);stroke:hsl(217 33% 22%)}.text,.mono{fill:hsl(210 40% 98%)}}</style>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="hsl(173 80% 36%)"/></marker></defs>
+  <rect class="bg" width="720" height="280" rx="20"/>
+  <rect class="card" x="50" y="68" width="210" height="110" rx="16"/>
+  <text class="text" x="78" y="112">current order</text>
+  <text class="mono" x="78" y="148">customer_id = 1</text>
+  <path class="arrow" d="M292 124 H430"/>
+  <rect class="card" x="468" y="42" width="210" height="196" rx="16"/>
+  <rect class="accent" x="468" y="42" width="210" height="46" rx="16"/>
+  <text class="text" x="492" y="72" fill="white">customers</text>
+  <rect class="hilite" x="484" y="108" width="178" height="34" rx="8"/>
+  <text class="mono" x="506" y="130">1 | Asha | pro</text>
+  <text class="mono" x="506" y="168">2 | Ben  | free</text>
+  <text class="mono" x="506" y="206">3 | Chen | pro</text>
+</svg>

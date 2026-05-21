@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { withAdmin } from "@/lib/api-auth"
 import { snapshotArticleVersion } from "@/lib/article-versions"
+import { validateArticleDirectivesForPublish } from "@/actions/article-publish-validation"
 
 type Ctx = { params: Promise<{ slug: string }> }
 
@@ -14,12 +15,34 @@ export const POST = withAdmin(async (_req, principal, ctx: Ctx) => {
     try {
         const article = await prisma.article.findUnique({
             where: { slug },
-            select: { id: true, status: true },
+            select: {
+                id: true,
+                status: true,
+                content: true,
+                authorId: true,
+                hasVisualBlocks: true,
+            },
         })
         if (!article) {
             return NextResponse.json({ error: "Not found." }, { status: 404 })
         }
+        const validation = await validateArticleDirectivesForPublish(
+            article.content,
+            article.authorId
+        )
+        if (!validation.ok) {
+            return NextResponse.json(
+                { error: "directive-validation", errors: validation.errors },
+                { status: 400 }
+            )
+        }
         if (article.status === "PUBLISHED") {
+            if (article.hasVisualBlocks !== validation.hasVisualBlocks) {
+                await prisma.article.update({
+                    where: { id: article.id },
+                    data: { hasVisualBlocks: validation.hasVisualBlocks },
+                })
+            }
             return NextResponse.json({ ok: true, status: "PUBLISHED" })
         }
         const result = await prisma.$transaction(async (tx) => {
@@ -27,6 +50,7 @@ export const POST = withAdmin(async (_req, principal, ctx: Ctx) => {
                 where: { id: article.id },
                 data: {
                     status: "PUBLISHED",
+                    hasVisualBlocks: validation.hasVisualBlocks,
                     reviewNotes: null,
                     reviewedAt: new Date(),
                     reviewedBy: principal.userId,

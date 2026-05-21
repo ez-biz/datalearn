@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280" role="img" aria-labelledby="title desc">
+  <title id="title">Step 3 emit the joined row</title>
+  <desc id="desc">Columns from matching rows are combined into one output row.</desc>
+  <style>.bg{fill:hsl(0 0% 100%)}.card{fill:hsl(210 40% 98%);stroke:hsl(214 32% 91%);stroke-width:2}.head{fill:hsl(221 83% 53%)}.accent{fill:hsl(173 80% 36%)}.out{fill:hsl(47 95% 88%);stroke:hsl(40 90% 45%);stroke-width:2}.text{fill:hsl(222 47% 11%);font:600 18px ui-sans-serif,system-ui}.mono{fill:hsl(222 47% 11%);font:500 15px ui-monospace,SFMono-Regular,Menlo,monospace}.arrow{stroke:hsl(221 83% 53%);stroke-width:4;fill:none;stroke-linecap:round;marker-end:url(#arrow)}@media (prefers-color-scheme: dark){.bg{fill:hsl(222 47% 7%)}.card{fill:hsl(222 47% 11%);stroke:hsl(217 33% 22%)}.out{fill:hsl(40 40% 18%)}.text,.mono{fill:hsl(210 40% 98%)}}</style>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="hsl(221 83% 53%)"/></marker></defs>
+  <rect class="bg" width="720" height="280" rx="20"/>
+  <rect class="card" x="48" y="48" width="215" height="76" rx="14"/>
+  <text class="text" x="72" y="82">order row</text>
+  <text class="mono" x="72" y="108">101 | 1 | $80</text>
+  <rect class="card" x="48" y="156" width="215" height="76" rx="14"/>
+  <text class="text" x="72" y="190">customer row</text>
+  <text class="mono" x="72" y="216">1 | Asha | pro</text>
+  <path class="arrow" d="M292 86 C370 86 394 116 450 130"/>
+  <path class="arrow" d="M292 194 C370 194 394 164 450 150"/>
+  <rect class="out" x="450" y="86" width="225" height="108" rx="16"/>
+  <text class="text" x="476" y="124">joined output row</text>
+  <text class="mono" x="476" y="156">101 | Asha | pro | $80</text>
+</svg>

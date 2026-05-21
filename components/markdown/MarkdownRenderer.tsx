@@ -5,6 +5,7 @@ import type { Components } from "react-markdown"
 import type { ComponentPropsWithoutRef, CSSProperties } from "react"
 import remarkGfm from "remark-gfm"
 import remarkDirective from "remark-directive"
+import rehypeSlug from "rehype-slug"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
 import { Callout } from "@/components/markdown/directives/Callout"
@@ -13,17 +14,24 @@ import { Mermaid } from "@/components/markdown/directives/Mermaid"
 import { SideBySide } from "@/components/markdown/directives/SideBySide"
 import { Steps } from "@/components/markdown/directives/Steps"
 import { remarkBlockDirectives } from "@/lib/markdown/remark-block-directives"
+import { cn } from "@/lib/utils"
 
 const prismTheme = vscDarkPlus as { [key: string]: CSSProperties }
 
 interface MarkdownRendererProps {
     content: string
     empty?: string
+    className?: string
+    size?: "sm" | "base"
+    withHeadingIds?: boolean
 }
 
 export function MarkdownRenderer({
     content,
     empty = "Nothing to preview.",
+    className,
+    size = "sm",
+    withHeadingIds = false,
 }: MarkdownRendererProps) {
     const trimmed = content.trim()
     const components = {
@@ -67,9 +75,16 @@ export function MarkdownRenderer({
     }
 
     return (
-        <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none break-words prose-headings:font-semibold prose-headings:tracking-tight prose-a:break-all prose-a:text-primary hover:prose-a:text-primary-hover prose-p:leading-relaxed prose-code:font-mono prose-code:text-[0.85em] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:bg-surface-muted prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-pre:bg-transparent prose-pre:p-0 prose-table:text-[12px] prose-th:bg-surface-muted prose-th:px-2 prose-td:px-2 prose-td:py-1">
+        <div
+            className={cn(
+                "prose prose-neutral dark:prose-invert max-w-none break-words prose-headings:font-semibold prose-headings:tracking-tight prose-a:break-all prose-a:text-primary hover:prose-a:text-primary-hover prose-p:leading-relaxed prose-code:font-mono prose-code:text-[0.85em] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:bg-surface-muted prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-pre:bg-transparent prose-pre:p-0 prose-table:text-[12px] prose-th:bg-surface-muted prose-th:px-2 prose-td:px-2 prose-td:py-1",
+                size === "sm" && "prose-sm",
+                className
+            )}
+        >
             <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkDirective, remarkBlockDirectives]}
+                rehypePlugins={withHeadingIds ? [rehypeSlug] : undefined}
                 components={components}
             >
                 {trimmed}

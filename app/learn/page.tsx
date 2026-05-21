@@ -58,12 +58,22 @@ export default async function LearnPage() {
                                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                                             <BookOpen className="h-5 w-5" />
                                         </div>
-                                        <Badge variant="secondary">
-                                            {topic._count.articles}{" "}
-                                            {topic._count.articles === 1
-                                                ? "article"
-                                                : "articles"}
-                                        </Badge>
+                                        <div className="flex flex-wrap justify-end gap-1.5">
+                                            {topic.articles.length > 0 && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="text-[10px]"
+                                                >
+                                                    Visual
+                                                </Badge>
+                                            )}
+                                            <Badge variant="secondary">
+                                                {topic._count.articles}{" "}
+                                                {topic._count.articles === 1
+                                                    ? "article"
+                                                    : "articles"}
+                                            </Badge>
+                                        </div>
                                     </div>
                                     <h2 className="text-lg font-semibold tracking-tight group-hover:text-primary transition-colors">
                                         {topic.name}
