@@ -3,6 +3,10 @@
 // pure Zod only. Anything else will break the MCP bundle.
 
 import { z } from "zod"
+import { unified } from "unified"
+import remarkParse from "remark-parse"
+import remarkDirective from "remark-directive"
+import { visit } from "unist-util-visit"
 
 const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const moderatorPermissionValues = [
@@ -624,4 +628,161 @@ export function slugify(input: string): string {
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "")
         .slice(0, 120)
+}
+
+const DIRECTIVE_NAMES = new Set([
+    "figure",
+    "mermaid",
+    "steps",
+    "side-by-side",
+    "callout",
+])
+const ALLOWED_CALLOUT_KINDS = new Set(["tip", "pitfall", "note", "warning"])
+
+type MarkdownDirectiveNode = {
+    type?: string
+    name?: string
+    attributes?: Record<string, unknown> | null
+    children?: MarkdownDirectiveNode[]
+}
+
+export type ArticleDirectiveError = {
+    directive: string
+    index: number
+    message: string
+}
+
+export interface SyntacticResult {
+    ok: boolean
+    hasVisualBlocks: boolean
+    figureUrls: string[]
+    errors: ArticleDirectiveError[]
+}
+
+function getStringAttribute(
+    attrs: Record<string, unknown>,
+    key: string
+): string | undefined {
+    const value = attrs[key]
+    return typeof value === "string" ? value : undefined
+}
+
+function isAllowedFigureSrc(src: string): boolean {
+    if (src.startsWith("/learn/")) return true
+    try {
+        const url = new URL(src)
+        return (
+            url.protocol === "https:" &&
+            url.hostname.endsWith(".vercel-storage.com")
+        )
+    } catch {
+        return false
+    }
+}
+
+export function validateArticleDirectivesSyntactic(
+    content: string
+): SyntacticResult {
+    const errors: ArticleDirectiveError[] = []
+    const figureUrls: string[] = []
+    let hasVisualBlocks = false
+    let directiveCount = 0
+
+    const tree = unified()
+        .use(remarkParse)
+        .use(remarkDirective)
+        .parse(content)
+
+    visit(tree, (node) => {
+        const directiveNode = node as MarkdownDirectiveNode
+        if (
+            directiveNode.type !== "containerDirective" &&
+            directiveNode.type !== "leafDirective"
+        ) {
+            return
+        }
+        if (
+            !directiveNode.name ||
+            !DIRECTIVE_NAMES.has(directiveNode.name)
+        ) {
+            return
+        }
+
+        hasVisualBlocks = true
+        const index = directiveCount++
+        const attrs = directiveNode.attributes ?? {}
+
+        if (directiveNode.name === "figure") {
+            const src = getStringAttribute(attrs, "src")
+            const alt = getStringAttribute(attrs, "alt")
+
+            if (!src) {
+                errors.push({
+                    directive: "figure",
+                    index,
+                    message: "src is required",
+                })
+            } else if (!isAllowedFigureSrc(src)) {
+                errors.push({
+                    directive: "figure",
+                    index,
+                    message: `src "${src}" is not in the allowlist (/learn/ or *.vercel-storage.com)`,
+                })
+            } else {
+                figureUrls.push(src)
+            }
+
+            if (!alt?.trim()) {
+                errors.push({
+                    directive: "figure",
+                    index,
+                    message: "alt is required and non-empty",
+                })
+            }
+        }
+
+        if (directiveNode.name === "mermaid") {
+            const alt = getStringAttribute(attrs, "alt")
+            if (!alt?.trim()) {
+                errors.push({
+                    directive: "mermaid",
+                    index,
+                    message: "alt is required and non-empty",
+                })
+            }
+        }
+
+        if (directiveNode.name === "callout") {
+            const kind = getStringAttribute(attrs, "kind") ?? "note"
+            if (!ALLOWED_CALLOUT_KINDS.has(kind)) {
+                errors.push({
+                    directive: "callout",
+                    index,
+                    message: `kind "${kind}" must be one of ${[
+                        ...ALLOWED_CALLOUT_KINDS,
+                    ].join(", ")}`,
+                })
+            }
+        }
+
+        if (directiveNode.name === "side-by-side") {
+            const hrCount = (directiveNode.children ?? []).filter(
+                (child) => child.type === "thematicBreak"
+            ).length
+            if (hrCount !== 1) {
+                errors.push({
+                    directive: "side-by-side",
+                    index,
+                    message: `body must contain exactly one '---' break, got ${hrCount}`,
+                })
+            }
+        }
+    })
+
+    return {
+        ok: errors.length === 0,
+        hasVisualBlocks,
+        figureUrls,
+        errors,
+    }
 }
