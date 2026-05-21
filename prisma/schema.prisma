@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["driverAdapters"]
 }
 
@@ -8,29 +8,31 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  role          UserRole  @default(USER)
-  accounts      Account[]
-  sessions      Session[]
-  submissions   Submission[]
-  apiKeys       ApiKey[]
-  reports       ProblemReport[]
-  articles      Article[]
-  lists         ProblemList[]
-  discussionComments DiscussionComment[] @relation("DiscussionCommentAuthor")
-  discussionVotes DiscussionVote[]
-  discussionVoteActions DiscussionVoteAction[]
-  discussionReports DiscussionReport[] @relation("DiscussionReportReporter")
-  resolvedDiscussionReports DiscussionReport[] @relation("DiscussionReportResolver")
-  hiddenDiscussionComments DiscussionComment[] @relation("DiscussionCommentHiddenBy")
-  reputationEvents UserReputationEvent[]
-  moderatorPermissions ModeratorPermission[] @relation("ModeratorPermissionUser")
-  grantedModeratorPermissions ModeratorPermission[] @relation("ModeratorPermissionGranter")
-  moderationActions DiscussionModerationLog[] @relation("DiscussionModerationActor")
+  id                          String                    @id @default(cuid())
+  name                        String?
+  email                       String?                   @unique
+  emailVerified               DateTime?
+  image                       String?
+  role                        UserRole                  @default(USER)
+  accounts                    Account[]
+  sessions                    Session[]
+  submissions                 Submission[]
+  apiKeys                     ApiKey[]
+  reports                     ProblemReport[]
+  articles                    Article[]
+  lists                       ProblemList[]
+  discussionComments          DiscussionComment[]       @relation("DiscussionCommentAuthor")
+  discussionVotes             DiscussionVote[]
+  discussionVoteActions       DiscussionVoteAction[]
+  discussionReports           DiscussionReport[]        @relation("DiscussionReportReporter")
+  resolvedDiscussionReports   DiscussionReport[]        @relation("DiscussionReportResolver")
+  hiddenDiscussionComments    DiscussionComment[]       @relation("DiscussionCommentHiddenBy")
+  reputationEvents            UserReputationEvent[]
+  moderatorPermissions        ModeratorPermission[]     @relation("ModeratorPermissionUser")
+  grantedModeratorPermissions ModeratorPermission[]     @relation("ModeratorPermissionGranter")
+  moderationActions           DiscussionModerationLog[] @relation("DiscussionModerationActor")
+  assets                      Asset[]
+  assetQuota                  UserAssetQuota?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -44,18 +46,18 @@ enum UserRole {
 }
 
 model Account {
-  id                 String  @id @default(cuid())
-  userId             String
-  type               String
-  provider           String
-  providerAccountId  String
-  refresh_token      String? @db.Text
-  access_token       String? @db.Text
-  expires_at         Int?
-  token_type         String?
-  scope              String?
-  id_token           String? @db.Text
-  session_state      String?
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -89,25 +91,25 @@ model Topic {
 }
 
 model Article {
-  id              String        @id @default(cuid())
+  id              String           @id @default(cuid())
   title           String
-  slug            String        @unique
-  content         String        @db.Text
-  status          ArticleStatus @default(DRAFT)
-  summary         String?       @db.Text
+  slug            String           @unique
+  content         String           @db.Text
+  status          ArticleStatus    @default(DRAFT)
+  summary         String?          @db.Text
   readingMinutes  Int?
-  reviewNotes     String?       @db.Text
+  reviewNotes     String?          @db.Text
   reviewedAt      DateTime?
   reviewedBy      String?
   topicId         String
-  topic           Topic         @relation(fields: [topicId], references: [id])
+  topic           Topic            @relation(fields: [topicId], references: [id])
   authorId        String
-  author          User          @relation(fields: [authorId], references: [id], onDelete: Restrict)
-  tags            Tag[]         @relation("ArticleTags")
-  relatedProblems SQLProblem[]  @relation("ArticleProblems")
+  author          User             @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  tags            Tag[]            @relation("ArticleTags")
+  relatedProblems SQLProblem[]     @relation("ArticleProblems")
   versions        ArticleVersion[]
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@index([status])
   @@index([topicId, status])
@@ -126,19 +128,19 @@ enum ArticleStatus {
  * Created automatically on transitions to PUBLISHED.
  */
 model ArticleVersion {
-  id            String   @id @default(cuid())
-  articleId     String
-  article       Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  versionNumber Int
-  title         String
-  slug          String
-  content       String   @db.Text
-  summary       String?  @db.Text
-  topicId       String
-  tagSlugs      String[]
+  id                  String   @id @default(cuid())
+  articleId           String
+  article             Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  versionNumber       Int
+  title               String
+  slug                String
+  content             String   @db.Text
+  summary             String?  @db.Text
+  topicId             String
+  tagSlugs            String[]
   relatedProblemSlugs String[]
-  publishedById String?
-  capturedAt    DateTime @default(now())
+  publishedById       String?
+  capturedAt          DateTime @default(now())
 
   @@unique([articleId, versionNumber])
   @@index([articleId, capturedAt])
@@ -154,57 +156,57 @@ model SqlSchema {
 }
 
 model SQLProblem {
-  id                String     @id @default(cuid())
+  id                 String                  @id @default(cuid())
   /// Stable monotonic id for display (`#247.` LeetCode-style). Minted at
   /// create-time as MAX(number)+1 in a transaction; never recycled even
   /// after archive. Backfill on existing rows ordered by createdAt ASC.
-  number            Int        @unique
-  title             String
-  slug              String     @unique
-  difficulty        Difficulty
-  status            ProblemStatus @default(PUBLISHED)
-  description       String     @db.Text
-  schemaDescription String     @db.Text
-  schemaId          String
-  schema            SqlSchema  @relation(fields: [schemaId], references: [id])
+  number             Int                     @unique
+  title              String
+  slug               String                  @unique
+  difficulty         Difficulty
+  status             ProblemStatus           @default(PUBLISHED)
+  description        String                  @db.Text
+  schemaDescription  String                  @db.Text
+  schemaId           String
+  schema             SqlSchema               @relation(fields: [schemaId], references: [id])
   /// Legacy single-dialect output. Kept during the v0.5.0 transition;
   /// the source of truth is `expectedOutputs[<dialect>]`. Will be
   /// dropped in v0.5.1 once all live problems are populated and the
   /// fallback path in validateSubmission is removed.
-  expectedOutput    String     @db.Text
+  expectedOutput     String                  @db.Text
   /// Legacy single-dialect canonical solution. Same lifecycle as
   /// `expectedOutput` above — written for back-compat, read with
   /// fallback when `solutions[<dialect>]` is missing.
-  solutionSql       String?    @db.Text
+  solutionSql        String?                 @db.Text
   /// Per-dialect canonical solutions. Shape: `{ "DUCKDB": "SELECT…",
   /// "POSTGRES": "SELECT…" }`. Required keys = each entry of
   /// `dialects[]` for any PUBLISHED problem (enforced at the API
   /// layer). Each value is the canonical SQL for that engine.
-  solutions         Json       @default("{}")
+  solutions          Json                    @default("{}")
   /// Per-dialect expected output rows. Shape: `{ "DUCKDB":
   /// "[{...rows...}]", "POSTGRES": "[{...rows...}]" }`. Same key
   /// constraint as `solutions`. Each value is a JSON-stringified
   /// array of row objects.
-  expectedOutputs   Json       @default("{}")
-  ordered           Boolean    @default(false)
+  expectedOutputs    Json                    @default("{}")
+  ordered            Boolean                 @default(false)
   /// Allowed engines for solving this problem. Most problems are
   /// portable (`[DUCKDB, POSTGRES]`); narrow only when the canonical
   /// solution uses dialect-specific syntax (e.g. JSONB, STRING_AGG,
   /// LIST_AGG). Learners pick which engine to use in the workspace
   /// when more than one is allowed.
-  dialects          Dialect[]  @default([DUCKDB, POSTGRES])
-  hints             String[]   @default([])
-  tags              Tag[]      @relation("ProblemTags")
-  submissions       Submission[]
-  reports           ProblemReport[]
-  relatedArticles   Article[]  @relation("ArticleProblems")
-  listItems         ProblemListItem[]
-  trackItems        TrackItem[]
-  dailyProblems     DailyProblem[]
+  dialects           Dialect[]               @default([DUCKDB, POSTGRES])
+  hints              String[]                @default([])
+  tags               Tag[]                   @relation("ProblemTags")
+  submissions        Submission[]
+  reports            ProblemReport[]
+  relatedArticles    Article[]               @relation("ArticleProblems")
+  listItems          ProblemListItem[]
+  trackItems         TrackItem[]
+  dailyProblems      DailyProblem[]
   discussionComments DiscussionComment[]
-  discussionState   ProblemDiscussionState?
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  discussionState    ProblemDiscussionState?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
 
   @@index([status])
 }
@@ -297,8 +299,8 @@ model Submission {
   reason    String?          @db.Text
   createdAt DateTime         @default(now())
 
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  problem   SQLProblem       @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem SQLProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
   @@index([userId, problemId, createdAt])
   @@index([userId, createdAt])
@@ -322,31 +324,31 @@ model Page {
 }
 
 model ApiKey {
-  id         String    @id @default(cuid())
-  name       String
-  keyHash    String    @unique
-  prefix     String    // first 8 chars of plaintext, for display
-  lastUsedAt DateTime?
-  expiresAt  DateTime?
-  revokedAt  DateTime?
+  id          String    @id @default(cuid())
+  name        String
+  keyHash     String    @unique
+  prefix      String // first 8 chars of plaintext, for display
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
   createdById String
-  createdBy  User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  createdAt  DateTime  @default(now())
+  createdBy   User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
 
   @@index([createdById])
 }
 
 model ProblemReport {
-  id         String              @id @default(cuid())
+  id         String            @id @default(cuid())
   problemId  String
-  problem    SQLProblem          @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  problem    SQLProblem        @relation(fields: [problemId], references: [id], onDelete: Cascade)
   userId     String?
-  user       User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user       User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
   kind       ProblemReportKind
-  message    String              @db.Text
+  message    String            @db.Text
   resolvedAt DateTime?
   resolvedBy String?
-  createdAt  DateTime            @default(now())
+  createdAt  DateTime          @default(now())
 
   @@index([resolvedAt])
   @@index([problemId, createdAt])
@@ -363,14 +365,14 @@ enum ProblemReportKind {
 /// User-curated private collection of problems. LeetCode-style "My Lists".
 /// Visible only to the owner in v1; public sharing is a future addition.
 model ProblemList {
-  id          String              @id @default(cuid())
+  id          String            @id @default(cuid())
   ownerId     String
-  owner       User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner       User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   name        String
-  description String?             @db.Text
+  description String?           @db.Text
   items       ProblemListItem[]
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   @@index([ownerId, updatedAt])
 }
@@ -474,30 +476,30 @@ enum DiscussionModerationActionKind {
 }
 
 model DiscussionComment {
-  id          String                  @id @default(cuid())
-  problemId   String
-  problem     SQLProblem              @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  userId      String?
-  user        User?                   @relation("DiscussionCommentAuthor", fields: [userId], references: [id], onDelete: SetNull)
-  parentId    String?
-  parent      DiscussionComment?      @relation("DiscussionReplies", fields: [parentId], references: [id], onDelete: Restrict)
-  replies     DiscussionComment[]     @relation("DiscussionReplies")
-  bodyMarkdown String                 @db.Text
-  status      DiscussionCommentStatus @default(VISIBLE)
-  upvotes     Int                     @default(0)
-  downvotes   Int                     @default(0)
-  score       Int                     @default(0)
-  reportCount Int                     @default(0)
-  votes       DiscussionVote[]
-  voteActions DiscussionVoteAction[]
-  reports     DiscussionReport[]
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
-  editedAt    DateTime?
-  deletedAt   DateTime?
-  hiddenAt    DateTime?
-  hiddenById  String?
-  hiddenBy    User?                   @relation("DiscussionCommentHiddenBy", fields: [hiddenById], references: [id], onDelete: SetNull)
+  id           String                  @id @default(cuid())
+  problemId    String
+  problem      SQLProblem              @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  userId       String?
+  user         User?                   @relation("DiscussionCommentAuthor", fields: [userId], references: [id], onDelete: SetNull)
+  parentId     String?
+  parent       DiscussionComment?      @relation("DiscussionReplies", fields: [parentId], references: [id], onDelete: Restrict)
+  replies      DiscussionComment[]     @relation("DiscussionReplies")
+  bodyMarkdown String                  @db.Text
+  status       DiscussionCommentStatus @default(VISIBLE)
+  upvotes      Int                     @default(0)
+  downvotes    Int                     @default(0)
+  score        Int                     @default(0)
+  reportCount  Int                     @default(0)
+  votes        DiscussionVote[]
+  voteActions  DiscussionVoteAction[]
+  reports      DiscussionReport[]
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  editedAt     DateTime?
+  deletedAt    DateTime?
+  hiddenAt     DateTime?
+  hiddenById   String?
+  hiddenBy     User?                   @relation("DiscussionCommentHiddenBy", fields: [hiddenById], references: [id], onDelete: SetNull)
 
   @@index([problemId, parentId, status, score, createdAt])
   @@index([problemId, status, createdAt])
@@ -507,12 +509,12 @@ model DiscussionComment {
 
 model DiscussionVote {
   commentId String
-  comment   DiscussionComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  comment   DiscussionComment   @relation(fields: [commentId], references: [id], onDelete: Cascade)
   userId    String
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   value     DiscussionVoteValue
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
 
   @@id([commentId, userId])
   @@index([userId, updatedAt])
@@ -532,18 +534,18 @@ model DiscussionVoteAction {
 }
 
 model DiscussionReport {
-  id          String                 @id @default(cuid())
-  commentId   String
-  comment     DiscussionComment      @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User                   @relation("DiscussionReportReporter", fields: [userId], references: [id], onDelete: Cascade)
-  reason      DiscussionReportReason
-  message     String                 @db.Text
-  status      DiscussionReportStatus @default(OPEN)
-  createdAt   DateTime               @default(now())
-  resolvedAt  DateTime?
+  id           String                 @id @default(cuid())
+  commentId    String
+  comment      DiscussionComment      @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User                   @relation("DiscussionReportReporter", fields: [userId], references: [id], onDelete: Cascade)
+  reason       DiscussionReportReason
+  message      String                 @db.Text
+  status       DiscussionReportStatus @default(OPEN)
+  createdAt    DateTime               @default(now())
+  resolvedAt   DateTime?
   resolvedById String?
-  resolvedBy  User?                  @relation("DiscussionReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedBy   User?                  @relation("DiscussionReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
 
   @@unique([commentId, userId])
   @@index([commentId, status])
@@ -597,8 +599,8 @@ model UserReputationEvent {
   sourceId  String
   createdAt DateTime                @default(now())
 
-  @@index([userId, createdAt])
   @@unique([userId, kind, sourceId])
+  @@index([userId, createdAt])
 }
 
 model ModeratorPermission {
@@ -613,15 +615,49 @@ model ModeratorPermission {
 }
 
 model DiscussionModerationLog {
-  id        String                         @id @default(cuid())
-  actorId   String?
-  actor     User?                          @relation("DiscussionModerationActor", fields: [actorId], references: [id], onDelete: SetNull)
-  action    DiscussionModerationActionKind
+  id         String                         @id @default(cuid())
+  actorId    String?
+  actor      User?                          @relation("DiscussionModerationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action     DiscussionModerationActionKind
   targetType String
   targetId   String
-  note       String?                       @db.Text
-  createdAt  DateTime                      @default(now())
+  note       String?                        @db.Text
+  createdAt  DateTime                       @default(now())
 
   @@index([actorId, createdAt])
   @@index([targetType, targetId, createdAt])
+}
+
+enum AssetStatus {
+  PENDING
+  ACTIVE
+  DELETING
+  DELETED
+}
+
+model Asset {
+  id                String      @id @default(cuid())
+  ownerId           String
+  owner             User        @relation(fields: [ownerId], references: [id])
+  blobUrl           String?     @unique
+  blobKey           String      @unique
+  contentType       String
+  bytes             Int
+  status            AssetStatus @default(PENDING)
+  pendingExpiresAt  DateTime?
+  deletedAt         DateTime?
+  deletionAttempts  Int         @default(0)
+  lastDeletionError String?
+  createdAt         DateTime    @default(now())
+
+  @@index([ownerId, status])
+  @@index([status, deletedAt])
+  @@index([status, pendingExpiresAt])
+}
+
+model UserAssetQuota {
+  userId        String   @id
+  user          User     @relation(fields: [userId], references: [id])
+  reservedBytes BigInt   @default(0)
+  updatedAt     DateTime @updatedAt
 }
