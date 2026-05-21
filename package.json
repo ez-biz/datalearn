@@ -41,7 +41,11 @@
     "test:asset-gc": "tsx scripts/test-asset-gc.ts",
     "test:asset-delete-references": "tsx scripts/test-asset-delete-references.ts",
     "test:admin-asset-delete": "tsx scripts/test-admin-asset-delete.ts",
-    "test:admin-asset-delete-retry": "tsx scripts/test-admin-asset-delete-retry.ts"
+    "test:admin-asset-delete-retry": "tsx scripts/test-admin-asset-delete-retry.ts",
+    "test:directive-renderer": "tsx scripts/test-directive-renderer.ts",
+    "test:mermaid-sanitization": "tsx scripts/test-mermaid-sanitization.ts",
+    "test:article-publish-validation": "tsx scripts/test-article-publish-validation.ts",
+    "check:mcp-bundle-isolation": "tsx scripts/check-mcp-bundle-isolation.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
@@ -59,7 +63,9 @@
     "apache-arrow": "^21.1.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
+    "isomorphic-dompurify": "^3.14.0",
     "lucide-react": "^0.562.0",
+    "mermaid": "^11.15.0",
     "next": "^16.2.6",
     "next-auth": "^5.0.0-beta.30",
     "next-themes": "^0.4.6",
