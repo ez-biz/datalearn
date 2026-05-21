@@ -8,7 +8,8 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 
 function isAuthorized(req: NextRequest): boolean {
-    return req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`
+    const secret = process.env.CRON_SECRET
+    return Boolean(secret) && req.headers.get("authorization") === `Bearer ${secret}`
 }
 
 async function handleAssetGc(req: NextRequest) {
@@ -26,18 +27,29 @@ async function handleAssetGc(req: NextRequest) {
     const tombstoneCutoff = new Date(Date.now() - SEVEN_DAYS_MS)
     const tombstones = await prisma.asset.findMany({
         where: { status: "DELETED", deletedAt: { lt: tombstoneCutoff } },
-        select: { id: true, blobUrl: true, ownerId: true, bytes: true },
+        select: {
+            id: true,
+            blobUrl: true,
+            ownerId: true,
+            bytes: true,
+            quotaReleasedAt: true,
+        },
     })
     for (const tombstone of tombstones) {
-        if (!tombstone.blobUrl) continue
         try {
-            await delBlobWithRetry(tombstone.blobUrl)
+            if (!tombstone.quotaReleasedAt && tombstone.blobUrl) {
+                await delBlobWithRetry(tombstone.blobUrl)
+            }
             await prisma.$transaction(async (tx) => {
                 await tx.asset.delete({ where: { id: tombstone.id } })
-                await releaseBytes(tx, tombstone.ownerId, tombstone.bytes)
+                if (!tombstone.quotaReleasedAt) {
+                    await releaseBytes(tx, tombstone.ownerId, tombstone.bytes)
+                }
             })
             out.tombstones.deleted++
-            out.tombstones.bytesReclaimed += tombstone.bytes
+            if (!tombstone.quotaReleasedAt) {
+                out.tombstones.bytesReclaimed += tombstone.bytes
+            }
         } catch {
             out.tombstones.failed++
         }
@@ -60,7 +72,11 @@ async function handleAssetGc(req: NextRequest) {
             await prisma.$transaction(async (tx) => {
                 await tx.asset.update({
                     where: { id: asset.id },
-                    data: { status: "DELETED", lastDeletionError: null },
+                    data: {
+                        status: "DELETED",
+                        lastDeletionError: null,
+                        quotaReleasedAt: new Date(),
+                    },
                 })
                 await releaseBytes(tx, asset.ownerId, asset.bytes)
             })

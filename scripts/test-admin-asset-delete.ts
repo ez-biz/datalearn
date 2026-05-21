@@ -98,6 +98,9 @@ async function main() {
             where: { userId: ownerId },
         })
         assert.equal(quota.reservedBytes, BigInt(0), "quota must be released")
+
+        const asset = await prisma.asset.findUniqueOrThrow({ where: { id: up.id } })
+        assert.ok(asset.quotaReleasedAt, "quota release marker must be set")
     } finally {
         if (articleId) {
             await prisma.articleVersion.deleteMany({ where: { articleId } })

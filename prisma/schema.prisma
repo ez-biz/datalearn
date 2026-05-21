@@ -646,6 +646,7 @@ model Asset {
   status            AssetStatus @default(PENDING)
   pendingExpiresAt  DateTime?
   deletedAt         DateTime?
+  quotaReleasedAt   DateTime?
   deletionAttempts  Int         @default(0)
   lastDeletionError String?
   createdAt         DateTime    @default(now())

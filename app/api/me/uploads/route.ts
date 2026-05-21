@@ -97,7 +97,11 @@ export const POST = withContributor(async (req, principal) => {
         await prisma.$transaction(async (tx) => {
             await tx.asset.update({
                 where: { id: assetId },
-                data: { status: "DELETED", deletedAt: new Date() },
+                data: {
+                    status: "DELETED",
+                    deletedAt: new Date(),
+                    quotaReleasedAt: new Date(),
+                },
             })
             await releaseBytes(tx, principal.userId, file.size)
         })
@@ -129,7 +133,10 @@ export const POST = withContributor(async (req, principal) => {
 
 export const GET = withContributor(async (req, principal) => {
     const url = new URL(req.url)
-    const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200)
+    const requestedLimit = Number(url.searchParams.get("limit") ?? 50)
+    const limit = Number.isFinite(requestedLimit)
+        ? Math.min(Math.max(requestedLimit, 1), 200)
+        : 50
     const cursor = url.searchParams.get("cursor") ?? undefined
 
     const assets = await prisma.asset.findMany({

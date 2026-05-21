@@ -75,7 +75,11 @@ export const DELETE = withAdmin(
             await prisma.$transaction(async (tx) => {
                 await tx.asset.update({
                     where: { id },
-                    data: { status: "DELETED", lastDeletionError: null },
+                    data: {
+                        status: "DELETED",
+                        lastDeletionError: null,
+                        quotaReleasedAt: new Date(),
+                    },
                 })
                 await releaseBytes(tx, asset.ownerId, asset.bytes)
             })

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import type { AssetStatus } from "@prisma/client"
 import { withAdmin } from "@/lib/api-auth"
 import { prisma } from "@/lib/prisma"
 
@@ -8,7 +9,10 @@ export const GET = withAdmin(async (req) => {
     const url = new URL(req.url)
     const rawStatus = url.searchParams.get("status")
     const ownerId = url.searchParams.get("ownerId") ?? undefined
-    const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200)
+    const requestedLimit = Number(url.searchParams.get("limit") ?? 50)
+    const limit = Number.isFinite(requestedLimit)
+        ? Math.min(Math.max(requestedLimit, 1), 200)
+        : 50
 
     if (rawStatus && !ASSET_STATUSES.has(rawStatus)) {
         return NextResponse.json(
@@ -19,7 +23,7 @@ export const GET = withAdmin(async (req) => {
 
     const assets = await prisma.asset.findMany({
         where: {
-            ...(rawStatus ? { status: rawStatus as any } : {}),
+            ...(rawStatus ? { status: rawStatus as AssetStatus } : {}),
             ...(ownerId ? { ownerId } : {}),
         },
         orderBy: { createdAt: "desc" },
