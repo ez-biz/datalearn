@@ -9,6 +9,12 @@ const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3000"
 
+async function assertStatus(res: Response, expected: number) {
+    if (res.status !== expected) {
+        assert.equal(res.status, expected, await res.text())
+    }
+}
+
 async function seedUser(role: "ADMIN" | "CONTRIBUTOR" | "USER") {
     const id = `test-uploads-${role.toLowerCase()}`
     await prisma.user.upsert({
@@ -66,7 +72,7 @@ async function main() {
             ...Array(92).fill(0),
         ])
         const okRes = await postFile(contributorFetch, "hi.png", "image/png", png)
-        assert.equal(okRes.status, 200, await okRes.text())
+        await assertStatus(okRes, 200)
         const okBody = (await okRes.json()) as {
             id: string
             url: string
@@ -79,7 +85,7 @@ async function main() {
         assert.equal(okBody.bytes, 100)
 
         const listRes = await contributorFetch("/api/me/uploads")
-        assert.equal(listRes.status, 200, await listRes.text())
+        await assertStatus(listRes, 200)
         const listBody = (await listRes.json()) as {
             items: { id: string; blobUrl: string; bytes: number }[]
         }

@@ -9,6 +9,12 @@ const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3000"
 
+async function assertStatus(res: Response, expected: number) {
+    if (res.status !== expected) {
+        assert.equal(res.status, expected, await res.text())
+    }
+}
+
 async function main() {
     if (process.env.DATALEARN_FORCE_DEL_FAILURE !== "1") {
         console.log(
@@ -53,7 +59,7 @@ async function main() {
             method: "DELETE",
             headers: { "X-Test-User-Id": adminId },
         })
-        assert.equal(del.status, 502, await del.text())
+        await assertStatus(del, 502)
         const body = (await del.json()) as {
             status: string
             blobDeleted: boolean

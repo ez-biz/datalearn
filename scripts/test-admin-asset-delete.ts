@@ -9,6 +9,12 @@ const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3000"
 
+async function assertStatus(res: Response, expected: number) {
+    if (res.status !== expected) {
+        assert.equal(res.status, expected, await res.text())
+    }
+}
+
 async function main() {
     const adminId = "test-aadmin-1"
     const ownerId = "test-aown-1"
@@ -52,7 +58,7 @@ async function main() {
             headers: { "X-Test-User-Id": ownerId },
             body: form,
         })
-        assert.equal(upRes.status, 200, await upRes.text())
+        await assertStatus(upRes, 200)
         const up = (await upRes.json()) as { id: string; url: string }
 
         const article = await prisma.article.create({
@@ -71,7 +77,7 @@ async function main() {
             method: "DELETE",
             headers: { "X-Test-User-Id": adminId },
         })
-        assert.equal(del.status, 200, await del.text())
+        await assertStatus(del, 200)
         const body = (await del.json()) as {
             blobDeleted: boolean
             status: string
