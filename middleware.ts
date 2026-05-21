@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import { auth } from "@/lib/auth"
 import { signInPath } from "@/lib/auth-redirect"
 
@@ -39,11 +39,21 @@ function isLearnPath(pathname: string): boolean {
     return pathname === "/learn" || pathname.startsWith("/learn/")
 }
 
-function applyLearnCsp(response: NextResponse): NextResponse {
+function applyLearnCsp(req: NextRequest): NextResponse {
     const nonce = crypto.randomUUID().replace(/-/g, "")
     const policy = LEARN_CSP_DIRECTIVES.map((directive) =>
         directive.replace("__NONCE__", nonce)
     ).join("; ")
+
+    const requestHeaders = new Headers(req.headers)
+    requestHeaders.set("Content-Security-Policy", policy)
+    requestHeaders.set("x-csp-nonce", nonce)
+
+    const response = NextResponse.next({
+        request: {
+            headers: requestHeaders,
+        },
+    })
     response.headers.set("Content-Security-Policy", policy)
     response.headers.set("x-csp-nonce", nonce)
     return response
@@ -115,7 +125,7 @@ export default function middleware(
     const { pathname } = req.nextUrl
 
     if (isLearnPath(pathname)) {
-        return applyLearnCsp(NextResponse.next())
+        return applyLearnCsp(req)
     }
 
     return adminAuthMiddleware(...args)

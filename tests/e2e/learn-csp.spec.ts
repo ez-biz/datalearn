@@ -20,4 +20,34 @@ test.describe("CSP on /learn/**", () => {
 
         expect(csp).toBeUndefined()
     })
+
+    test("Next inline scripts use the Learn CSP nonce", async ({ page }) => {
+        const cspErrors: string[] = []
+        page.on("console", (message) => {
+            if (
+                message.type() === "error" &&
+                message.text().includes("Content Security Policy")
+            ) {
+                cspErrors.push(message.text())
+            }
+        })
+
+        const response = await page.goto("/learn/joins/how-a-join-works", {
+            waitUntil: "networkidle",
+        })
+        expect(response).not.toBeNull()
+
+        const csp = response!.headers()["content-security-policy"]
+        const nonce = /'nonce-([^']+)'/.exec(csp)?.[1]
+        expect(nonce).toBeTruthy()
+
+        const inlineScriptNonces = await page
+            .locator("script:not([src])")
+            .evaluateAll((scripts) => scripts.map((script) => script.nonce))
+        expect(inlineScriptNonces.length).toBeGreaterThan(0)
+        expect(
+            inlineScriptNonces.every((scriptNonce) => scriptNonce === nonce)
+        ).toBe(true)
+        expect(cspErrors).toEqual([])
+    })
 })
