@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createHmac } from "node:crypto"
+import type { UserRole } from "@prisma/client"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 
@@ -11,6 +12,27 @@ export class AuthFailure extends Error {
     constructor(public status: number, public body: { error: string }) {
         super(body.error)
     }
+}
+
+async function resolveTestUser(
+    req: Request,
+    allowedRoles: UserRole[]
+): Promise<{ userId: string; role: UserRole } | null> {
+    if (process.env.NODE_ENV === "production") return null
+    const testUserId = req.headers.get("x-test-user-id")
+    if (!testUserId) return null
+
+    const user = await prisma.user.findUnique({
+        where: { id: testUserId },
+        select: { id: true, role: true },
+    })
+    if (!user) {
+        throw new AuthFailure(401, { error: "Test user not found." })
+    }
+    if (!allowedRoles.includes(user.role)) {
+        throw new AuthFailure(403, { error: "Test user role not allowed." })
+    }
+    return { userId: user.id, role: user.role }
 }
 
 /**
@@ -53,6 +75,11 @@ export function hashApiKey(plaintext: string): string {
  * Accepts either a logged-in admin session or an Authorization: Bearer <key> header.
  */
 export async function requireAdmin(req: Request): Promise<AdminPrincipal> {
+    const testUser = await resolveTestUser(req, ["ADMIN"])
+    if (testUser) {
+        return { kind: "session", userId: testUser.userId }
+    }
+
     // Bearer key path
     const header = req.headers.get("authorization") ?? req.headers.get("Authorization")
 
@@ -181,6 +208,15 @@ export type ContributorPrincipal = {
  * Same Origin/CSRF gate as requireAdmin for cookie-auth writes.
  */
 export async function requireContributor(req: Request): Promise<ContributorPrincipal> {
+    const testUser = await resolveTestUser(req, ["ADMIN", "CONTRIBUTOR"])
+    if (testUser) {
+        return {
+            kind: "session",
+            userId: testUser.userId,
+            role: testUser.role as "ADMIN" | "CONTRIBUTOR",
+        }
+    }
+
     // Bearer auth is admin-only — reject any Authorization header here so
     // a leaked admin key cannot be used to impersonate a contributor's
     // authorship via /api/me/*.
