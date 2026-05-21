@@ -1,5 +1,6 @@
 import "dotenv/config"
 import assert from "node:assert/strict"
+import { randomUUID } from "node:crypto"
 import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
 import { Pool } from "pg"
@@ -9,6 +10,8 @@ const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
 const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3000"
+const ORIGIN = new URL(BASE).origin
+const SESSION_COOKIE_NAME = "authjs.session-token"
 const TEST_PREFIX = "test-prc-visual"
 const ARTICLE_SLUGS = [
     `${TEST_PREFIX}-bad-alt`,
@@ -26,32 +29,50 @@ const USER_IDS = [
 ]
 const TOPIC_SLUG = `${TEST_PREFIX}-topic`
 
+type TestPrincipal = {
+    id: string
+    sessionToken: string
+}
+
 async function cleanup() {
     await prisma.article.deleteMany({ where: { slug: { in: ARTICLE_SLUGS } } })
     await prisma.asset.deleteMany({ where: { ownerId: { in: USER_IDS } } })
     await prisma.userAssetQuota.deleteMany({ where: { userId: { in: USER_IDS } } })
+    await prisma.session.deleteMany({ where: { userId: { in: USER_IDS } } })
     await prisma.topic.deleteMany({ where: { slug: TOPIC_SLUG } })
     await prisma.user.deleteMany({ where: { id: { in: USER_IDS } } })
 }
 
-async function seedAdmin() {
-    const id = USER_IDS[0]
+async function seedUser(
+    id: string,
+    role: "ADMIN" | "CONTRIBUTOR"
+): Promise<TestPrincipal> {
     await prisma.user.upsert({
         where: { id },
-        create: { id, email: `${id}@test.local`, role: "ADMIN" },
-        update: { role: "ADMIN" },
+        create: { id, email: `${id}@test.local`, role },
+        update: { role },
     })
-    return id
+    await prisma.session.deleteMany({ where: { userId: id } })
+    const sessionToken = randomUUID()
+    await prisma.session.create({
+        data: {
+            sessionToken,
+            userId: id,
+            expires: new Date(Date.now() + 60 * 60 * 1000),
+        },
+    })
+
+    return { id, sessionToken }
+}
+
+async function seedAdmin() {
+    const id = USER_IDS[0]
+    return seedUser(id, "ADMIN")
 }
 
 async function seedContributor(index: number) {
     const id = USER_IDS[index]
-    await prisma.user.upsert({
-        where: { id },
-        create: { id, email: `${id}@test.local`, role: "CONTRIBUTOR" },
-        update: { role: "CONTRIBUTOR" },
-    })
-    return id
+    return seedUser(id, "CONTRIBUTOR")
 }
 
 async function seedActiveAsset(ownerId: string, suffix: string) {
@@ -75,11 +96,15 @@ async function seedTopic() {
     })
 }
 
-function userFetch(userId: string) {
+function userFetch(user: TestPrincipal) {
     return (path: string, init?: RequestInit) =>
         fetch(`${BASE}${path}`, {
             ...init,
-            headers: { ...init?.headers, "X-Test-User-Id": userId },
+            headers: {
+                ...init?.headers,
+                Cookie: `${SESSION_COOKIE_NAME}=${user.sessionToken}`,
+                Origin: ORIGIN,
+            },
         })
 }
 
@@ -95,7 +120,7 @@ async function main() {
     const admin = await seedAdmin()
     const topic = await seedTopic()
     const adminFetch = userFetch(admin)
-    const adminAsset = await seedActiveAsset(admin, "admin-owned")
+    const adminAsset = await seedActiveAsset(admin.id, "admin-owned")
 
     try {
         const badAlt = await adminFetch("/api/admin/articles", {
@@ -142,7 +167,7 @@ async function main() {
         await assertStatus(foreign, 400)
 
         const otherUser = await seedContributor(1)
-        const otherAsset = await seedActiveAsset(otherUser, "other-owned")
+        const otherAsset = await seedActiveAsset(otherUser.id, "other-owned")
         const crossOwner = await adminFetch("/api/admin/articles", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -185,14 +210,14 @@ async function main() {
         assert.equal(refreshed.hasVisualBlocks, false)
 
         const approvalUser = await seedContributor(2)
-        const approvalAsset = await seedActiveAsset(approvalUser, "approval")
+        const approvalAsset = await seedActiveAsset(approvalUser.id, "approval")
         const draft = await prisma.article.create({
             data: {
                 title: "Submitted",
                 slug: `${TEST_PREFIX}-submitted`,
                 status: "SUBMITTED",
                 content: `:::figure{src="${approvalAsset.blobUrl}"}\nbad no alt\n:::`,
-                authorId: approvalUser,
+                authorId: approvalUser.id,
                 topicId: topic.id,
             },
         })
@@ -225,7 +250,7 @@ async function main() {
                 slug: `${TEST_PREFIX}-submit-bad`,
                 status: "DRAFT",
                 content: `:::callout{kind="oops"}\nx\n:::`,
-                authorId: submitUser,
+                authorId: submitUser.id,
                 topicId: topic.id,
             },
         })
