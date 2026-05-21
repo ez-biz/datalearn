@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
     Check,
@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { TagPicker } from "./TagPicker"
 import { RelatedProblemsPicker } from "./RelatedProblemsPicker"
 import { MarkdownPreview } from "./MarkdownPreview"
+import { InsertMenu, MyUploadsPanel } from "./ArticleVisualTools"
 import { slugify } from "@/lib/admin-validation"
 import { cn } from "@/lib/utils"
 
@@ -69,6 +70,7 @@ export function ArticleForm({
     const [error, setError] = useState<string | null>(null)
     const [savedAt, setSavedAt] = useState<number | null>(null)
     const [draftHydrated, setDraftHydrated] = useState(initial.mode === "edit")
+    const textareaRef = useRef<HTMLTextAreaElement>(null)
 
     const draftKey = `${DRAFT_PREFIX}${originalSlug ?? "__new__"}`
 
@@ -144,6 +146,26 @@ export function ArticleForm({
             tagSlugs,
             relatedProblemSlugs,
         }
+    }
+
+    function insertIntoContent(snippet: string) {
+        setEditorTab("write")
+        const textarea = textareaRef.current
+        if (!textarea) {
+            setContent((current) => `${current}${snippet}`)
+            return
+        }
+        const start = textarea.selectionStart
+        const end = textarea.selectionEnd
+        setContent((current) => {
+            const next = `${current.slice(0, start)}${snippet}${current.slice(end)}`
+            requestAnimationFrame(() => {
+                textarea.focus()
+                const cursor = start + snippet.length
+                textarea.setSelectionRange(cursor, cursor)
+            })
+            return next
+        })
     }
 
     async function onSubmit(e: React.FormEvent) {
@@ -326,52 +348,67 @@ export function ArticleForm({
             <Card>
                 <CardHeader className="flex items-center justify-between gap-3">
                     <CardTitle>Body</CardTitle>
-                    <div className="flex items-center gap-1 rounded-md border border-border bg-surface p-1">
-                        <button
-                            type="button"
-                            onClick={() => setEditorTab("write")}
-                            aria-pressed={editorTab === "write"}
-                            className={cn(
-                                "rounded-sm px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer",
-                                editorTab === "write"
-                                    ? "bg-surface-muted text-foreground"
-                                    : "text-muted-foreground hover:text-foreground"
-                            )}
-                        >
-                            <PenSquare className="h-3 w-3" />
-                            Write
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setEditorTab("preview")}
-                            aria-pressed={editorTab === "preview"}
-                            className={cn(
-                                "rounded-sm px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer",
-                                editorTab === "preview"
-                                    ? "bg-surface-muted text-foreground"
-                                    : "text-muted-foreground hover:text-foreground"
-                            )}
-                        >
-                            <Eye className="h-3 w-3" />
-                            Preview
-                        </button>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                        <InsertMenu onInsert={insertIntoContent} />
+                        <div className="flex items-center gap-1 rounded-md border border-border bg-surface p-1">
+                            <button
+                                type="button"
+                                onClick={() => setEditorTab("write")}
+                                aria-pressed={editorTab === "write"}
+                                className={cn(
+                                    "rounded-sm px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer",
+                                    editorTab === "write"
+                                        ? "bg-surface-muted text-foreground"
+                                        : "text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                <PenSquare className="h-3 w-3" />
+                                Write
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setEditorTab("preview")}
+                                aria-pressed={editorTab === "preview"}
+                                className={cn(
+                                    "rounded-sm px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer",
+                                    editorTab === "preview"
+                                        ? "bg-surface-muted text-foreground"
+                                        : "text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                <Eye className="h-3 w-3" />
+                                Preview
+                            </button>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent>
-                    {editorTab === "write" ? (
-                        <Textarea
-                            value={content}
-                            onChange={(e) => setContent(e.target.value)}
-                            rows={24}
-                            className="font-mono text-[13px]"
-                            placeholder={"# Heading\n\nWrite your article in Markdown.\n\n## Section\n\nText, code blocks, lists — all supported."}
-                            required
-                        />
-                    ) : (
-                        <div className="rounded-md border border-border bg-surface px-5 py-4 min-h-[24rem]">
-                            <MarkdownPreview content={content} />
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+                        <div className="min-w-0">
+                            {editorTab === "write" ? (
+                                <Textarea
+                                    ref={textareaRef}
+                                    value={content}
+                                    onChange={(e) => setContent(e.target.value)}
+                                    rows={24}
+                                    className="font-mono text-[13px]"
+                                    placeholder={"# Heading\n\nWrite your article in Markdown.\n\n## Section\n\nText, code blocks, lists — all supported."}
+                                    required
+                                />
+                            ) : (
+                                <div className="rounded-md border border-border bg-surface px-5 py-4 min-h-[24rem]">
+                                    <MarkdownPreview content={content} />
+                                </div>
+                            )}
                         </div>
-                    )}
+                        <MyUploadsPanel
+                            onInsertUrl={(url) =>
+                                insertIntoContent(
+                                    `\n:::figure{src="${url}" alt=""}\n\n:::\n`
+                                )
+                            }
+                        />
+                    </div>
                 </CardContent>
             </Card>
 

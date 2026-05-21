@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { withContributor } from "@/lib/api-auth"
+import { validateArticleDirectivesSyntactic } from "@/lib/admin-validation"
 
 type Ctx = { params: Promise<{ slug: string }> }
 
@@ -12,7 +13,7 @@ export const POST = withContributor(async (_req, principal, ctx: Ctx) => {
     const { slug } = await ctx.params
     const article = await prisma.article.findUnique({
         where: { slug },
-        select: { id: true, status: true, authorId: true },
+        select: { id: true, status: true, authorId: true, content: true },
     })
     if (!article || article.authorId !== principal.userId) {
         return NextResponse.json({ error: "Not found." }, { status: 404 })
@@ -26,6 +27,17 @@ export const POST = withContributor(async (_req, principal, ctx: Ctx) => {
                 error: `Cannot submit from status ${article.status}. Article must be DRAFT.`,
             },
             { status: 409 }
+        )
+    }
+    const syntactic = validateArticleDirectivesSyntactic(article.content)
+    if (!syntactic.ok) {
+        return NextResponse.json(
+            {
+                error: "directive-validation",
+                errors: syntactic.errors,
+                advisory: true,
+            },
+            { status: 400 }
         )
     }
     try {

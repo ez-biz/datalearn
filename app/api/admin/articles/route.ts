@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { withAdmin } from "@/lib/api-auth"
+import { validateArticleDirectivesForPublish } from "@/actions/article-publish-validation"
 import {
     ArticleCreateInput,
     computeReadingMinutes,
@@ -41,6 +42,21 @@ export const POST = withAdmin(async (req, principal) => {
         )
     }
     const input = parsed.data
+    let hasVisualBlocks = false
+
+    if (input.status === "PUBLISHED") {
+        const validation = await validateArticleDirectivesForPublish(
+            input.content,
+            principal.userId
+        )
+        if (!validation.ok) {
+            return NextResponse.json(
+                { error: "directive-validation", errors: validation.errors },
+                { status: 400 }
+            )
+        }
+        hasVisualBlocks = validation.hasVisualBlocks
+    }
 
     try {
         const created = await prisma.$transaction(async (tx) => {
@@ -90,6 +106,7 @@ export const POST = withAdmin(async (req, principal) => {
                     content: input.content,
                     summary: input.summary ?? null,
                     status: input.status,
+                    hasVisualBlocks,
                     readingMinutes: computeReadingMinutes(input.content),
                     authorId: principal.userId,
                     tags: { connect: tagIds.map((id) => ({ id })) },

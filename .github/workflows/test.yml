@@ -68,6 +68,9 @@ jobs:
       - name: Seed
         run: npx tsx prisma/seed.ts
 
+      - name: Seed visual lesson
+        run: npm run seed:visual
+
       - name: Audit SQL dialect outputs
         run: npm run audit:dialects:ci
 
@@ -98,6 +101,12 @@ jobs:
       - name: Test tracks actions
         run: npm run test:tracks
 
+      - name: Test article publish validation
+        run: npm run test:article-publish-validation
+
+      - name: Check MCP bundle isolation
+        run: npm run check:mcp-bundle-isolation
+
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         with:
@@ -112,6 +121,22 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Test article publish routes
+        run: |
+          npm run start -- -p 3101 &
+          SERVER_PID=$!
+          trap "kill $SERVER_PID" EXIT
+
+          for i in {1..30}; do
+            if curl -fsS http://localhost:3101/api/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          curl -fsS http://localhost:3101/api/health >/dev/null
+          TEST_BASE_URL=http://localhost:3101 npm run test:article-publish-routes
 
       - name: Run E2E tests
         run: npm run test:e2e

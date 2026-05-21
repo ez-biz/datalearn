@@ -78,8 +78,10 @@ Required vars (from [`.env.example`](../.env.example)):
 | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | prod OAuth app | dev OAuth app |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | prod OAuth client | dev OAuth client |
 | `API_KEY_HASH_SECRET` | `openssl rand -hex 32` (fresh) | `openssl rand -hex 32` (fresh, different) |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob integration token | Vercel Blob integration token |
+| `CRON_SECRET` | manual `vercel env add` secret for `/api/cron/*` | manual `vercel env add` secret for `/api/cron/*` |
 
-**Never** share `AUTH_SECRET` or `API_KEY_HASH_SECRET` between dev and prod.
+**Never** share `AUTH_SECRET`, `API_KEY_HASH_SECRET`, or `CRON_SECRET` between dev and prod.
 
 ### 5. First deploy
 
@@ -101,9 +103,10 @@ Visit your prod URL. You should see the marketing landing page. You won't be abl
 
 ```bash
 DATABASE_URL='<prod-direct-url>' npx tsx prisma/seed.ts
+DATABASE_URL='<prod-direct-url>' npm run seed:visual
 ```
 
-Run from your laptop. You only do this once. Use the **direct** URL (port 5432) so the seed can do schema-aware operations cleanly.
+Run from your laptop. You only do this once per seed set. Use the **direct** URL (port 5432) so the seed can do schema-aware operations cleanly. `seed:visual` is idempotent; it creates or updates the Learn v2 reference lesson ("How a JOIN works") and expects the base seed/admin user to exist.
 
 ### 7. Bootstrap the first admin
 
@@ -168,6 +171,36 @@ For low-risk migrations (additive columns, new tables), batching multiple migrat
 ```
 
 Wire this into UptimeRobot, Better Uptime, or any monitor. It pings the DB so a 200 means both the function and the database are reachable.
+
+### Daily asset garbage collection
+
+`GET /api/cron/asset-gc` runs daily at 04:00 UTC via the `vercel.json` cron entry. It performs these sweeps:
+
+1. **Tombstones** — `Asset` rows in `DELETED` with `deletedAt` older than 7 days get their Blob removed and the row hard-deleted; quota is released.
+2. **DELETING retries** — admin abuse-deletes whose inline Blob removal did not confirm are retried.
+3. **PENDING expiry + orphan blobs** — expired PENDING reservations are either promoted if the Blob exists or row-deleted if it does not; orphan blobs under `learn/` with no matching `Asset` row are deleted after a 24-hour grace window when Blob credentials are configured.
+
+Health check: `vercel cron list` shows the schedule. Manual invocation:
+
+```bash
+curl -H "authorization: Bearer $CRON_SECRET" "$URL/api/cron/asset-gc"
+```
+
+### Visual article backfill
+
+Learn v2 stores `Article.hasVisualBlocks` as a denormalized flag for listing badges. After deploying the migration that adds the column, run the backfill once against each environment that already has published articles:
+
+```bash
+DATABASE_URL='<direct-url>' npx tsx scripts/backfill-has-visual-blocks.ts
+```
+
+Expected output:
+
+```text
+backfill complete: scanned=N, updated=M
+```
+
+The script only scans `PUBLISHED` articles and recomputes the flag from the directive parser. It does not publish, archive, or mutate article content.
 
 ### Logs
 

@@ -101,6 +101,38 @@ The AI will:
 4. Call `create_problem` with `schemaId: "<orders-id>"`, generated SQL solution, and a matching `expectedOutput`.
 5. Lands as DRAFT in `/admin/problems`. Review, then publish via the admin UI or a deliberate `update_problem` call.
 
+## Visual article authoring
+
+MCP v1 does not create Learn articles. Visual article authoring happens in the app UI:
+
+- Contributors: `/me/articles/new` and `/me/articles/<slug>/edit`
+- Admins: `/admin/articles/new` and `/admin/articles/<slug>/edit`
+
+The article editor has an insert menu for the five supported visual directives and a My uploads panel that inserts active uploads as `figure` blocks. Publishing runs the same validation used by the public renderer:
+
+- `figure` requires `src` and `alt`; `src` must be `/learn/...` or an active Vercel Blob asset owned by the article author.
+- `mermaid` requires `alt`; Mermaid SVG output is sanitized client-side before insertion.
+- `steps` requires an ordered list.
+- `side-by-side` requires exactly one Markdown horizontal rule separator.
+- `callout` supports `tip`, `pitfall`, `warning`, and `note`.
+
+Minimal examples:
+
+```markdown
+:::figure{src="/learn/img/joins-hero.svg" alt="Two tables joined by customer_id"}
+Rows match where the key values are equal.
+:::
+
+:::mermaid{alt="Join execution flow"}
+flowchart LR
+  scan[Scan tables] --> match[Match join keys] --> project[Return columns]
+:::
+
+:::callout{kind="pitfall"}
+An INNER JOIN drops rows that do not find a match.
+:::
+```
+
 ## Authoring guide — exact data formats
 
 This section is the source of truth for *what* to send to each tool. The Zod validators in `lib/admin-validation.ts` are authoritative; this is the ergonomic version.
@@ -275,7 +307,7 @@ The Next API runs Zod validation server-side; failures come back as `McpError(In
 
 ### What's NOT in v1
 
-- **Articles.** The `create_article` / `submit_article` / `approve_article` tools are deferred to v2. Article authoring stays in the existing UI (`/me/articles` for contributors, `/admin/articles` for admins) for now.
+- **Articles.** The `create_article` / `submit_article` / `approve_article` tools are deferred to v2. Visual article authoring stays in the existing UI (`/me/articles` for contributors, `/admin/articles` for admins) for now.
 - **Delete tools.** There is intentionally no `delete_problem`; archive with `update_problem` instead so submission history is preserved.
 - **Validation pre-flight.** A `validate_problem` tool that runs `solutionSql` against `schemaInline` and checks the produced rows match `expectedOutput` — deferred. For now, errors surface only when a learner actually runs the query.
 

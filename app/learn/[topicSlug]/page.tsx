@@ -68,9 +68,19 @@ export default async function TopicPage({ params }: Props) {
                                 {String(i + 1).padStart(2, "0")}
                             </span>
                             <div className="flex-1 min-w-0">
-                                <h2 className="font-medium text-foreground group-hover:text-primary transition-colors">
-                                    {article.title}
-                                </h2>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <h2 className="font-medium text-foreground group-hover:text-primary transition-colors">
+                                        {article.title}
+                                    </h2>
+                                    {article.hasVisualBlocks && (
+                                        <Badge
+                                            variant="outline"
+                                            className="text-[10px]"
+                                        >
+                                            Visual
+                                        </Badge>
+                                    )}
+                                </div>
                                 {article.summary && (
                                     <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
                                         {article.summary}

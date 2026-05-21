@@ -14,6 +14,14 @@ export async function getTopics() {
                         },
                     },
                 },
+                articles: {
+                    where: {
+                        status: "PUBLISHED",
+                        hasVisualBlocks: true,
+                    },
+                    select: { id: true },
+                    take: 1,
+                },
             },
             orderBy: {
                 name: 'asc'
@@ -39,6 +47,7 @@ export async function getTopic(slug: string) {
                         slug: true,
                         summary: true,
                         readingMinutes: true,
+                        hasVisualBlocks: true,
                         createdAt: true,
                         tags: { select: { id: true, slug: true, name: true } },
                     },
