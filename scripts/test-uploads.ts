@@ -34,7 +34,7 @@ async function postFile(
     body: Buffer
 ) {
     const form = new FormData()
-    form.append("file", new Blob([body], { type }), filename)
+    form.append("file", new Blob([new Uint8Array(body)], { type }), filename)
     return authedFetch("/api/me/uploads", { method: "POST", body: form })
 }
 
@@ -77,6 +77,18 @@ async function main() {
                 okBody.url.includes(".vercel-blob")
         )
         assert.equal(okBody.bytes, 100)
+
+        const listRes = await contributorFetch("/api/me/uploads")
+        assert.equal(listRes.status, 200, await listRes.text())
+        const listBody = (await listRes.json()) as {
+            items: { id: string; blobUrl: string; bytes: number }[]
+        }
+        assert.ok(
+            listBody.items.some(
+                (item) => item.id === okBody.id && item.bytes === okBody.bytes
+            ),
+            "owner upload list should include the newly uploaded asset"
+        )
 
         const txt = await postFile(
             contributorFetch,

@@ -126,3 +126,29 @@ export const POST = withContributor(async (req, principal) => {
         createdAt: asset.createdAt,
     })
 })
+
+export const GET = withContributor(async (req, principal) => {
+    const url = new URL(req.url)
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200)
+    const cursor = url.searchParams.get("cursor") ?? undefined
+
+    const assets = await prisma.asset.findMany({
+        where: { ownerId: principal.userId, status: "ACTIVE" },
+        orderBy: { createdAt: "desc" },
+        take: limit + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        select: {
+            id: true,
+            blobUrl: true,
+            contentType: true,
+            bytes: true,
+            createdAt: true,
+        },
+    })
+
+    const nextCursor = assets.length > limit ? assets[limit - 1].id : null
+    return NextResponse.json({
+        items: assets.slice(0, limit),
+        nextCursor,
+    })
+})

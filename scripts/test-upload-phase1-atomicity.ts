@@ -23,7 +23,7 @@ async function main() {
     const before = await prisma.userAssetQuota.findUniqueOrThrow({
         where: { userId },
     })
-    assert.equal(before.reservedBytes, 0n)
+    assert.equal(before.reservedBytes, BigInt(0))
 
     const attemptBytes = 1024
     const duplicateId = "duplicate-id-for-phase1-test"
@@ -64,7 +64,7 @@ async function main() {
     })
     assert.equal(
         after.reservedBytes,
-        0n,
+        BigInt(0),
         `quota must be restored, got ${after.reservedBytes}`
     )
 
