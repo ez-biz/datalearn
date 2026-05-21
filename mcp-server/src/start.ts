@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { DataLearnClient } from "./client.js"
+import { registerArticleTools } from "./tools/articles.js"
 import { registerProblemTools } from "./tools/problems.js"
 import { registerSchemaTools } from "./tools/schemas.js"
 import { registerTagTools } from "./tools/tags.js"
@@ -31,5 +32,6 @@ export function buildServer(config: StartConfig): {
     registerSchemaTools(server, client)
     registerProblemTools(server, client)
     registerTrackTools(server, client)
+    registerArticleTools(server, client)
     return { server, client }
 }
