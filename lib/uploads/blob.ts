@@ -12,6 +12,16 @@ export async function putBlob(
     body: Blob | ArrayBuffer | Buffer,
     contentType: string
 ): Promise<BlobPutResult> {
+    if (
+        process.env.NODE_ENV !== "production" &&
+        process.env.DATALEARN_FAKE_BLOB === "1"
+    ) {
+        return {
+            url: `https://store.vercel-storage.com/${key}`,
+            pathname: key,
+        }
+    }
+
     const result = await put(key, body, {
         access: "public",
         addRandomSuffix: false,
@@ -26,6 +36,12 @@ export async function delBlobWithRetry(url: string): Promise<void> {
         process.env.DATALEARN_FORCE_DEL_FAILURE === "1"
     ) {
         throw new Error("forced-del-failure")
+    }
+    if (
+        process.env.NODE_ENV !== "production" &&
+        process.env.DATALEARN_FAKE_BLOB === "1"
+    ) {
+        return
     }
 
     let lastError: unknown
@@ -45,6 +61,13 @@ export async function delBlobWithRetry(url: string): Promise<void> {
 }
 
 export async function blobExists(url: string): Promise<boolean> {
+    if (
+        process.env.NODE_ENV !== "production" &&
+        process.env.DATALEARN_FAKE_BLOB === "1"
+    ) {
+        return process.env.DATALEARN_FAKE_BLOB_EXISTS === "1"
+    }
+
     try {
         await head(url)
         return true
