@@ -12,7 +12,7 @@ export async function snapshotArticleVersion(
     tx: Tx,
     articleId: string,
     publishedById: string | null
-): Promise<void> {
+): Promise<number | null> {
     const article = await tx.article.findUnique({
         where: { id: articleId },
         include: {
@@ -20,7 +20,7 @@ export async function snapshotArticleVersion(
             relatedProblems: { select: { slug: true } },
         },
     })
-    if (!article) return
+    if (!article) return null
 
     const last = await tx.articleVersion.findFirst({
         where: { articleId },
@@ -43,4 +43,5 @@ export async function snapshotArticleVersion(
             publishedById,
         },
     })
+    return nextVersion
 }
