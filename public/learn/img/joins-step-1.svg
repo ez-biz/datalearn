@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280" role="img" aria-labelledby="title desc">
+  <title id="title">Step 1 scan the driver table</title>
+  <desc id="desc">The orders table is scanned one row at a time.</desc>
+  <style>.bg{fill:hsl(0 0% 100%)}.card{fill:hsl(210 40% 98%);stroke:hsl(214 32% 91%);stroke-width:2}.head{fill:hsl(221 83% 53%)}.text{fill:hsl(222 47% 11%);font:600 18px ui-sans-serif,system-ui}.mono{fill:hsl(222 47% 11%);font:500 15px ui-monospace,SFMono-Regular,Menlo,monospace}.hilite{fill:hsl(221 83% 53%);opacity:.13}.arrow{stroke:hsl(221 83% 53%);stroke-width:5;fill:none;stroke-linecap:round;marker-end:url(#arrow)}@media (prefers-color-scheme: dark){.bg{fill:hsl(222 47% 7%)}.card{fill:hsl(222 47% 11%);stroke:hsl(217 33% 22%)}.text,.mono{fill:hsl(210 40% 98%)}}</style>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="hsl(221 83% 53%)"/></marker></defs>
+  <rect class="bg" width="720" height="280" rx="20"/>
+  <rect class="card" x="60" y="42" width="310" height="196" rx="16"/>
+  <rect class="head" x="60" y="42" width="310" height="46" rx="16"/>
+  <text class="text" x="84" y="72" fill="white">orders</text>
+  <rect class="hilite" x="74" y="112" width="282" height="34" rx="8"/>
+  <text class="mono" x="92" y="134">101 | customer_id 1 | $80</text>
+  <text class="mono" x="92" y="172">102 | customer_id 2 | $55</text>
+  <text class="mono" x="92" y="210">103 | customer_id 1 | $120</text>
+  <path class="arrow" d="M410 130 H590"/>
+  <text class="text" x="410" y="176">pick next driver row</text>
+</svg>

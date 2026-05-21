@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-labelledby="title desc">
+  <title id="title">Orders table joined to customers table</title>
+  <desc id="desc">Rows in orders connect to matching customer rows by customer id.</desc>
+  <style>
+    .bg{fill:hsl(0 0% 100%)}.card{fill:hsl(210 40% 98%);stroke:hsl(214 32% 91%);stroke-width:2}.head{fill:hsl(221 83% 53%)}.accent{fill:hsl(173 80% 36%)}.muted{fill:hsl(215 16% 47%)}.text{fill:hsl(222 47% 11%);font:600 20px ui-sans-serif,system-ui}.small{fill:hsl(215 16% 47%);font:500 15px ui-sans-serif,system-ui}.mono{fill:hsl(222 47% 11%);font:500 15px ui-monospace,SFMono-Regular,Menlo,monospace}.line{stroke:hsl(221 83% 53%);stroke-width:4;fill:none;stroke-linecap:round}.dash{stroke:hsl(173 80% 36%);stroke-width:3;stroke-dasharray:8 8;fill:none}
+    @media (prefers-color-scheme: dark){.bg{fill:hsl(222 47% 7%)}.card{fill:hsl(222 47% 11%);stroke:hsl(217 33% 22%)}.text,.mono{fill:hsl(210 40% 98%)}.small,.muted{fill:hsl(215 20% 65%)}}
+  </style>
+  <rect class="bg" width="960" height="420" rx="24"/>
+  <rect class="card" x="54" y="70" width="330" height="250" rx="18"/>
+  <rect class="head" x="54" y="70" width="330" height="52" rx="18"/>
+  <rect class="head" x="54" y="104" width="330" height="18"/>
+  <text class="text" x="82" y="104" fill="white">orders</text>
+  <text class="small" x="82" y="154">order_id</text><text class="small" x="196" y="154">customer_id</text><text class="small" x="318" y="154">total</text>
+  <text class="mono" x="92" y="194">101</text><text class="mono" x="228" y="194">1</text><text class="mono" x="318" y="194">$80</text>
+  <text class="mono" x="92" y="232">102</text><text class="mono" x="228" y="232">2</text><text class="mono" x="318" y="232">$55</text>
+  <text class="mono" x="92" y="270">103</text><text class="mono" x="228" y="270">1</text><text class="mono" x="318" y="270">$120</text>
+  <rect class="card" x="576" y="70" width="330" height="250" rx="18"/>
+  <rect class="accent" x="576" y="70" width="330" height="52" rx="18"/>
+  <rect class="accent" x="576" y="104" width="330" height="18"/>
+  <text class="text" x="604" y="104" fill="white">customers</text>
+  <text class="small" x="604" y="154">id</text><text class="small" x="706" y="154">name</text><text class="small" x="830" y="154">tier</text>
+  <text class="mono" x="608" y="194">1</text><text class="mono" x="706" y="194">Asha</text><text class="mono" x="830" y="194">pro</text>
+  <text class="mono" x="608" y="232">2</text><text class="mono" x="706" y="232">Ben</text><text class="mono" x="830" y="232">free</text>
+  <text class="mono" x="608" y="270">3</text><text class="mono" x="706" y="270">Chen</text><text class="mono" x="830" y="270">pro</text>
+  <path class="line" d="M302 190 C430 154 520 154 648 190"/>
+  <path class="line" d="M302 228 C430 220 520 220 648 228"/>
+  <path class="dash" d="M302 266 C430 324 520 324 648 190"/>
+  <text class="text" x="375" y="365">ON orders.customer_id = customers.id</text>
+</svg>
