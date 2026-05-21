@@ -15,6 +15,20 @@ async function assertStatus(res: Response, expected: number) {
     }
 }
 
+function isExpectedBlobUrl(value: string): boolean {
+    try {
+        const url = new URL(value)
+        return (
+            url.protocol === "https:" &&
+            (url.hostname === "store.vercel-storage.com" ||
+                url.hostname.endsWith(".vercel-storage.com") ||
+                url.hostname.endsWith(".vercel-blob.com"))
+        )
+    } catch {
+        return false
+    }
+}
+
 async function seedUser(role: "ADMIN" | "CONTRIBUTOR" | "USER") {
     const id = `test-uploads-${role.toLowerCase()}`
     await prisma.user.upsert({
@@ -78,10 +92,7 @@ async function main() {
             url: string
             bytes: number
         }
-        assert.ok(
-            okBody.url.includes(".vercel-storage.com") ||
-                okBody.url.includes(".vercel-blob")
-        )
+        assert.ok(isExpectedBlobUrl(okBody.url))
         assert.equal(okBody.bytes, 100)
 
         const listRes = await contributorFetch("/api/me/uploads")
