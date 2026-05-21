@@ -49,7 +49,7 @@ function applyLearnCsp(response: NextResponse): NextResponse {
     return response
 }
 
-export default auth((req) => {
+const adminAuthMiddleware = auth((req) => {
     const { pathname } = req.nextUrl
     const isAdminApi = pathname.startsWith("/api/admin/") || pathname === "/api/admin"
     const isAdminPage = pathname.startsWith("/admin/") || pathname === "/admin"
@@ -60,8 +60,7 @@ export default auth((req) => {
         pathname.startsWith("/api/admin/discussions/")
 
     if (!isAdminApi && !isAdminPage) {
-        const response = NextResponse.next()
-        return isLearnPath(pathname) ? applyLearnCsp(response) : response
+        return NextResponse.next()
     }
 
     // Bearer-key /api/admin/* requests are admin-only and validated by
@@ -108,6 +107,19 @@ export default auth((req) => {
 
     return NextResponse.next()
 })
+
+export default function middleware(
+    ...args: Parameters<typeof adminAuthMiddleware>
+) {
+    const [req] = args
+    const { pathname } = req.nextUrl
+
+    if (isLearnPath(pathname)) {
+        return applyLearnCsp(NextResponse.next())
+    }
+
+    return adminAuthMiddleware(...args)
+}
 
 export const config = {
     matcher: [
