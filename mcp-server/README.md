@@ -13,6 +13,10 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that lets an 
 | `get_problem` | Fetch a single problem's full record by slug (use this to learn the `expectedOutput` JSON shape). |
 | `create_problem` | Create a new problem. **Always lands as DRAFT** — publish manually via the admin UI. |
 | `update_problem` | Patch an existing problem by slug. Can replace tags, rename with `newSlug`, and set `status` to `DRAFT`, `PUBLISHED`, or `ARCHIVED`. |
+| `list_articles` | List Learn articles (minimal projection, optional `topicSlug` and `status` filters). |
+| `get_article` | Fetch a single article's full record by slug, including `content` markdown. |
+| `create_article` | Create a new Learn article. **Always lands as DRAFT** — publish via `update_article` or the admin UI. Supports v0.5.0 directive syntax. |
+| `update_article` | Patch an existing article by slug. PATCH semantics — `content` REPLACES the current value entirely. Can rename via `newSlug` and transition `status`. |
 
 ## Install
 
@@ -52,7 +56,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) a
 }
 ```
 
-Restart Claude Desktop. The 11 tools appear under the `datalearn` namespace.
+Restart Claude Desktop. The 15 tools appear under the `datalearn` namespace.
 
 ### Local development
 
@@ -305,10 +309,21 @@ The Next API runs Zod validation server-side; failures come back as `McpError(In
 
 **`update_problem`** — input `{ slug, ...fields }`, with `newSlug` for slug rename. Returns the same full shape as `get_problem`, or `{ found: false }` if the current slug does not exist.
 
+### Articles (v0.5.0+)
+
+Article tools mirror the problem-tool shape: `list_articles`, `get_article`, `create_article`, `update_article`. The DRAFT-guard pattern is the same — `create_article` does not accept a `status` field; articles always land in DRAFT and require a human publish via `update_article` or the admin UI.
+
+**Directive syntax in `content`:** v0.5.0 ships five `remark-directive` block directives — `:::figure`, `:::mermaid`, `:::steps`, `:::side-by-side`, `:::callout`. See `docs/superpowers/prompts/learn-v2-article-author.md` for the full directive grammar and authoring conventions. The MCP server runs a Prisma-free Layer 1 directive check before POSTing — bad `alt`, foreign `src` URLs, or invalid `callout` kinds fail fast with a clear error.
+
+**Figure assets:** `create_article` and `update_article` accept figure URLs but cannot upload images. The author or a human editor must upload via the admin "My uploads" panel first, copy the resulting `*.vercel-storage.com` URL, and paste it into the `:::figure{src="..."}` attribute. Repo-committed `/learn/img/...` paths also work.
+
+**Publishing:** `update_article({ slug, status: "PUBLISHED" })` triggers Layer 2 (Prisma-aware) validation on the resulting article state. Figure URLs must resolve to ACTIVE `Asset` rows owned by the article author — foreign Blob URLs and cross-owner assets are rejected with no admin override in v1.
+
+**Read-before-write for edits.** `update_article.content` REPLACES the article body wholesale. Always call `get_article` first, modify the markdown locally, then send the full modified content back. Same applies to `tagSlugs` and `relatedProblemSlugs` arrays — present means replace, absent means leave unchanged.
+
 ### What's NOT in v1
 
-- **Articles.** The `create_article` / `submit_article` / `approve_article` tools are deferred to v2. Visual article authoring stays in the existing UI (`/me/articles` for contributors, `/admin/articles` for admins) for now.
-- **Delete tools.** There is intentionally no `delete_problem`; archive with `update_problem` instead so submission history is preserved.
+- **Delete tools.** There is intentionally no `delete_problem` or `delete_article`; archive with `update_*` (status=ARCHIVED) instead so submission history is preserved.
 - **Validation pre-flight.** A `validate_problem` tool that runs `solutionSql` against `schemaInline` and checks the produced rows match `expectedOutput` — deferred. For now, errors surface only when a learner actually runs the query.
 
 ## Tests
