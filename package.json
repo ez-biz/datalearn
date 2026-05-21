@@ -10,6 +10,7 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
+    "seed:visual": "tsx prisma/seed-visual-lesson.ts",
     "vercel-build": "prisma migrate deploy && tsx scripts/copy-sql-engine-assets.ts && next build --webpack",
     "copy:sql-engine-assets": "tsx scripts/copy-sql-engine-assets.ts",
     "test:e2e": "playwright test",
