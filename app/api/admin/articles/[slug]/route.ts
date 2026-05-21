@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { withAdmin } from "@/lib/api-auth"
+import { validateArticleDirectivesForPublish } from "@/actions/article-publish-validation"
 import {
     ArticleUpdateInput,
     computeReadingMinutes,
@@ -46,10 +47,26 @@ export const PATCH = withAdmin(async (req, principal, ctx: Ctx) => {
 
     const existing = await prisma.article.findUnique({
         where: { slug },
-        select: { id: true, status: true },
+        select: { id: true, status: true, content: true, authorId: true },
     })
     if (!existing) {
         return NextResponse.json({ error: "Not found." }, { status: 404 })
+    }
+    const resultingStatus = input.status ?? existing.status
+    const resultingContent = input.content ?? existing.content
+    let nextHasVisualBlocks: boolean | undefined
+    if (resultingStatus === "PUBLISHED") {
+        const validation = await validateArticleDirectivesForPublish(
+            resultingContent,
+            existing.authorId
+        )
+        if (!validation.ok) {
+            return NextResponse.json(
+                { error: "directive-validation", errors: validation.errors },
+                { status: 400 }
+            )
+        }
+        nextHasVisualBlocks = validation.hasVisualBlocks
     }
     const becomingPublished =
         input.status === "PUBLISHED" && existing.status !== "PUBLISHED"
@@ -65,6 +82,9 @@ export const PATCH = withAdmin(async (req, principal, ctx: Ctx) => {
                 }),
                 ...(input.summary !== undefined && { summary: input.summary }),
                 ...(input.status !== undefined && { status: input.status }),
+                ...(nextHasVisualBlocks !== undefined && {
+                    hasVisualBlocks: nextHasVisualBlocks,
+                }),
             }
 
             if (input.topicSlug !== undefined) {
