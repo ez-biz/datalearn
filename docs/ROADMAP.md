@@ -6,6 +6,10 @@
 
 ## Recently shipped
 
+### v0.4.13 — Asset infrastructure (ships dark)
+
+Foundation for Learn v2 visual articles. New `Asset` table + `UserAssetQuota`, two-phase upload at `/api/me/uploads`, admin abuse-delete with retry at `/api/admin/assets`, daily GC cron with reconciliation sweeps. No learner-facing change.
+
 ### May 2026 — v0.4.12: Study plans / tracks (V9)
 
 GitHub Release: <https://github.com/ez-biz/datalearn/releases/tag/v0.4.12>. Curated multi-problem learning paths — the platform's first opinionated entry into the catalog. Shipped as a two-PR sequence: backend ships dark in #112, learner-facing reveal lands in #113.

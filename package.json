@@ -34,7 +34,14 @@
     "audit:dialects:ci": "tsx scripts/audit-all-dialects.ts",
     "mcp:e2e-test": "node scripts/mcp-e2e-test.mjs",
     "validate:problem": "tsx scripts/validate-problem.ts",
-    "db:sync-prod": "bash scripts/sync-from-prod.sh"
+    "db:sync-prod": "bash scripts/sync-from-prod.sh",
+    "test:uploads": "tsx scripts/test-uploads.ts",
+    "test:upload-quota-race": "tsx scripts/test-upload-quota-race.ts",
+    "test:upload-phase1-atomicity": "tsx scripts/test-upload-phase1-atomicity.ts",
+    "test:asset-gc": "tsx scripts/test-asset-gc.ts",
+    "test:asset-delete-references": "tsx scripts/test-asset-delete-references.ts",
+    "test:admin-asset-delete": "tsx scripts/test-admin-asset-delete.ts",
+    "test:admin-asset-delete-retry": "tsx scripts/test-admin-asset-delete-retry.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
@@ -47,6 +54,7 @@
     "@types/pg": "^8.16.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/blob": "^1.1.1",
     "@vercel/speed-insights": "^2.0.0",
     "apache-arrow": "^21.1.0",
     "clsx": "^2.1.1",
@@ -61,8 +69,13 @@
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.0",
     "rehype-slug": "^6.0.0",
+    "remark-directive": "^4.0.0",
     "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
     "tailwind-merge": "^3.6.0",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.1.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -44,6 +44,12 @@ export default auth((req) => {
         if (authz?.startsWith("Bearer ")) {
             return NextResponse.next()
         }
+        if (
+            process.env.NODE_ENV !== "production" &&
+            req.headers.get("x-test-user-id")
+        ) {
+            return NextResponse.next()
+        }
     }
 
     const session = req.auth
