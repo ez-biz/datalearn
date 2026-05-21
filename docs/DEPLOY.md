@@ -103,9 +103,10 @@ Visit your prod URL. You should see the marketing landing page. You won't be abl
 
 ```bash
 DATABASE_URL='<prod-direct-url>' npx tsx prisma/seed.ts
+DATABASE_URL='<prod-direct-url>' npm run seed:visual
 ```
 
-Run from your laptop. You only do this once. Use the **direct** URL (port 5432) so the seed can do schema-aware operations cleanly.
+Run from your laptop. You only do this once per seed set. Use the **direct** URL (port 5432) so the seed can do schema-aware operations cleanly. `seed:visual` is idempotent; it creates or updates the Learn v2 reference lesson ("How a JOIN works") and expects the base seed/admin user to exist.
 
 ### 7. Bootstrap the first admin
 
@@ -184,6 +185,22 @@ Health check: `vercel cron list` shows the schedule. Manual invocation:
 ```bash
 curl -H "authorization: Bearer $CRON_SECRET" "$URL/api/cron/asset-gc"
 ```
+
+### Visual article backfill
+
+Learn v2 stores `Article.hasVisualBlocks` as a denormalized flag for listing badges. After deploying the migration that adds the column, run the backfill once against each environment that already has published articles:
+
+```bash
+DATABASE_URL='<direct-url>' npx tsx scripts/backfill-has-visual-blocks.ts
+```
+
+Expected output:
+
+```text
+backfill complete: scanned=N, updated=M
+```
+
+The script only scans `PUBLISHED` articles and recomputes the flag from the directive parser. It does not publish, archive, or mutate article content.
 
 ### Logs
 

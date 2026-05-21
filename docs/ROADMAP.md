@@ -1,10 +1,21 @@
 # 🚀 Antigravity Data Learning Platform — Long-Term Roadmap
 
-> **Last updated:** 2026-05-17
+> **Last updated:** 2026-05-21
 > **Status:** Live — <https://www.learndatanow.com>
-> **Version:** 0.4.12 (deployed)
+> **Version:** 0.5.0 (next release)
 
 ## Recently shipped
+
+### v0.5.0 — Learn v2 visual articles
+
+Learner-facing reveal for visual Learn content. This ties the asset upload foundation and directive renderer into the article publishing flow, then ships a reference lesson that demonstrates the full system.
+
+- **Visual article directives** — public Learn articles now render `figure`, `mermaid`, `steps`, `side-by-side`, and `callout` directive blocks through the shared directive-aware Markdown renderer while preserving heading IDs for the table of contents.
+- **Publish-time validation** — new `Article.hasVisualBlocks` denormalized flag plus Prisma-aware Layer 2 validation. Admin create/update, admin approve, and contributor submit paths validate directive syntax before publication; Blob-backed figures must point at active assets owned by the article author, while `/learn/` seed assets are allowed.
+- **Editor tools** — admin and contributor article forms include an insert menu for all directive types and a My uploads panel that inserts uploaded active assets as figure directives.
+- **Listing UX** — Learn topic cards and topic article lists show a Visual pill whenever a published article contains visual directive blocks.
+- **Seed lesson** — `npm run seed:visual` creates the published "How a JOIN works" lesson under the Joins topic, backed by five small SVGs in `public/learn/img/`.
+- **Verification gates** — CI seeds the visual lesson, runs article publish validation and route wiring tests, checks MCP bundle isolation, and covers the visual lesson plus Mermaid lazy-loading in Playwright.
 
 ### v0.4.13 — Asset infrastructure (ships dark)
 
