@@ -12,6 +12,12 @@ test.describe("CSP on /learn/**", () => {
         expect(csp).toContain(
             "img-src 'self' data: https://*.vercel-storage.com"
         )
+        // Mermaid v11 needs Function() — keep 'unsafe-eval' until we
+        // pre-render mermaid to SVG at publish time (planned v0.6).
+        expect(csp).toContain("'unsafe-eval'")
+        // Analytics scripts must be reachable from /learn/**.
+        expect(csp).toContain("https://www.googletagmanager.com")
+        expect(csp).toContain("https://*.vercel-insights.com")
     })
 
     test("CSP header is absent on a non-/learn path", async ({ page }) => {
