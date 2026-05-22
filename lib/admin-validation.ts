@@ -544,10 +544,14 @@ export const TrackStatus = z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"])
 
 const CoverImageUrl = z.string().url().max(2_000).optional().nullable()
 
+export const TopicLaneSchema = z.enum(["SQL", "DATA_ENGINEERING"])
+
 export const TopicCreateInput = z.object({
     name: z.string().min(1).max(100),
     slug: SlugSchema,
     description: z.string().max(2_000).optional().nullable(),
+    lane: TopicLaneSchema.default("SQL"),
+    displayOrder: z.number().int().min(0).max(1_000).default(0),
 })
 export const TopicUpdateInput = TopicCreateInput.partial()
 

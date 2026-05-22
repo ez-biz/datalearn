@@ -81,13 +81,22 @@ model VerificationToken {
 }
 
 model Topic {
-  id          String    @id @default(cuid())
-  name        String    @unique
-  slug        String    @unique
-  description String?
-  articles    Article[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  name         String    @unique
+  slug         String    @unique
+  description  String?
+  lane         TopicLane @default(SQL)
+  displayOrder Int       @default(0)
+  articles     Article[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([lane, displayOrder])
+}
+
+enum TopicLane {
+  SQL
+  DATA_ENGINEERING
 }
 
 model Article {
