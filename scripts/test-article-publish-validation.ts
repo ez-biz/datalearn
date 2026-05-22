@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { validateArticleDirectivesSyntactic } from "../lib/admin-validation"
+import { validateLearnFigurePaths } from "../lib/article-learn-path-validation"
 
 const ok = validateArticleDirectivesSyntactic(
     `:::figure{src="/learn/a.svg" alt="a"}\nx\n:::\n\n:::callout{kind="tip"}\nhi\n:::`
@@ -80,4 +81,57 @@ assert.equal(legacy.ok, true)
 assert.equal(legacy.hasVisualBlocks, false)
 assert.deepEqual(legacy.figureUrls, [])
 
-console.log("test-article-publish-validation PASS")
+async function runLearnPathTests() {
+    const ok = await validateLearnFigurePaths(["/learn/img/joins-hero.svg"])
+    assert.equal(ok.ok, true, "joins-hero.svg should exist in public/")
+
+    const missing = await validateLearnFigurePaths([
+        "/learn/img/window-vs-groupby.svg",
+    ])
+    assert.equal(missing.ok, false)
+    assert.match(
+        missing.errors[0].message,
+        /does not exist/i,
+        "error message should mention nonexistent path"
+    )
+
+    const mixed = await validateLearnFigurePaths([
+        "/learn/img/joins-hero.svg",
+        "/learn/img/never-existed-12345.svg",
+    ])
+    assert.equal(mixed.ok, false)
+    assert.equal(mixed.errors.length, 1)
+
+    // Path-traversal guard: `..` segments that escape public/ must be rejected.
+    const traversal = await validateLearnFigurePaths([
+        "/learn/../../etc/passwd",
+    ])
+    assert.equal(traversal.ok, false)
+    assert.match(
+        traversal.errors[0].message,
+        /stay within public\//i,
+        "traversal error should mention the containment rule"
+    )
+
+    // Directory edge case: a directory must not satisfy a figure src check.
+    // `/learn/img` resolves to public/learn/img, which exists as a directory.
+    const directoryAsFile = await validateLearnFigurePaths(["/learn/img"])
+    assert.equal(
+        directoryAsFile.ok,
+        false,
+        "a directory must not be accepted as a figure src"
+    )
+    assert.match(
+        directoryAsFile.errors[0].message,
+        /not a regular file/i,
+        "directory error should mention the file-type requirement"
+    )
+}
+
+runLearnPathTests().then(
+    () => console.log("test-article-publish-validation PASS"),
+    (err) => {
+        console.error(err)
+        process.exit(1)
+    }
+)

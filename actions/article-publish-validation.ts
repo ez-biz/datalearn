@@ -4,6 +4,7 @@ import {
     validateArticleDirectivesSyntactic,
     type ArticleDirectiveError,
 } from "@/lib/admin-validation"
+import { validateLearnFigurePaths } from "@/lib/article-learn-path-validation"
 
 export interface PublishValidationOk {
     ok: true
@@ -25,6 +26,9 @@ export async function validateArticleDirectivesForPublish(
 ): Promise<PublishValidationResult> {
     const syntactic = validateArticleDirectivesSyntactic(content)
     if (!syntactic.ok) return { ok: false, errors: syntactic.errors }
+
+    const localCheck = await validateLearnFigurePaths(syntactic.figureUrls)
+    if (!localCheck.ok) return { ok: false, errors: localCheck.errors }
 
     const blobUrls = syntactic.figureUrls.filter(
         (url) => !url.startsWith("/learn/")
