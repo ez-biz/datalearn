@@ -22,12 +22,16 @@ import { signInPath } from "@/lib/auth-redirect"
 // Run on Node runtime so we can use the Prisma session adapter.
 export const runtime = "nodejs"
 
+// `'unsafe-eval'` is required for client-side Mermaid (v11 uses the Function
+// constructor for its globalThis polyfill, which CSP counts as eval). Analytics
+// CDNs are allowlisted so Google Analytics + Vercel Analytics/Speed Insights
+// fire on /learn/** pages.
 const LEARN_CSP_DIRECTIVES = [
     "default-src 'self'",
-    "script-src 'self' 'nonce-__NONCE__'",
+    "script-src 'self' 'nonce-__NONCE__' 'unsafe-eval' https://www.googletagmanager.com https://*.google-analytics.com https://*.vercel-scripts.com https://*.vercel-insights.com",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://*.vercel-storage.com https://*.public.blob.vercel-storage.com",
-    "connect-src 'self'",
+    "img-src 'self' data: https://*.vercel-storage.com https://*.public.blob.vercel-storage.com https://*.google-analytics.com https://*.googletagmanager.com",
+    "connect-src 'self' https://*.google-analytics.com https://*.googletagmanager.com https://*.vercel-insights.com",
     "font-src 'self' data:",
     "frame-ancestors 'none'",
     "object-src 'none'",
