@@ -101,12 +101,35 @@ async function runLearnPathTests() {
     ])
     assert.equal(mixed.ok, false)
     assert.equal(mixed.errors.length, 1)
+
+    // Path-traversal guard: `..` segments that escape public/ must be rejected.
+    const traversal = await validateLearnFigurePaths([
+        "/learn/../../etc/passwd",
+    ])
+    assert.equal(traversal.ok, false)
+    assert.match(
+        traversal.errors[0].message,
+        /stay within public\//i,
+        "traversal error should mention the containment rule"
+    )
+
+    // Directory edge case: a directory must not satisfy a figure src check.
+    // `/learn/img` resolves to public/learn/img, which exists as a directory.
+    const directoryAsFile = await validateLearnFigurePaths(["/learn/img"])
+    assert.equal(
+        directoryAsFile.ok,
+        false,
+        "a directory must not be accepted as a figure src"
+    )
+    assert.match(
+        directoryAsFile.errors[0].message,
+        /not a regular file/i,
+        "directory error should mention the file-type requirement"
+    )
 }
 
-console.log("test-article-publish-validation PASS")
-
 runLearnPathTests().then(
-    () => console.log("ok: /learn/** existence tests passed"),
+    () => console.log("test-article-publish-validation PASS"),
     (err) => {
         console.error(err)
         process.exit(1)
