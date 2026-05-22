@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { validateArticleDirectivesSyntactic } from "../lib/admin-validation"
+import { validateLearnFigurePaths } from "../lib/article-learn-path-validation"
 
 const ok = validateArticleDirectivesSyntactic(
     `:::figure{src="/learn/a.svg" alt="a"}\nx\n:::\n\n:::callout{kind="tip"}\nhi\n:::`
@@ -80,4 +81,34 @@ assert.equal(legacy.ok, true)
 assert.equal(legacy.hasVisualBlocks, false)
 assert.deepEqual(legacy.figureUrls, [])
 
+async function runLearnPathTests() {
+    const ok = await validateLearnFigurePaths(["/learn/img/joins-hero.svg"])
+    assert.equal(ok.ok, true, "joins-hero.svg should exist in public/")
+
+    const missing = await validateLearnFigurePaths([
+        "/learn/img/window-vs-groupby.svg",
+    ])
+    assert.equal(missing.ok, false)
+    assert.match(
+        missing.errors[0].message,
+        /does not exist/i,
+        "error message should mention nonexistent path"
+    )
+
+    const mixed = await validateLearnFigurePaths([
+        "/learn/img/joins-hero.svg",
+        "/learn/img/never-existed-12345.svg",
+    ])
+    assert.equal(mixed.ok, false)
+    assert.equal(mixed.errors.length, 1)
+}
+
 console.log("test-article-publish-validation PASS")
+
+runLearnPathTests().then(
+    () => console.log("ok: /learn/** existence tests passed"),
+    (err) => {
+        console.error(err)
+        process.exit(1)
+    }
+)
