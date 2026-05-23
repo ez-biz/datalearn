@@ -4,6 +4,7 @@ import { ArrowLeft, Route } from "lucide-react"
 import { getPublishedTracks } from "@/actions/tracks"
 import { TrackCard } from "@/components/learn/TrackCard"
 import { Container } from "@/components/ui/Container"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 import { EmptyState } from "@/components/ui/EmptyState"
 
 export const metadata: Metadata = {
@@ -17,7 +18,7 @@ export default async function TracksIndexPage() {
     const tracks = await getPublishedTracks()
 
     return (
-        <Container width="lg" className="py-10 sm:py-14">
+        <Container width="2xl" className="py-10 sm:py-14">
             <header className="mb-8">
                 <Link
                     href="/learn"
@@ -26,7 +27,10 @@ export default async function TracksIndexPage() {
                     <ArrowLeft className="h-3.5 w-3.5" />
                     Learning hub
                 </Link>
-                <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+                <Eyebrow variant="bracket" className="mt-4 mb-1">
+                    TRACKS
+                </Eyebrow>
+                <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
                             Tracks

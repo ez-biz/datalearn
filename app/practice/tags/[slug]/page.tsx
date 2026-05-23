@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react"
 import { getProblemsByTag } from "@/actions/problems"
 import { getSolvedSlugs } from "@/actions/submissions"
 import { Container } from "@/components/ui/Container"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 import { PracticeList } from "@/components/practice/PracticeList"
 
 interface PageProps {
@@ -54,7 +55,7 @@ export default async function TagDetailPage({ params }: PageProps) {
     const isCompany = tag.kind === "COMPANY"
 
     return (
-        <Container width="lg" className="py-10 sm:py-14">
+        <Container width="2xl" className="py-10 sm:py-14">
             <header className="mb-8">
                 <Link
                     href="/practice/tags"
@@ -63,7 +64,10 @@ export default async function TagDetailPage({ params }: PageProps) {
                     <ArrowLeft className="h-3.5 w-3.5" />
                     All tags
                 </Link>
-                <div className="mt-4 flex items-end justify-between gap-4 flex-wrap">
+                <Eyebrow variant="bracket" className="mt-4 mb-1">
+                    TAG: {tag.slug}
+                </Eyebrow>
+                <div className="flex items-end justify-between gap-4 flex-wrap">
                     <div>
                         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
                             {isCompany

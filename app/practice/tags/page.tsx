@@ -4,6 +4,7 @@ import { ArrowLeft, Building2, Tag as TagIcon } from "lucide-react"
 import { getPublicTags } from "@/actions/problems"
 import { Container } from "@/components/ui/Container"
 import { Card } from "@/components/ui/Card"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 import { EmptyState } from "@/components/ui/EmptyState"
 
 const COMPANY_MIN_COUNT = 5
@@ -25,7 +26,7 @@ export default async function TagsIndexPage() {
             .length >= COMPANY_MIN_COUNT
 
     return (
-        <Container width="lg" className="py-10 sm:py-14">
+        <Container width="2xl" className="py-10 sm:py-14">
             <header className="mb-8">
                 <Link
                     href="/practice"
@@ -34,7 +35,10 @@ export default async function TagsIndexPage() {
                     <ArrowLeft className="h-3.5 w-3.5" />
                     All problems
                 </Link>
-                <h1 className="mt-4 text-3xl sm:text-4xl font-bold tracking-tight">
+                <Eyebrow variant="bracket" className="mt-4 mb-1">
+                    TAGS
+                </Eyebrow>
+                <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
                     Browse by tag
                 </h1>
                 <p className="mt-2 text-muted-foreground max-w-2xl">
