@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { ChevronLeft } from "lucide-react"
 import { prisma } from "@/lib/prisma"
 import { requireAdminPage } from "@/lib/admin-page-auth"
-import { Container } from "@/components/ui/Container"
+import { AdminListShell } from "@/components/admin/AdminListShell"
 import { TopicEditForm } from "@/components/admin/TopicEditForm"
 
 export const metadata = {
@@ -21,31 +21,41 @@ export default async function EditTopicPage({ params }: Props) {
     if (!topic) notFound()
 
     return (
-        <Container width="md" className="py-10">
-            <Link
-                href="/admin/topics"
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-4"
-            >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                Back to topics
-            </Link>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-1">
-                Edit · {topic.name}
-            </h1>
-            <p className="text-sm text-muted-foreground mb-6">
-                Saved via{" "}
-                <code className="font-mono text-xs">
-                    PATCH /api/admin/topics/{topic.slug}
-                </code>
-            </p>
+        <AdminListShell
+            eyebrow="EDIT TOPIC"
+            title={topic.name}
+            description={
+                <>
+                    Saved via{" "}
+                    <code className="font-mono text-xs">
+                        PATCH /api/admin/topics/{topic.slug}
+                    </code>
+                </>
+            }
+            actions={<BackLink href="/admin/topics" label="Back to topics" />}
+        >
             <TopicEditForm
                 originalSlug={topic.slug}
                 initial={{
                     name: topic.name,
                     slug: topic.slug,
                     description: topic.description ?? "",
+                    lane: topic.lane,
+                    displayOrder: topic.displayOrder,
                 }}
             />
-        </Container>
+        </AdminListShell>
+    )
+}
+
+function BackLink({ href, label }: { href: string; label: string }) {
+    return (
+        <Link
+            href={href}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            {label}
+        </Link>
     )
 }

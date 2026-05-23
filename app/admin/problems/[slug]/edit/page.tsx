@@ -1,9 +1,11 @@
 import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
+import type { ProblemStatus } from "@prisma/client"
 import { notFound } from "next/navigation"
 import { prisma } from "@/lib/prisma"
 import { requireAdminPage } from "@/lib/admin-page-auth"
-import { Container } from "@/components/ui/Container"
+import { AdminListShell } from "@/components/admin/AdminListShell"
+import { StatusPill, type StatusPillStatus } from "@/components/ui/StatusPill"
 import { ProblemForm } from "@/components/admin/ProblemForm"
 
 export const metadata = {
@@ -27,27 +29,27 @@ export default async function EditProblemPage({ params }: Props) {
     if (!problem) notFound()
 
     return (
-        <Container width="lg" className="py-10">
-            <Link
-                href="/admin/problems"
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-4"
-            >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                Back to problems
-            </Link>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-1">
-                Edit ·{" "}
-                <span className="text-muted-foreground tabular-nums font-semibold">
-                    {problem.number}.
-                </span>{" "}
-                {problem.title}
-            </h1>
-            <p className="text-sm text-muted-foreground mb-6">
-                Saved via{" "}
-                <code className="font-mono text-xs">
-                    PATCH /api/admin/problems/{problem.slug}
-                </code>
-            </p>
+        <AdminListShell
+            eyebrow="EDIT"
+            title={problem.title}
+            description={
+                <>
+                    <span className="mr-2 font-mono text-[11px] tabular-nums">
+                        #{String(problem.number).padStart(3, "0")}
+                    </span>
+                    Saved via{" "}
+                    <code className="font-mono text-xs">
+                        PATCH /api/admin/problems/{problem.slug}
+                    </code>
+                </>
+            }
+            actions={
+                <div className="flex flex-wrap items-center gap-2">
+                    <ProblemStatusPill status={problem.status} />
+                    <BackLink href="/admin/problems" label="Back to problems" />
+                </div>
+            }
+        >
             <ProblemForm
                 originalSlug={problem.slug}
                 initial={{
@@ -76,6 +78,29 @@ export default async function EditProblemPage({ params }: Props) {
                     solutionSql: problem.solutionSql ?? "",
                 }}
             />
-        </Container>
+        </AdminListShell>
+    )
+}
+
+function ProblemStatusPill({ status }: { status: ProblemStatus }) {
+    const map: Record<ProblemStatus, { pill: StatusPillStatus; label: string }> = {
+        DRAFT: { pill: "draft", label: "draft" },
+        BETA: { pill: "pending", label: "beta" },
+        PUBLISHED: { pill: "accepted", label: "published" },
+        ARCHIVED: { pill: "rejected", label: "archived" },
+    }
+    const { pill, label } = map[status]
+    return <StatusPill status={pill} label={label} />
+}
+
+function BackLink({ href, label }: { href: string; label: string }) {
+    return (
+        <Link
+            href={href}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            {label}
+        </Link>
     )
 }

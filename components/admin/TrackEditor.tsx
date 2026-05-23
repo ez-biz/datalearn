@@ -15,8 +15,11 @@ import {
 import { Button } from "@/components/ui/Button"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Badge, DifficultyBadge } from "@/components/ui/Badge"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { Field, Input, Textarea } from "@/components/ui/Input"
+import { Kbd } from "@/components/ui/Kbd"
+import { StatusPill, type StatusPillStatus } from "@/components/ui/StatusPill"
 import { cn } from "@/lib/utils"
 
 type TrackProblem = {
@@ -208,9 +211,7 @@ export function TrackEditor({
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Badge variant={status === "PUBLISHED" ? "primary" : "secondary"}>
-                        {status.toLowerCase()}
-                    </Badge>
+                    <TrackStatusPill status={status} />
                     <Badge variant="outline">
                         {items.length} {items.length === 1 ? "item" : "items"}
                     </Badge>
@@ -364,7 +365,10 @@ export function TrackEditor({
                 <CardContent className="p-5">
                     <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                         <div>
-                            <h2 className="text-base font-semibold">Items</h2>
+                            <Eyebrow variant="bracket" className="mb-1">
+                                ITEMS
+                            </Eyebrow>
+                            <h2 className="text-base font-semibold">Track sequence</h2>
                             <p className="mt-1 text-sm text-muted-foreground">
                                 Problems render in this order on the learner
                                 track page.
@@ -375,9 +379,12 @@ export function TrackEditor({
                             <Input
                                 value={query}
                                 onChange={(event) => setQuery(event.target.value)}
-                                className="pl-8"
+                                className="pl-8 pr-12"
                                 placeholder="Search problems to add"
                             />
+                            <Kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 sm:inline-flex">
+                                /
+                            </Kbd>
                         </div>
                     </div>
 
@@ -393,8 +400,8 @@ export function TrackEditor({
                                         key={problem.id}
                                         className="grid grid-cols-[3rem_1fr_auto_auto] items-center gap-3 px-3 py-2"
                                     >
-                                        <span className="text-xs tabular-nums text-muted-foreground">
-                                            {problem.number}
+                                        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                                            #{String(problem.number).padStart(3, "0")}
                                         </span>
                                         <span className="truncate text-sm">
                                             {problem.title}
@@ -453,7 +460,7 @@ export function TrackEditor({
                                             <ArrowDown className="h-3.5 w-3.5" />
                                         </button>
                                     </div>
-                                    <span className="text-xs tabular-nums text-muted-foreground">
+                                    <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
                                         {index + 1}
                                     </span>
                                     <div className="min-w-0">
@@ -464,7 +471,7 @@ export function TrackEditor({
                                             {item.problem.title}
                                         </Link>
                                         <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-                                            #{item.problem.number} ·{" "}
+                                            #{String(item.problem.number).padStart(3, "0")} ·{" "}
                                             {item.problem.slug}
                                         </p>
                                     </div>
@@ -499,4 +506,14 @@ export function TrackEditor({
             </Card>
         </div>
     )
+}
+
+function TrackStatusPill({ status }: { status: AdminTrack["status"] }) {
+    const map: Record<AdminTrack["status"], { pill: StatusPillStatus; label: string }> = {
+        DRAFT: { pill: "draft", label: "draft" },
+        PUBLISHED: { pill: "accepted", label: "published" },
+        ARCHIVED: { pill: "rejected", label: "archived" },
+    }
+    const { pill, label } = map[status]
+    return <StatusPill status={pill} label={label} />
 }

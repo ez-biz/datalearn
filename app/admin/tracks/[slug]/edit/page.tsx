@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { ChevronLeft } from "lucide-react"
 import { prisma } from "@/lib/prisma"
 import { requireAdminPage } from "@/lib/admin-page-auth"
-import { Container } from "@/components/ui/Container"
+import { AdminListShell } from "@/components/admin/AdminListShell"
 import { TrackEditor } from "@/components/admin/TrackEditor"
 
 export const metadata = {
@@ -57,15 +57,32 @@ export default async function EditTrackPage({ params }: PageProps) {
     if (!track) notFound()
 
     return (
-        <Container width="lg" className="py-10">
-            <Link
-                href="/admin/tracks"
-                className="mb-4 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                Back to tracks
-            </Link>
+        <AdminListShell
+            eyebrow="EDIT"
+            title="Edit track"
+            description={
+                <>
+                    Saved via{" "}
+                    <code className="font-mono text-xs">
+                        PATCH /api/admin/tracks/{track.slug}
+                    </code>
+                </>
+            }
+            actions={<BackLink href="/admin/tracks" label="Back to tracks" />}
+        >
             <TrackEditor track={track} allProblems={problems} />
-        </Container>
+        </AdminListShell>
+    )
+}
+
+function BackLink({ href, label }: { href: string; label: string }) {
+    return (
+        <Link
+            href={href}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            {label}
+        </Link>
     )
 }
