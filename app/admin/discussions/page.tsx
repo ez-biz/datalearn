@@ -5,8 +5,9 @@ import { prisma } from "@/lib/prisma"
 import { requireAdminOrModeratorPage } from "@/lib/admin-page-auth"
 import { listModeratorPermissions } from "@/lib/discussions/permissions"
 import { getDiscussionSettings } from "@/lib/discussions/settings"
-import { Container } from "@/components/ui/Container"
+import { AdminListShell } from "@/components/admin/AdminListShell"
 import { EmptyState } from "@/components/ui/EmptyState"
+import { StatusPill } from "@/components/ui/StatusPill"
 import { DiscussionQueueClient } from "@/components/admin/discussions/DiscussionQueueClient"
 
 export const metadata = {
@@ -141,21 +142,26 @@ export default async function AdminDiscussionQueuePage() {
         spam.length
 
     return (
-        <Container width="xl" className="py-10">
-            <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                        Discussion moderation
-                    </h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        {total} queued comments · review threshold{" "}
+        <AdminListShell
+            eyebrow="MODERATION"
+            title="Discussion moderation"
+            description={
+                <span className="inline-flex flex-wrap items-center gap-2">
+                    <StatusPill
+                        status="pending"
+                        label={`${total} queued`}
+                    />
+                    <span>
+                        review threshold{" "}
                         <span className="tabular-nums">
                             {settings.reportThreshold}
                         </span>{" "}
                         reports
-                    </p>
-                </div>
-                {session.user.role === "ADMIN" && (
+                    </span>
+                </span>
+            }
+            actions={
+                session.user.role === "ADMIN" && (
                     <Link
                         href="/admin/discussions/settings"
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 text-sm font-medium text-foreground transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -163,8 +169,9 @@ export default async function AdminDiscussionQueuePage() {
                         <Settings className="h-4 w-4" />
                         Settings
                     </Link>
-                )}
-            </header>
+                )
+            }
+        >
 
             {total === 0 ? (
                 <EmptyState
@@ -183,7 +190,7 @@ export default async function AdminDiscussionQueuePage() {
                     permissions={permissions}
                 />
             )}
-        </Container>
+        </AdminListShell>
     )
 }
 
