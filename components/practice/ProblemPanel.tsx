@@ -136,29 +136,29 @@ export function ProblemPanel({
                     >
                         <TabsTrigger
                             value="description"
-                            className="px-3 py-2.5 text-[12px] font-mono"
+                            className="px-3 py-2.5 text-[13px]"
                         >
-                            prompt
+                            Description
                         </TabsTrigger>
                         {hasHints && (
                             <TabsTrigger
                                 value="hints"
-                                className="px-3 py-2.5 text-[12px] font-mono"
+                                className="px-3 py-2.5 text-[13px] gap-1.5"
                             >
-                                hints{" "}
-                                <span className="tabular-nums text-muted-foreground">
-                                    ({hints.length})
+                                Hints
+                                <span className="inline-flex items-center justify-center rounded-full bg-surface-muted px-1.5 text-[10px] font-mono tabular-nums text-muted-foreground min-w-[18px]">
+                                    {hints.length}
                                 </span>
                             </TabsTrigger>
                         )}
                         <TabsTrigger
                             value="history"
-                            className="px-3 py-2.5 text-[12px] font-mono"
+                            className="px-3 py-2.5 text-[13px] gap-1.5"
                         >
-                            history{" "}
+                            Submissions
                             {history.length > 0 && (
-                                <span className="tabular-nums text-muted-foreground">
-                                    ({history.length})
+                                <span className="inline-flex items-center justify-center rounded-full bg-surface-muted px-1.5 text-[10px] font-mono tabular-nums text-muted-foreground min-w-[18px]">
+                                    {history.length}
                                 </span>
                             )}
                         </TabsTrigger>
@@ -166,9 +166,9 @@ export function ProblemPanel({
                             <TabsTrigger
                                 value="discussion"
                                 aria-label="Discussion"
-                                className="px-3 py-2.5 text-[12px] font-mono"
+                                className="px-3 py-2.5 text-[13px]"
                             >
-                                discuss
+                                Discussion
                             </TabsTrigger>
                         )}
                     </TabsList>
