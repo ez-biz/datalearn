@@ -12,6 +12,8 @@ import { Container } from "@/components/ui/Container"
 import { LinkButton } from "@/components/ui/Button"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Badge, DifficultyBadge } from "@/components/ui/Badge"
+import { Eyebrow } from "@/components/ui/Eyebrow"
+import { Kbd } from "@/components/ui/Kbd"
 import { getProblems } from "@/actions/problems"
 import { getTopics } from "@/actions/content"
 import { auth } from "@/lib/auth"
@@ -70,6 +72,9 @@ export default async function Home() {
                 <Container width="xl" className="py-20 sm:py-28">
                     <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-12 lg:gap-16 items-center">
                         <div>
+                            <Eyebrow variant="plain" className="mb-4">
+                                DATA LEARN
+                            </Eyebrow>
                             <Badge variant="primary" className="mb-5">
                                 <Sparkles className="h-3 w-3" />
                                 Beta · v0.3
@@ -86,6 +91,7 @@ export default async function Home() {
                             <div className="mt-8 flex flex-col sm:flex-row gap-3">
                                 <LinkButton href="/practice" size="lg">
                                     Start solving
+                                    <Kbd tone="on-primary">↵</Kbd>
                                     <ArrowRight className="h-4 w-4" />
                                 </LinkButton>
                                 <LinkButton href="/learn" size="lg" variant="outline">
@@ -291,8 +297,8 @@ export default async function Home() {
 function Stat({ label, value }: { label: string; value: number }) {
     return (
         <div>
-            <dt className="text-xs uppercase tracking-wide text-muted-foreground font-medium">
-                {label}
+            <dt>
+                <Eyebrow>{label}</Eyebrow>
             </dt>
             <dd className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd>
         </div>

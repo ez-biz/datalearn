@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import { signInPath } from "@/lib/auth-redirect"
 import { Container } from "@/components/ui/Container"
 import { Card } from "@/components/ui/Card"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { getMyLists } from "@/actions/lists"
 import { CreateListButton } from "@/components/lists/CreateListButton"
@@ -38,6 +39,9 @@ export default async function MyListsPage() {
         <Container width="lg" className="py-10">
             <header className="flex items-end justify-between mb-6 gap-4 flex-wrap">
                 <div>
+                    <Eyebrow variant="bracket" className="mb-1">
+                        MY LISTS
+                    </Eyebrow>
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                         My lists
                     </h1>

@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Card } from "@/components/ui/Card"
 import { DifficultyBadge } from "@/components/ui/Badge"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 import { EmptyState } from "@/components/ui/EmptyState"
 import {
     addToList,
@@ -259,6 +260,9 @@ export function ListDetail({
                         </form>
                     ) : (
                         <>
+                            <Eyebrow variant="bracket" className="mb-1">
+                                LIST: {list.name}
+                            </Eyebrow>
                             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                                 {list.name}
                             </h1>
@@ -464,8 +468,8 @@ export function ListDetail({
                                                 <Circle className="h-3.5 w-3.5" />
                                             )}
                                         </span>
-                                        <span className="text-xs tabular-nums text-muted-foreground">
-                                            {item.problem.number}
+                                        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                                            #{String(item.problem.number).padStart(3, "0")}
                                         </span>
                                         <div className="min-w-0">
                                             <Link
@@ -654,8 +658,8 @@ function AddProblemsPicker({
                                                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                                             )}
                                         >
-                                            <span className="text-xs tabular-nums text-muted-foreground">
-                                                {p.number}
+                                            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                                                #{String(p.number).padStart(3, "0")}
                                             </span>
                                             <span className="truncate">
                                                 {p.title}
