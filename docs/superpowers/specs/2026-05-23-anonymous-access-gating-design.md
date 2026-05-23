@@ -9,7 +9,7 @@ Limit how much value an anonymous (non-signed-in) visitor can extract from `/pra
 
 **Posture (be precise about this).** The gate is a **conversion nudge backed by a soft server check**, not authoritative enforcement. A determined visitor can clear their cookie or open a new browser for a fresh trial; two tabs racing on slug 3→4 can both pass the gate; tampered cookies fall back to a fresh trial. We accept this because (a) the asset being protected is engagement value, not secrets — DuckDB-WASM runs entirely in-browser, so true enforcement would require server-mediated query execution we don't have, and (b) telemetry over the first two weeks will tell us whether bypass is statistically material. If it is, v1.1 adds a server-side `AnonSession` table with atomic append; v1 stays cookie-only.
 
-The change is one user-initiated gate hooked into `SqlPlayground.handleRun` + one new server-action gate (`validateRunQuery`) keyed off a signed cookie, plus a small chip on the Run button, a sign-in modal, and three Vercel Analytics events. No schema changes. No backend rate-limiter dependency. No new auth providers.
+The change is a `gateAndExecute(intent)` helper inside `SqlPlayground.tsx` that wraps **both** `handleRun` and `handleSubmit` before they call the in-browser engine, a new server-action gate (`validateRunQuery`) keyed off a signed cookie, a small chip on the Run button, a sign-in modal, a client-only `AnonStorageReset` component for post-OAuth localStorage cleanup, and three Vercel Analytics events. No schema changes. No backend rate-limiter dependency. No new auth providers.
 
 ## Non-goals
 
@@ -32,7 +32,7 @@ The change is one user-initiated gate hooked into `SqlPlayground.handleRun` + on
 | Free quota | **3 problems** (one constant in code; tunable). |
 | What counts as "using" a problem | **First successful `Run` click on that slug.** Page visits, schema reads, and re-runs on already-started slugs do not count. |
 | Storage of the counter | **localStorage** (`dl:anon:startedSlugs`) **+ signed cookie** (`dl_anon_started`, HMAC-signed JSON, server-readable). |
-| Counter reset semantics | Cookie cleared server-side in NextAuth `events.signIn` handler (callback-URL-independent). localStorage cleared client-side via a `useSession` transition effect in the global `Navbar`. Never refunded. |
+| Counter reset semantics | Cookie cleared server-side in NextAuth `events.signIn` handler (callback-URL-independent). localStorage cleared client-side via a new `AnonStorageReset` client component mounted in the root layout (receives `isSignedIn` as a server-derived prop; no `SessionProvider` required; existing server-component `Navbar` is not touched). Never refunded. |
 | Wall UX on the 4th problem | **Modal overlay** (centered Dialog, two OAuth buttons + "Maybe later"). |
 | Quota indicator | **Subtle chip** next to the Run button: `"2 free runs left"`, `"1 free run left"` (amber). Hidden on already-started slugs and for authed users. |
 | Server enforcement | New `validateRunQuery` server action checks the signed cookie. Soft/advisory, not authoritative — accepts cookie clear, incognito, and two-tab race as acceptable bypass paths in v1. |
@@ -50,7 +50,8 @@ The change is one user-initiated gate hooked into `SqlPlayground.handleRun` + on
 | `/practice/[slug]` page load | Public — full content visible (description, schema, editor) | Full + history |
 | Click **Run** on a *new* problem (slug not in `startedSlugs`) | Allowed if `startedSlugs.length < 3`, else modal | Always allowed |
 | Click **Run** on an already-started problem | Always allowed (no double-counting) | Always allowed |
-| Click **Check Answer** | Already blocked at `validateSubmission` (existing) | Always allowed |
+| Click **Submit / Check Answer** on a *new* problem | Same gate as Run: allowed if `startedSlugs.length < 3`, else modal (and the engine is NOT executed). The existing server-side `validateSubmission` gate still blocks the DB row write for anons even if the gate let them through. | Always allowed |
+| Click **Submit / Check Answer** on an already-started problem | Engine runs locally; `validateSubmission` server gate still rejects the DB row write for anons (existing behavior, unchanged). | Always allowed |
 | `/learn/**` | Public (unchanged) | Same |
 | `/api/problems/[slug]/discussion` GET | Public read (unchanged) | Same |
 | Discussion POST / vote / reply | Already 401 (existing) | Always allowed |
@@ -76,35 +77,50 @@ The new gate is the single row "Click **Run** on a *new* problem". Everything el
 
 ### Trigger semantics
 
-A slug is "started" the first time the anon clicks the **user-facing Run button** (or its keyboard shortcut, `Cmd/Ctrl+Enter`) AND the gate returns success. The slug is appended to both `localStorage` and the cookie on that success.
+A slug is "started" the first time the anon takes a **user-initiated action that executes an engine query** on it: either clicking Run (or `Cmd/Ctrl+Enter`) OR clicking Submit / Check Answer (or `Cmd/Ctrl+Shift+Enter`). The slug is appended to both `localStorage` and the cookie on the first such action's gate success.
 
-**The gate hooks only into user-initiated Run.** Specifically, it lives at the boundary between `SqlPlayground.handleRun` and the underlying engine call — *not* at `useProblemDB`'s shared `runQuery` and *not* at `ProblemClient`'s top-level effects. The following code paths must NOT increment the counter (verified by tests in Done criteria):
+**The gate wraps both `handleRun` and `handleSubmit` in `SqlPlayground.tsx`** — i.e., every code path in the workspace that leads to a `runQuery(editorSql)` call. The gate is *not* hooked into the shared `runQuery` in `useProblemDB` (that would also catch background introspection); it's specifically at the user-action handlers immediately before they invoke the engine.
+
+Why both Run and Submit need the gate, not just Run: the existing `validateSubmission` action at `actions/submissions.ts:36-42` blocks the *Submission DB row creation* for anons, but `SqlPlayground.handleSubmit` runs the engine query *before* calling `onSubmit`. Without the gate on Submit too, an anon past quota could press Submit on a 4th problem, see the result table render, and bypass the entire workspace wall through a normal UI path.
+
+The following code paths must NOT increment the counter (verified by tests in Done criteria):
 
 - Page-load schema introspection / table metadata fetch on `useProblemDB` init.
 - Sample data preview rendering inside the `INPUT` panel.
 - Any background query the workspace runs to populate the table list, dialect picker, or schema sidebar.
-- Validation/comparison queries the existing `Check Answer` path executes against expected output. (`Check Answer` is already auth-gated separately at `actions/submissions.ts:36-42`; that gate fires before any engine call.)
 - Programmatic re-runs from React Strict Mode double-effects in dev.
 
-Subsequent Runs on the same slug do not increment.
+Subsequent Run or Submit clicks on the same slug do not increment.
 
 ```ts
 // pseudocode in SqlPlayground.tsx (NOT in useProblemDB or runQuery)
-async function handleRun() {
-    // Only this user-facing call path goes through the gate.
+
+async function gateAndExecute(intent: "run" | "submit") {
     const gate = await validateRunQuery({ slug })
     if (!gate.ok) {
-        onTrialExhausted({ slug, reason: gate.reason })  // ProblemClient opens the modal
-        return
+        onTrialExhausted({ slug, reason: gate.reason, intent })
+        return null  // signal to caller: do not invoke engine
     }
     if (!startedSlugs.includes(slug)) {
-        appendStartedSlug(slug) // updates localStorage; cookie is set by the server response
+        appendStartedSlug(slug)  // updates localStorage; cookie set by server response
     }
-    runQuery(editorSql)  // existing in-browser DuckDB / PGlite execution
+    return runQuery(editorSql)  // existing in-browser DuckDB / PGlite execution
+}
+
+async function handleRun() {
+    const rows = await gateAndExecute("run")
+    if (rows) setResultRows(rows)
+}
+
+async function handleSubmit() {
+    const rows = await gateAndExecute("submit")
+    if (rows) await onSubmit(rows)  // existing server validation pipeline
 }
 ```
 
-`ProblemClient` exposes the `onTrialExhausted` callback to `SqlPlayground` via a new prop. The same prop is invoked by the keyboard-shortcut handler in `SqlPlayground` for parity.
+Both keyboard shortcuts (`Cmd/Ctrl+Enter` for Run, `Cmd/Ctrl+Shift+Enter` for Submit) bind to the same `handleRun` / `handleSubmit` handlers; no extra wiring needed.
+
+`ProblemClient` passes the `onTrialExhausted` callback to `SqlPlayground` via a new prop. The callback opens the modal regardless of `intent` (`run` vs `submit`); the modal copy is identical.
 
 ### Server-side check (soft, advisory — not authoritative)
 
@@ -127,17 +143,41 @@ DuckDB / PGlite execution itself stays client-side; the server gate is on the ac
 
 ### Counter reset on sign-in
 
-The two storages clear via two independent triggers that don't depend on which page the user lands on after OAuth:
+The two storages clear via two independent triggers that don't depend on which page the user lands on after OAuth.
 
-1. **Cookie (server-side).** A new NextAuth `events.signIn` handler in `lib/auth.ts` invokes the underlying `cookies()` API and writes `Set-Cookie: dl_anon_started=; Max-Age=0; Path=/`. This fires once per sign-in regardless of callback URL. Already-authed sessions don't re-trigger.
+**Important architectural constraint.** The existing `components/layout/Navbar.tsx` is an **async server component** that imports `auth()`, `getNavLinks`, and `prisma`. It cannot host a `useSession()` hook directly without converting to a client component (which would break its data-fetching boundary). The reset design therefore uses a tiny client-only sibling component fed by a server-derived `isSignedIn` prop, not a `useSession` hook.
 
-2. **localStorage (client-side).** A new top-level mount effect in the existing `components/layout/Navbar.tsx` (which renders on every authenticated route since it lives in `app/layout.tsx`) detects the transition from `unauthenticated` → `authenticated` via `useSession()` and removes `localStorage["dl:anon:startedSlugs"]`. The effect runs at most once per session-state transition; subsequent renders are no-ops because the key is already absent.
+1. **Cookie (server-side).** A new NextAuth `events.signIn` handler in `lib/auth.ts` writes `Set-Cookie: dl_anon_started=; Max-Age=0; Path=/`. This fires once per sign-in regardless of callback URL. Already-authed sessions don't re-trigger. NextAuth's `events.signIn` runs server-side on the OAuth-callback path with access to the response writer, so the cookie clear is safe to set there even though Next App Router's `cookies()` is read-only outside route handlers and server actions — the NextAuth callback is itself a route handler.
+
+2. **localStorage (client-side).** New client component `components/auth/AnonStorageReset.tsx`:
+   ```tsx
+   "use client"
+   export function AnonStorageReset({ isSignedIn }: { isSignedIn: boolean }) {
+       const prevRef = useRef<boolean | null>(null)
+       useEffect(() => {
+           if (prevRef.current === false && isSignedIn) {
+               try { localStorage.removeItem("dl:anon:startedSlugs") } catch {}
+           }
+           prevRef.current = isSignedIn
+       }, [isSignedIn])
+       return null
+   }
+   ```
+   Mounted under `app/layout.tsx` (which is a server component) alongside the existing `<Navbar />`:
+   ```tsx
+   const session = await auth()
+   const isSignedIn = Boolean(session?.user?.id)
+   ...
+   <Navbar />
+   <AnonStorageReset isSignedIn={isSignedIn} />
+   ```
+   The boolean prop is derived from the already-existing `auth()` call in `app/layout.tsx` — no extra Prisma hit, no `SessionProvider` boundary, and Navbar's server-component status is preserved.
 
 This pair of triggers is robust against:
 
-- OAuth callbacks bouncing the user to any URL (the cookie clears server-side in the callback regardless of destination).
-- The `/auth/signin` page server-redirecting authed users elsewhere (the Navbar effect runs wherever the user lands).
-- Sign-in → sign-out → fresh-anonymous cycle: the localStorage is empty after sign-in, so a subsequent sign-out leaves the visitor with a fresh `[]` counter for the new anonymous session. **An e2e test in Done criteria asserts exactly this cycle.**
+- OAuth callbacks bouncing the user to any URL (the cookie clears server-side in the NextAuth event handler regardless of destination).
+- The `/auth/signin` page server-redirecting authed users elsewhere (`AnonStorageReset` is in the root layout and renders everywhere).
+- Sign-in → sign-out → fresh-anonymous cycle: the localStorage is empty after sign-in (the false→true transition cleared it), so a subsequent sign-out leaves the visitor with a fresh `[]` counter for the new anonymous session. The next true→false→true cycle would clear again. **An e2e test in Done criteria asserts exactly this cycle.**
 
 After sign-in the user has unlimited Run access. No retroactive credit for the three anon runs (they were never persisted to `Submission` anyway).
 
@@ -168,7 +208,7 @@ No layout shift between authed and anon users — the chip slot is conditionally
 
 New component: `components/auth/SignInModal.tsx`. Reuses the existing `Dialog` primitive.
 
-- Triggered by `SqlPlayground.handleRun` receiving `{ ok: false, reason: "trial-exhausted" }` from the `validateRunQuery` server action, which then invokes the `onTrialExhausted` callback that `ProblemClient` wires to the modal's open state.
+- Triggered by either `SqlPlayground.handleRun` or `SqlPlayground.handleSubmit` (via the shared `gateAndExecute` helper) receiving `{ ok: false, reason: "trial-exhausted" }` from the `validateRunQuery` server action, which then invokes the `onTrialExhausted` callback that `ProblemClient` wires to the modal's open state. Modal copy is identical regardless of which intent (Run vs Submit) triggered it.
 - Content: friendly header, two OAuth buttons (GitHub / Google) wired to `signIn(provider, { callbackUrl: <currentUrl> })`, a small "Maybe later" link that closes the modal.
 - Copy: *"Nice — you've tried 3 problems. Sign in to keep solving, save your progress, and unlock the full catalog."*
 - After successful sign-in, the OAuth callback redirects back to the current problem URL with the cookie cleared. The Run button then works.
@@ -226,8 +266,10 @@ Conversion = `anon_signin_from_wall / anon_wall_shown`. Target after one week: >
 | The 3-problem quota is wrong (too tight or too loose) | Single constant in `lib/anon-gate.ts`; tuned via telemetry over the first two weeks. |
 | Anons confused by the chip → support tickets | Modal copy explains the system. Chip wording is plain English. Telemetry on bounce-after-chip-shown signals confusion. |
 | Existing logged-in users hit a regression | Gate paths are wrapped in `if (!session?.user?.id)`; logged-in callers short-circuit at line 1 of the gate. Regression risk near zero. |
-| Background / non-Run engine calls (schema introspection, sample preview) accidentally consume quota | The gate hooks into `SqlPlayground.handleRun` and its keyboard shortcut only — not the shared `runQuery`. **An e2e test asserts that opening 4+ problems sequentially without clicking Run does not increment the counter** (see Done criteria). |
-| `localStorage` stale after sign-in if NextAuth callback redirects somewhere unexpected | The cookie clears server-side in the NextAuth `events.signIn` handler (callback-URL-independent); localStorage clears client-side via a `useSession` transition effect in the global `Navbar` (runs wherever the user lands). E2e test in Done criteria covers exhaust → sign-in → sign-out → fresh counter. |
+| Background / non-Run engine calls (schema introspection, sample preview) accidentally consume quota | The gate hooks into `SqlPlayground.handleRun` and `handleSubmit` only — not the shared `runQuery` in `useProblemDB`. **An e2e test asserts that opening 4+ problems sequentially without clicking Run or Submit does not increment the counter** (see Done criteria). |
+| **Submit-shortcut bypass** — anon presses Submit on the 4th problem and sees the engine result table render before the server rejects the DB write | Closed: the gate wraps both `handleRun` and `handleSubmit` in a shared `gateAndExecute(intent)` helper. The engine is never invoked for trial-exhausted anons on a new slug, regardless of whether the action was Run or Submit. Dedicated e2e test (Submit bypass test) asserts no result table renders in this path. |
+| `localStorage` stale after sign-in if NextAuth callback redirects somewhere unexpected | The cookie clears server-side in the NextAuth `events.signIn` handler (callback-URL-independent). localStorage clears client-side via the `AnonStorageReset` client component (mounted in root layout, receives `isSignedIn` as a server-derived prop — no `SessionProvider` required, no Navbar refactor). E2e test covers exhaust → sign-in → sign-out → fresh counter. |
+| **Navbar architectural drift** — implementer accidentally converts the server-component Navbar to a client component to host a `useSession` hook | The reset uses a dedicated client component (`AnonStorageReset`) fed by a prop derived from the layout's existing `auth()` call. Done criteria includes an explicit "Navbar still a server component" check. |
 
 ## Done criteria (gate)
 
@@ -235,21 +277,23 @@ Conversion = `anon_signin_from_wall / anon_wall_shown`. Target after one week: >
 
 - [ ] New file `lib/anon-gate.ts` exports `MAX_FREE_PROBLEMS`, `signCounter()`, `verifyCounter()`, `parseCookieValue()`. Unit tests in `scripts/test-anon-gate.ts` cover signing, verification, and tamper detection.
 - [ ] New server action `validateRunQuery` in `actions/runtime.ts` returns the four documented outcomes.
-- [ ] `lib/auth.ts` exposes a `events.signIn` handler that clears the `dl_anon_started` cookie via `cookies()` regardless of callback URL.
-- [ ] `components/layout/Navbar.tsx` watches `useSession()` and clears `localStorage["dl:anon:startedSlugs"]` on the `unauthenticated → authenticated` transition.
+- [ ] `lib/auth.ts` exposes an `events.signIn` handler that clears the `dl_anon_started` cookie regardless of callback URL.
+- [ ] New client component `components/auth/AnonStorageReset.tsx` accepts `isSignedIn: boolean` and clears `localStorage["dl:anon:startedSlugs"]` on the `false → true` transition. Mounted in `app/layout.tsx` alongside `<Navbar />` with `isSignedIn` derived from the layout's existing `auth()` call. **`Navbar.tsx` remains an async server component; no `useSession` hook is added to it.**
 - [ ] `components/auth/SignInModal.tsx` renders the two OAuth buttons + "Maybe later"; opens on `trial-exhausted` from either the client gate or a 4xx from the server action.
 - [ ] `components/sql/SqlPlayground.tsx` renders the chip next to Run when `!session && !startedSlugs.includes(currentSlug)`. Amber border at `count == 2`. Run button shows a lock icon when `!session && !startedSlugs.includes(currentSlug) && count >= 3` (lock never appears on already-started slugs).
-- [ ] **The gate hooks only into `SqlPlayground.handleRun` and its `Cmd/Ctrl+Enter` keyboard shortcut** — not the shared `runQuery` in `useProblemDB`. `ProblemClient` passes an `onTrialExhausted` callback prop down; `SqlPlayground` invokes the gate via this prop right before calling `runQuery`.
+- [ ] **Both `SqlPlayground.handleRun` (`Cmd/Ctrl+Enter`) AND `SqlPlayground.handleSubmit` (`Cmd/Ctrl+Shift+Enter`) wrap the underlying `runQuery` call in the gate.** A shared `gateAndExecute(intent)` helper inside `SqlPlayground` is the single point of control. The shared `runQuery` in `useProblemDB` is *not* gated (so schema introspection still works). `ProblemClient` passes an `onTrialExhausted` callback prop that the gate invokes; the callback opens the modal.
 - [ ] `ANON_GATE_SECRET` env var added to `.env.example` with a generation hint; required in Vercel production and preview.
 - [ ] Three telemetry events fire and are visible in Vercel Analytics within 1 hour of preview deploy.
 
 **E2e regression tests (Playwright in `tests/e2e/anon-gate.spec.ts`):**
 
-- [ ] Open 4 distinct `/practice/<slug>` pages in sequence as anonymous **without clicking Run on any of them** → counter remains 0; chip shows "3 free runs" on each. (Asserts background `runQuery` calls don't consume quota.)
+- [ ] Open 4 distinct `/practice/<slug>` pages in sequence as anonymous **without clicking Run or Submit on any of them** → counter remains 0; chip shows "3 free runs" on each. (Asserts background `runQuery` calls don't consume quota.)
 - [ ] Open problem A, click Run → counter = 1. Refresh the page → chip is hidden (slug already started), Run still works without counter change.
-- [ ] Click Run on three distinct new problems → counter = 3. Open a 4th distinct slug, click Run → modal appears, Run does not execute, counter stays 3.
-- [ ] Exhaust trial → sign in via mock OAuth → cookie cleared (server) and localStorage cleared (Navbar effect) → sign out → 5th distinct slug opens with chip showing "3 free runs" and Run works. (Asserts the full reset cycle.)
-- [ ] `Check Answer` path for anonymous users still returns the existing "Sign in to submit..." error from `validateSubmission`; the new gate does not change that surface.
+- [ ] Click Run on three distinct new problems → counter = 3. Open a 4th distinct slug, click Run → modal appears, **the result table does not re-render** (engine not invoked), counter stays 3.
+- [ ] **Submit bypass test:** exhaust trial via Run on 3 slugs → open a 4th distinct slug → press **Submit** (or `Cmd/Ctrl+Shift+Enter`) → modal opens, **no query result is rendered**, no engine execution. (This specifically verifies the Submit-shortcut bypass closed.)
+- [ ] **Reset cycle test:** exhaust trial → sign in via mock OAuth → cookie cleared (NextAuth `events.signIn`) and localStorage cleared (`AnonStorageReset` `false → true` effect) → sign out → 5th distinct slug opens with chip showing "3 free runs" and Run works.
+- [ ] `Check Answer` (Submit) path for anonymous users on an **already-started** slug still returns the existing "Sign in to submit..." error from `validateSubmission` server-side (engine executes locally, DB write rejected). The new gate doesn't change that surface for already-started slugs; it only blocks engine execution on NEW slugs past quota.
+- [ ] **Navbar regression:** verify `components/layout/Navbar.tsx` still imports `auth()` and `prisma` and is rendered as a server component. (Asserts the reset implementation didn't accidentally convert the Navbar to a client component.)
 
 **Smoke checks (manual on Vercel preview):**
 
