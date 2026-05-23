@@ -32,6 +32,7 @@
     "test:topic-lane": "tsx scripts/test-topic-lane.ts",
     "seed:curriculum-topics": "tsx scripts/seed-curriculum-topics.ts",
     "seed:curriculum-tags": "tsx scripts/seed-curriculum-tags.ts",
+    "sync:prod-content": "tsx scripts/sync-prod-content.ts",
     "audit:tags": "tsx scripts/audit-tags.ts",
     "audit:tags:prod": "bash scripts/audit-tags-prod.sh",
     "audit:dialects": "tsx scripts/audit-all-dialects.ts",
