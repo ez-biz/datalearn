@@ -1,15 +1,15 @@
 # Anonymous access gating — free-trial workspace wall
 
-> **Status:** design approved by user; revised after Codex adversarial review (2026-05-23). Awaits implementation plan via writing-plans skill.
+> **Status:** design approved by user; revised after four Codex adversarial review passes (2026-05-23). Awaits implementation plan via writing-plans skill.
 > **Date:** 2026-05-23
 
 ## Goal
 
 Limit how much value an anonymous (non-signed-in) visitor can extract from `/practice/**` before they're required to sign in, without harming the SEO surface or the "try it free" first impression. The mechanism is a LeetCode-style free trial: three problems' worth of in-browser query execution, then a workspace-side wall on the fourth distinct problem.
 
-**Posture (be precise about this).** The gate is a **conversion nudge backed by a soft server check**, not authoritative enforcement. A determined visitor can clear their cookie or open a new browser for a fresh trial; two tabs racing on slug 3→4 can both pass the gate; tampered cookies fall back to a fresh trial. We accept this because (a) the asset being protected is engagement value, not secrets — DuckDB-WASM runs entirely in-browser, so true enforcement would require server-mediated query execution we don't have, and (b) telemetry over the first two weeks will tell us whether bypass is statistically material. If it is, v1.1 adds a server-side `AnonSession` table with atomic append; v1 stays cookie-only.
+**Posture (be precise about this).** The gate is a **conversion nudge backed by a soft server check**, not authoritative enforcement. A determined visitor can clear their browser storage/cookies or open a new browser for a fresh trial; two tabs racing on slug 3→4 can both pass the gate; tampered cookies fall back to localStorage or a fresh cookie state. We accept this because (a) the asset being protected is engagement value, not secrets — DuckDB-WASM runs entirely in-browser, so true enforcement would require server-mediated query execution we don't have, and (b) telemetry over the first two weeks will tell us whether bypass is statistically material. If it is, v1.1 adds a server-side `AnonSession` table with atomic append; v1 stays cookie-only.
 
-The change is a `gateAndExecute(intent)` helper inside `SqlPlayground.tsx` that wraps **both** `handleRun` and `handleSubmit` before they call the in-browser engine, a new server-action gate (`validateRunQuery`) keyed off a signed cookie, a small chip on the Run button, a sign-in modal, a client-only `AnonStorageReset` component for post-OAuth localStorage cleanup, and three Vercel Analytics events. No schema changes. No backend rate-limiter dependency. No new auth providers.
+The change is a `gateAndExecute(intent)` helper inside `SqlPlayground.tsx` that wraps **both** `handleRun` and `handleSubmit` before they call the in-browser engine, new runtime server actions (`validateRunQuery` and `clearAnonRunCookie`) keyed off a signed cookie, a small chip on the Run button, a sign-in modal, a client-only `AnonStorageReset` component for post-OAuth storage cleanup, and three Vercel Analytics events. No schema changes. No backend rate-limiter dependency. No new auth providers.
 
 ## Non-goals
 
@@ -30,11 +30,11 @@ The change is a `gateAndExecute(intent)` helper inside `SqlPlayground.tsx` that 
 | Goal of the gate | Drive sign-ups while preserving SEO discovery. |
 | Gate flavor | LeetCode freemium: N free problems, then workspace wall on the N+1th. |
 | Free quota | **3 problems** (one constant in code; tunable). |
-| What counts as "using" a problem | **First successful `Run` click on that slug.** Page visits, schema reads, and re-runs on already-started slugs do not count. |
+| What counts as "using" a problem | **First successful user-initiated engine action on that slug: `Run` or `Submit / Check Answer`.** Page visits, schema reads, and re-runs/re-submits on already-started slugs do not count. |
 | Storage of the counter | **localStorage** (`dl:anon:startedSlugs`) **+ signed cookie** (`dl_anon_started`, HMAC-signed JSON, server-readable). |
-| Counter reset semantics | Cookie cleared server-side in NextAuth `events.signIn` handler (callback-URL-independent). localStorage cleared client-side via a new `AnonStorageReset` client component mounted in the root layout (receives `isSignedIn` as a server-derived prop; no `SessionProvider` required; existing server-component `Navbar` is not touched). Never refunded. |
-| Wall UX on the 4th problem | **Modal overlay** (centered Dialog, two OAuth buttons + "Maybe later"). |
-| Quota indicator | **Subtle chip** next to the Run button: `"2 free runs left"`, `"1 free run left"` (amber). Hidden on already-started slugs and for authed users. |
+| Counter reset semantics | `AnonStorageReset` clears localStorage client-side and calls `clearAnonRunCookie` server-side whenever it mounts with `isSignedIn === true`. This is callback-URL-independent, OAuth-remount-safe, and avoids relying on NextAuth event hooks for response-cookie mutation. Existing server-component `Navbar` is not touched. Never refunded. |
+| Wall UX on the 4th problem | **Centered modal overlay** with two OAuth buttons + "Maybe later". |
+| Quota indicator | **Subtle chip** next to the Run button: `"3 free runs"`, `"2 free runs left"`, `"1 free run left"` (amber). Hidden on already-started slugs and for authed users. |
 | Server enforcement | New `validateRunQuery` server action checks the signed cookie. Soft/advisory, not authoritative — accepts cookie clear, incognito, and two-tab race as acceptable bypass paths in v1. |
 | Logged-in user behavior | No change. |
 | Discussion read for anons | Public read remains. No change. |
@@ -69,10 +69,10 @@ The change is a `gateAndExecute(intent)` helper inside `SqlPlayground.tsx` that 
 
 ### Server state
 
-- Cookie `dl_anon_started` set on the first successful Run.
+- Cookie `dl_anon_started` set on the first successful Run or Submit gate pass for a new slug.
   - Format: `<base64(json)>.<hmac-sha256(secret, base64(json))>` where the JSON payload is `{startedSlugs: string[]}`. HMAC secret from `process.env.ANON_GATE_SECRET` (new env var; required in production, generated locally on first dev run via a small bootstrap script).
   - Attributes: `HttpOnly; SameSite=Lax; Secure (prod only); Path=/; Max-Age=31536000` (1 year).
-  - Cleared by setting `Max-Age=0` in the NextAuth `signIn` callback so signed-in users never carry an anon counter.
+  - Cleared by the `clearAnonRunCookie` server action, called from `AnonStorageReset` whenever the root layout renders a signed-in session.
 - The cookie is functional (not tracking) — no consent banner needed under GDPR; documented in `/privacy`.
 
 ### Trigger semantics
@@ -96,13 +96,19 @@ Subsequent Run or Submit clicks on the same slug do not increment.
 // pseudocode in SqlPlayground.tsx (NOT in useProblemDB or runQuery)
 
 async function gateAndExecute(intent: "run" | "submit") {
+    const localStartedSlugs = readStartedSlugsFromLocalStorage()
+    if (!isSignedIn && !localStartedSlugs.includes(slug) && localStartedSlugs.length >= MAX_FREE_PROBLEMS) {
+        onTrialExhausted({ slug, reason: "trial-exhausted", intent })
+        return null
+    }
+
     const gate = await validateRunQuery({ slug })
     if (!gate.ok) {
         onTrialExhausted({ slug, reason: gate.reason, intent })
         return null  // signal to caller: do not invoke engine
     }
-    if (!startedSlugs.includes(slug)) {
-        appendStartedSlug(slug)  // updates localStorage; cookie set by server response
+    if (gate.consumedNewSlot && !localStartedSlugs.includes(slug)) {
+        appendStartedSlug(slug)  // updates localStorage; cookie was updated by validateRunQuery
     }
     return runQuery(editorSql)  // existing in-browser DuckDB / PGlite execution
 }
@@ -120,22 +126,29 @@ async function handleSubmit() {
 
 Both keyboard shortcuts (`Cmd/Ctrl+Enter` for Run, `Cmd/Ctrl+Shift+Enter` for Submit) bind to the same `handleRun` / `handleSubmit` handlers; no extra wiring needed.
 
-`ProblemClient` passes the `onTrialExhausted` callback to `SqlPlayground` via a new prop. The callback opens the modal regardless of `intent` (`run` vs `submit`); the modal copy is identical.
+`ProblemClient` passes both `isSignedIn` and the `onTrialExhausted` callback to `SqlPlayground` via new props. The callback opens the modal regardless of `intent` (`run` vs `submit`); the modal copy is identical.
 
 ### Server-side check (soft, advisory — not authoritative)
 
-New server action `validateRunQuery({ slug })` in `actions/runtime.ts` (new file):
+New server actions in `actions/runtime.ts` (new file):
 
-- Parses + verifies the `dl_anon_started` cookie. If unsigned / tampered / missing, treats `startedSlugs = []`.
-- If `session?.user?.id` → returns `{ ok: true }` immediately (authed users bypass).
-- Else if `startedSlugs.length < 3 || startedSlugs.includes(slug)` → returns `{ ok: true, setCookie: <updated value> }`.
-- Else → returns `{ ok: false, reason: "trial-exhausted" }`.
+- `validateRunQuery({ slug })`
+  - Parses + verifies the `dl_anon_started` cookie. If unsigned / tampered / missing, treats `startedSlugs = []`.
+  - If `session?.user?.id` → returns `{ ok: true, consumedNewSlot: false, startedSlugs }` immediately (authed users bypass).
+  - Else if `startedSlugs.includes(slug)` → returns `{ ok: true, consumedNewSlot: false, startedSlugs }`.
+  - Else if `startedSlugs.length < 3` → appends `slug`, writes the signed cookie with `cookies().set(...)`, and returns `{ ok: true, consumedNewSlot: true, startedSlugs: nextStartedSlugs }`.
+  - Else → returns `{ ok: false, reason: "trial-exhausted" }` and does not mutate the cookie.
+- `clearAnonRunCookie()`
+  - If `session?.user?.id` is present, deletes `dl_anon_started` with `cookies().delete(...)` / `Max-Age=0`.
+  - If anonymous, no-ops. This keeps the action safe if the client calls it from a stale tab.
 
-**What this gate does and does not guarantee.** The server action is a soft enforcement layer that catches the common case of "user clicks Run on the 4th problem in a single browser session" and produces a sign-in conversion event. It is **not** authoritative:
+The client performs a localStorage preflight before `validateRunQuery` so either storage can block the common 4th-new-problem case. The server action remains the soft same-browser check when localStorage is unavailable or stale, while localStorage still blocks if the cookie was cleared but the browser storage remains.
 
-- **Race between tabs.** If a visitor with `startedSlugs = ["a", "b"]` opens slugs `c` and `d` in two tabs simultaneously and clicks Run in both within the same ~100ms window, both requests verify against the same incoming cookie value (length 2, OK), both pass the gate, and the response `Set-Cookie` for the second-arriving response overwrites the first. The cookie ends up with one of `{a,b,c}` or `{a,b,d}` — one slug is silently dropped from the counter. The visitor effectively gets 4 trials instead of 3. Accepted.
-- **Cookie clear / incognito.** The visitor can clear the `dl_anon_started` cookie (or open an incognito window) at any time for a fresh 3-trial run. Accepted; matches LeetCode behavior; no claim of stronger enforcement.
-- **Bundle patching.** Bypassing the gate from the client side requires inspecting the bundle and crafting a fake `Set-Cookie` ack. High effort, low payoff. Accepted.
+**What this gate does and does not guarantee.** The localStorage preflight plus server action is a soft enforcement layer that catches the common case of "user clicks Run or Submit on the 4th problem in a single browser session" and produces a sign-in conversion event. It is **not** authoritative:
+
+- **Race between tabs.** If a visitor with `startedSlugs = ["a", "b"]` opens slugs `c` and `d` in two tabs simultaneously and clicks Run/Submit in both within the same ~100ms window, both requests can verify against the same incoming cookie value (length 2, OK), both pass the gate, and the response `Set-Cookie` for the second-arriving response overwrites the first. The cookie ends up with one of `{a,b,c}` or `{a,b,d}` — one slug is silently dropped from the counter. The visitor effectively gets 4 trials instead of 3. Accepted.
+- **Storage clear / incognito.** The visitor can clear both `localStorage` and `dl_anon_started` (or open an incognito window) at any time for a fresh 3-trial run. Accepted; matches LeetCode behavior; no claim of stronger enforcement.
+- **Bundle patching.** Bypassing the client preflight requires inspecting the bundle and avoiding the normal UI path, but the server cookie check still blocks the common same-browser path. High effort, low payoff. Accepted.
 
 Telemetry consequences (covered in the Telemetry section): `anon_wall_shown` undercounts real "anonymous user wanted to run a 4th problem" events by the race factor (estimated tiny — most visitors don't sequence two tabs that fast). If conversion-rate observability matters more than enforcement, the v1.1 path is the durable `AnonSession` table.
 
@@ -143,19 +156,23 @@ DuckDB / PGlite execution itself stays client-side; the server gate is on the ac
 
 ### Counter reset on sign-in
 
-The two storages clear via two independent triggers that don't depend on which page the user lands on after OAuth.
+The two storages clear from one root-mounted component that handles each storage through the right boundary and does not depend on which page the user lands on after OAuth.
 
 **Important architectural constraint.** The existing `components/layout/Navbar.tsx` is an **async server component** that imports `auth()`, `getNavLinks`, and `prisma`. It cannot host a `useSession()` hook directly without converting to a client component (which would break its data-fetching boundary). The reset design therefore uses a tiny client-only sibling component fed by a server-derived `isSignedIn` prop, not a `useSession` hook.
 
-1. **Cookie (server-side).** A new NextAuth `events.signIn` handler in `lib/auth.ts` writes `Set-Cookie: dl_anon_started=; Max-Age=0; Path=/`. This fires once per sign-in regardless of callback URL. Already-authed sessions don't re-trigger. NextAuth's `events.signIn` runs server-side on the OAuth-callback path with access to the response writer, so the cookie clear is safe to set there even though Next App Router's `cookies()` is read-only outside route handlers and server actions — the NextAuth callback is itself a route handler.
+1. **Cookie (server-side).** `AnonStorageReset` calls the `clearAnonRunCookie` server action whenever it mounts with `isSignedIn === true`. The action verifies the session and then clears `dl_anon_started` via the server-action cookie writer. This deliberately avoids a NextAuth `events.signIn` dependency: Auth.js event callbacks expose the event message, not a typed response writer, and the repo should not rely on undocumented response mutation from inside the event hook.
 
-2. **localStorage (client-side).** New client component `components/auth/AnonStorageReset.tsx`:
+2. **localStorage (client-side).** The same new client component, `components/auth/AnonStorageReset.tsx`, clears browser storage directly:
    ```tsx
    "use client"
+   import { useEffect } from "react"
+   import { clearAnonRunCookie } from "@/actions/runtime"
+
    export function AnonStorageReset({ isSignedIn }: { isSignedIn: boolean }) {
        useEffect(() => {
            if (isSignedIn) {
                try { localStorage.removeItem("dl:anon:startedSlugs") } catch {}
+               void clearAnonRunCookie()
            }
        }, [isSignedIn])
        return null
@@ -174,12 +191,12 @@ The two storages clear via two independent triggers that don't depend on which p
    ```
    The boolean prop is derived from the already-existing `auth()` call in `app/layout.tsx` — no extra Prisma hit, no `SessionProvider` boundary, and Navbar's server-component status is preserved.
 
-This pair of triggers is robust against:
+This reset path is robust against:
 
 - **OAuth callback remount.** OAuth flows navigate to the provider and return via `/api/auth/callback/<provider>`, which triggers a fresh server render of the root layout. `AnonStorageReset` mounts fresh with `isSignedIn = true` and immediately clears localStorage. (This was the bug in the prior `prevRef === false → true` formulation; fixed.)
-- OAuth callbacks bouncing the user to any URL (the cookie clears server-side in the NextAuth event handler regardless of destination).
+- OAuth callbacks bouncing the user to any URL (the root layout renders there, `AnonStorageReset` mounts signed-in, and the cookie-clear server action runs).
 - The `/auth/signin` page server-redirecting authed users elsewhere (`AnonStorageReset` is in the root layout and renders everywhere).
-- Sign-in → sign-out → fresh-anonymous cycle: localStorage is empty after sign-in (cleared on mount), so a subsequent sign-out leaves the visitor with a fresh `[]` counter for the new anonymous session. **An e2e test in Done criteria exercises a real OAuth callback round-trip — not an in-place prop flip — to assert this cycle.**
+- Sign-in → sign-out → fresh-anonymous cycle: localStorage is empty after sign-in (cleared on mount), so a subsequent sign-out leaves the visitor with a fresh `[]` counter for the new anonymous session. **An e2e test in Done criteria exercises a full root-layout remount with `isSignedIn=true` — not an in-place prop flip — to assert this cycle.**
 
 After sign-in the user has unlimited Run access. No retroactive credit for the three anon runs (they were never persisted to `Submission` anyway).
 
@@ -190,7 +207,7 @@ After sign-in the user has unlimited Run access. No retroactive credit for the t
 Lives in `components/sql/SqlPlayground.tsx`, rendered next to the Run button.
 
 Visibility predicate (all must be true for the chip to render):
-- `!session?.user?.id` (the viewer is anonymous), AND
+- `!isSignedIn` (the viewer is anonymous), AND
 - `!startedSlugs.includes(currentSlug)` (the current problem hasn't been started yet — re-runs on already-tried problems don't need a chip).
 
 Chip text by `startedSlugs.length`:
@@ -202,16 +219,16 @@ Chip text by `startedSlugs.length`:
 | 2 | `"1 free run left"` | amber border (`border-amber-400/40`) |
 | ≥ 3 | chip hidden, **Run button shows a lock icon next to its label** | the lock state is the visible cue |
 
-The lock icon on Run obeys the same predicate as the chip plus `count >= 3` — i.e., it shows IFF `!session && !startedSlugs.includes(currentSlug) && startedSlugs.length >= 3`. On an already-started slug, Run never shows a lock even when `count >= 3`, because the policy matrix permits re-runs unconditionally.
+The lock icon on Run obeys the same predicate as the chip plus `count >= 3` — i.e., it shows IFF `!isSignedIn && !startedSlugs.includes(currentSlug) && startedSlugs.length >= 3`. On an already-started slug, Run never shows a lock even when `count >= 3`, because the policy matrix permits re-runs unconditionally.
 
-No layout shift between authed and anon users — the chip slot is conditionally rendered with `display: none` rather than removed from the flow.
+Keep the toolbar stable by reserving a small chip slot or otherwise using fixed button-group spacing; do not let the Run/Submit buttons jump horizontally when the chip appears or disappears.
 
 ### 2. Sign-in modal
 
-New component: `components/auth/SignInModal.tsx`. Reuses the existing `Dialog` primitive.
+New component: `components/auth/SignInModal.tsx`. Reuses the existing portal/focus-trap pattern from `components/auth/SignInDialog.tsx` plus `ProviderSignInActions`; do not introduce a new dialog library or Radix dependency just for this modal.
 
 - Triggered by either `SqlPlayground.handleRun` or `SqlPlayground.handleSubmit` (via the shared `gateAndExecute` helper) receiving `{ ok: false, reason: "trial-exhausted" }` from the `validateRunQuery` server action, which then invokes the `onTrialExhausted` callback that `ProblemClient` wires to the modal's open state. Modal copy is identical regardless of which intent (Run vs Submit) triggered it.
-- Content: friendly header, two OAuth buttons (GitHub / Google) wired to `signIn(provider, { callbackUrl: <currentUrl> })`, a small "Maybe later" link that closes the modal.
+- Content: friendly header, two OAuth buttons (GitHub / Google) wired through the existing `ProviderSignInActions` / `signIn(provider, { redirectTo: <currentUrl> })` path, a small "Maybe later" button that closes the modal.
 - Copy: *"Nice — you've tried 3 problems. Sign in to keep solving, save your progress, and unlock the full catalog."*
 - After successful sign-in, the OAuth callback redirects back to the current problem URL with the cookie cleared. The Run button then works.
 
@@ -229,8 +246,8 @@ Three Vercel Analytics events instrument the funnel. No new vendor.
 
 | Event | Trigger | Properties |
 |---|---|---|
-| `anon_run_consumed` | After a successful Run that appends a new slug to `startedSlugs` | `{ slug, totalStarted: 1\|2\|3 }` |
-| `anon_wall_shown` | When `SignInModal` renders for the `trial-exhausted` reason | `{ slug, attemptedFrom: "run" }` |
+| `anon_trial_consumed` | After a successful Run or Submit that appends a new slug to `startedSlugs` | `{ slug, attemptedFrom: "run" \| "submit", totalStarted: 1\|2\|3 }` |
+| `anon_wall_shown` | When `SignInModal` renders for the `trial-exhausted` reason | `{ slug, attemptedFrom: "run" \| "submit" }` |
 | `anon_signin_from_wall` | When the user clicks an OAuth button inside the modal | `{ slug, provider: "github" \| "google" }` |
 
 Conversion = `anon_signin_from_wall / anon_wall_shown`. Target after one week: > 25%. Below 15% → revisit copy or quota in v1.1.
@@ -249,7 +266,7 @@ Conversion = `anon_signin_from_wall / anon_wall_shown`. Target after one week: >
 
 ## Out of scope (do not add in v1)
 
-- **Server-side `AnonSession` table.** Provides atomic append + race-free counter, eliminates the two-tab undercount, and makes the gate authoritative. Deferred to **v1.1**, gated on telemetry showing meaningful bypass (e.g., conversion < 15%, or wall-shown counts implausibly low relative to engaged anons). Decision rule: if `anon_run_consumed` events plateau or drop in week 2 (suggesting incognito bypass), prioritize v1.1; if conversion is healthy, leave v1 in place.
+- **Server-side `AnonSession` table.** Provides atomic append + race-free counter, eliminates the two-tab undercount, and makes the gate authoritative. Deferred to **v1.1**, gated on telemetry showing meaningful bypass (e.g., conversion < 15%, or wall-shown counts implausibly low relative to engaged anons). Decision rule: if `anon_trial_consumed` events plateau or drop in week 2 (suggesting incognito bypass), prioritize v1.1; if conversion is healthy, leave v1 in place.
 - IP-based or device-fingerprint rate limiting.
 - A/B test framework integration.
 - Per-problem-difficulty quota tiers (e.g., 5 free easy, 1 free hard).
@@ -261,16 +278,16 @@ Conversion = `anon_signin_from_wall / anon_wall_shown`. Target after one week: >
 | Risk | Mitigation |
 |---|---|
 | Two-tab race lets a visitor get 4 trials instead of 3 | Accepted in v1. Documented in the Server-side check section. Telemetry's `anon_wall_shown` undercount is expected to be tiny; v1.1 ships an atomic `AnonSession` table if real-world data says otherwise. |
-| Cookie clear / incognito gives fresh trials | Accepted. Same behavior as LeetCode and Substack metered paywalls. v1 does not attempt to defeat this. |
+| Storage clear / incognito gives fresh trials | Accepted. Same behavior as LeetCode and Substack metered paywalls. v1 does not attempt to defeat this. |
 | Determined anons reverse-engineer the JS bundle and bypass the client gate | Server cookie check on `validateRunQuery` raises the bar (need to inspect bundle + forge `Set-Cookie` ack). Low payoff for high effort. Accepted. |
-| SEO traffic drops because crawlers see the chip / modal in HTML | Crawlers see the full HTML on page load — the chip is hidden for `count == 0` (visible text: `"3 free runs"`, a neutral marketing string). The modal is mounted hidden; only opens on a user click. Verified by `curl -A Googlebot ...` after implementation. |
+| SEO traffic drops because crawlers see the chip / modal in HTML | Crawlers see the full problem content on page load. The chip is neutral text (`"3 free runs"`) and the modal does not open until a user action. Verified by `curl -A Googlebot ...` after implementation. |
 | Cookie consent / GDPR | The cookie is functional (auth-trial state), not tracking. No banner change. Updated `/privacy` text covers it. |
 | The 3-problem quota is wrong (too tight or too loose) | Single constant in `lib/anon-gate.ts`; tuned via telemetry over the first two weeks. |
 | Anons confused by the chip → support tickets | Modal copy explains the system. Chip wording is plain English. Telemetry on bounce-after-chip-shown signals confusion. |
-| Existing logged-in users hit a regression | Gate paths are wrapped in `if (!session?.user?.id)`; logged-in callers short-circuit at line 1 of the gate. Regression risk near zero. |
+| Existing logged-in users hit a regression | Gate paths are wrapped in `if (!isSignedIn)` client-side and `session?.user?.id` server-side; logged-in callers bypass the anon wall. Regression risk near zero. |
 | Background / non-Run engine calls (schema introspection, sample preview) accidentally consume quota | The gate hooks into `SqlPlayground.handleRun` and `handleSubmit` only — not the shared `runQuery` in `useProblemDB`. **An e2e test asserts that opening 4+ problems sequentially without clicking Run or Submit does not increment the counter** (see Done criteria). |
 | **Submit-shortcut bypass** — anon presses Submit on the 4th problem and sees the engine result table render before the server rejects the DB write | Closed: the gate wraps both `handleRun` and `handleSubmit` in a shared `gateAndExecute(intent)` helper. The engine is never invoked for trial-exhausted anons on a new slug, regardless of whether the action was Run or Submit. Dedicated e2e test (Submit bypass test) asserts no result table renders in this path. |
-| `localStorage` stale after sign-in if NextAuth callback redirects somewhere unexpected | The cookie clears server-side in the NextAuth `events.signIn` handler (callback-URL-independent). localStorage clears client-side via the `AnonStorageReset` client component (mounted in root layout, receives `isSignedIn` as a server-derived prop — no `SessionProvider` required, no Navbar refactor). E2e test covers exhaust → sign-in → sign-out → fresh counter. |
+| `localStorage` or cookie stale after sign-in if NextAuth callback redirects somewhere unexpected | `AnonStorageReset` mounts from the root layout on the callback destination, clears localStorage immediately, and invokes `clearAnonRunCookie` server-side with a session check. No `SessionProvider` required, no Navbar refactor. E2e test covers exhaust → sign-in → sign-out → fresh counter. |
 | **Navbar architectural drift** — implementer accidentally converts the server-component Navbar to a client component to host a `useSession` hook | The reset uses a dedicated client component (`AnonStorageReset`) fed by a prop derived from the layout's existing `auth()` call. Done criteria includes an explicit "Navbar still a server component" check. |
 
 ## Done criteria (gate)
@@ -278,12 +295,11 @@ Conversion = `anon_signin_from_wall / anon_wall_shown`. Target after one week: >
 **Code + tests:**
 
 - [ ] New file `lib/anon-gate.ts` exports `MAX_FREE_PROBLEMS`, `signCounter()`, `verifyCounter()`, `parseCookieValue()`. Unit tests in `scripts/test-anon-gate.ts` cover signing, verification, and tamper detection.
-- [ ] New server action `validateRunQuery` in `actions/runtime.ts` returns the four documented outcomes.
-- [ ] `lib/auth.ts` exposes an `events.signIn` handler that clears the `dl_anon_started` cookie regardless of callback URL.
-- [ ] New client component `components/auth/AnonStorageReset.tsx` accepts `isSignedIn: boolean` and clears `localStorage["dl:anon:startedSlugs"]` on the `false → true` transition. Mounted in `app/layout.tsx` alongside `<Navbar />` with `isSignedIn` derived from the layout's existing `auth()` call. **`Navbar.tsx` remains an async server component; no `useSession` hook is added to it.**
-- [ ] `components/auth/SignInModal.tsx` renders the two OAuth buttons + "Maybe later"; opens on `trial-exhausted` from either the client gate or a 4xx from the server action.
-- [ ] `components/sql/SqlPlayground.tsx` renders the chip next to Run when `!session && !startedSlugs.includes(currentSlug)`. Amber border at `count == 2`. Run button shows a lock icon when `!session && !startedSlugs.includes(currentSlug) && count >= 3` (lock never appears on already-started slugs).
-- [ ] **Both `SqlPlayground.handleRun` (`Cmd/Ctrl+Enter`) AND `SqlPlayground.handleSubmit` (`Cmd/Ctrl+Shift+Enter`) wrap the underlying `runQuery` call in the gate.** A shared `gateAndExecute(intent)` helper inside `SqlPlayground` is the single point of control. The shared `runQuery` in `useProblemDB` is *not* gated (so schema introspection still works). `ProblemClient` passes an `onTrialExhausted` callback prop that the gate invokes; the callback opens the modal.
+- [ ] New server actions in `actions/runtime.ts`: `validateRunQuery` returns the documented ok/blocked outcomes and mutates `dl_anon_started` only on allowed new slugs; `clearAnonRunCookie` deletes the cookie only when a signed-in session exists.
+- [ ] New client component `components/auth/AnonStorageReset.tsx` accepts `isSignedIn: boolean`, clears `localStorage["dl:anon:startedSlugs"]`, and calls `clearAnonRunCookie()` on every mount/effect run where `isSignedIn === true`. Mounted in `app/layout.tsx` alongside `<Navbar />` with `isSignedIn` derived from the layout's existing `auth()` call. **`Navbar.tsx` remains an async server component; no `useSession` hook is added to it.**
+- [ ] `components/auth/SignInModal.tsx` renders the two OAuth buttons + "Maybe later"; opens on `trial-exhausted` from either the client localStorage preflight or the server action. It reuses the existing `SignInDialog`/`ProviderSignInActions` pattern and does not add Radix or a new dialog package.
+- [ ] `components/sql/SqlPlayground.tsx` accepts `isSignedIn`, renders the chip next to Run when `!isSignedIn && !startedSlugs.includes(currentSlug)`, and preserves a stable toolbar layout when the chip is absent. Amber border at `count == 2`. Run button shows a lock icon when `!isSignedIn && !startedSlugs.includes(currentSlug) && count >= 3` (lock never appears on already-started slugs).
+- [ ] **Both `SqlPlayground.handleRun` (`Cmd/Ctrl+Enter`) AND `SqlPlayground.handleSubmit` (`Cmd/Ctrl+Shift+Enter`) wrap the underlying `runQuery` call in the gate.** A shared `gateAndExecute(intent)` helper inside `SqlPlayground` is the single point of control. The helper first checks localStorage, then calls `validateRunQuery`, and never invokes the engine when either storage says the trial is exhausted for a new slug. The shared `runQuery` in `useProblemDB` is *not* gated (so schema introspection still works). `ProblemClient` passes `isSignedIn` and an `onTrialExhausted` callback prop that the gate invokes; the callback opens the modal.
 - [ ] `ANON_GATE_SECRET` env var added to `.env.example` with a generation hint; required in Vercel production and preview.
 - [ ] Three telemetry events fire and are visible in Vercel Analytics within 1 hour of preview deploy.
 
@@ -293,14 +309,14 @@ Conversion = `anon_signin_from_wall / anon_wall_shown`. Target after one week: >
 - [ ] Open problem A, click Run → counter = 1. Refresh the page → chip is hidden (slug already started), Run still works without counter change.
 - [ ] Click Run on three distinct new problems → counter = 3. Open a 4th distinct slug, click Run → modal appears, **the result table does not re-render** (engine not invoked), counter stays 3.
 - [ ] **Submit bypass test:** exhaust trial via Run on 3 slugs → open a 4th distinct slug → press **Submit** (or `Cmd/Ctrl+Shift+Enter`) → modal opens, **no query result is rendered**, no engine execution. (This specifically verifies the Submit-shortcut bypass closed.)
-- [ ] **Reset cycle test (real OAuth round-trip, not an in-place prop flip):** exhaust trial → click a sign-in button that triggers a real `signIn(<provider>)` call (use a Playwright mock route on `/api/auth/callback/<provider>` to simulate the provider redirect) → land on the post-auth destination → cookie cleared (NextAuth `events.signIn`) and localStorage cleared (`AnonStorageReset` mount-time effect with `isSignedIn=true`) → sign out → navigate to a 5th distinct slug → chip shows "3 free runs" and Run works. **The test must exercise the full OAuth callback navigation cycle**, since the bug Codex caught was specifically that an in-place `false → true` transition fires in dev but the real callback flow remounts fresh.
+- [ ] **Reset cycle test (full layout remount, not an in-place prop flip):** exhaust trial → establish a real signed-in NextAuth session using the repo's e2e session-cookie fixture or a mocked provider callback → reload/navigate through the post-auth destination so the root layout mounts with `isSignedIn=true` on first render → cookie cleared by `clearAnonRunCookie` and localStorage cleared by `AnonStorageReset` → sign out / clear the session cookie → navigate to a 5th distinct slug → chip shows "3 free runs" and Run works. **The test must exercise a fresh mounted root layout with `isSignedIn=true`**, since the bug Codex caught was specifically that an in-place `false → true` transition fires in dev but a real callback/remount starts already signed in.
 - [ ] `Check Answer` (Submit) path for anonymous users on an **already-started** slug still returns the existing "Sign in to submit..." error from `validateSubmission` server-side (engine executes locally, DB write rejected). The new gate doesn't change that surface for already-started slugs; it only blocks engine execution on NEW slugs past quota.
 - [ ] **Navbar regression:** verify `components/layout/Navbar.tsx` still imports `auth()` and `prisma` and is rendered as a server component. (Asserts the reset implementation didn't accidentally convert the Navbar to a client component.)
 
 **Smoke checks (manual on Vercel preview):**
 
 - [ ] Anon hits problems 1-3 in real Chrome (Run works, chip counts down), problem 4 (modal opens), signs in via GitHub (cookie cleared, Run works on problem 4 immediately).
-- [ ] `curl -A Googlebot https://<preview>/practice/joins` shows the full schema + description + editor markup in the HTML response. The only gate-related text in the response is the neutral `"3 free runs"` chip; modal is not in the initial HTML.
+- [ ] `curl -A Googlebot https://<preview>/practice/joins` shows the full problem description and schema content in the HTML response. Gate-related text is neutral (`"3 free runs"` if the client shell renders it); the modal is not open in the initial response.
 
 ## Open questions
 
