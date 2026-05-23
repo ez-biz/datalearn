@@ -5,6 +5,7 @@ import { Database, Play } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/Button"
+import { Kbd } from "@/components/ui/Kbd"
 import type { Dialect } from "@/lib/use-problem-db"
 import { cn } from "@/lib/utils"
 
@@ -52,10 +53,7 @@ export function SqlEditor({
     })
 
     const editorTheme = mounted && resolvedTheme === "dark" ? "vs-dark" : "vs"
-    const headerBg =
-        mounted && resolvedTheme === "dark"
-            ? "bg-[#1e1e1e] border-[#333]"
-            : "bg-surface-muted border-border"
+    const headerBg = "bg-surface-muted border-border"
     const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
     const modKey = isMac ? "⌘" : "Ctrl"
     const disableRun = Boolean(running || runDisabled)
@@ -77,16 +75,17 @@ export function SqlEditor({
             <div
                 className={`flex items-center justify-between px-3 py-2 border-b ${headerBg}`}
             >
-                <DialectToggle
-                    dialect={dialect}
-                    allowed={allowedDialects}
-                    onChange={onDialectChange}
-                    disabled={running}
-                />
+                <div className="flex min-w-0 items-center gap-3 text-[12px] font-mono">
+                    <span className="prompt text-muted-foreground">query.sql</span>
+                    <span className="text-muted-foreground-dim">·</span>
+                    <DialectToggle
+                        dialect={dialect}
+                        allowed={allowedDialects}
+                        onChange={onDialectChange}
+                        disabled={running}
+                    />
+                </div>
                 <div className="flex items-center gap-2">
-                    <kbd className="hidden sm:inline-flex items-center gap-1 rounded border border-border bg-surface px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                        {modKey} ↵
-                    </kbd>
                     <Button
                         onClick={onRun}
                         disabled={disableRun}
@@ -101,7 +100,8 @@ export function SqlEditor({
                         data-testid="workspace-run-editor"
                     >
                         <Play className="h-3 w-3 fill-current" />
-                        {running ? "Running…" : "Run"}
+                        <span>{running ? "Running…" : "▸ Run"}</span>
+                        <Kbd tone="on-primary">{modKey}↵</Kbd>
                     </Button>
                 </div>
             </div>
