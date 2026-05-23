@@ -9,7 +9,7 @@ Limit how much value an anonymous (non-signed-in) visitor can extract from `/pra
 
 **Posture (be precise about this).** The gate is a **conversion nudge backed by a soft server check**, not authoritative enforcement. A determined visitor can clear their browser storage/cookies or open a new browser for a fresh trial; two tabs racing on slug 3→4 can both pass the gate; tampered cookies fall back to localStorage or a fresh cookie state. We accept this because (a) the asset being protected is engagement value, not secrets — DuckDB-WASM runs entirely in-browser, so true enforcement would require server-mediated query execution we don't have, and (b) telemetry over the first two weeks will tell us whether bypass is statistically material. If it is, v1.1 adds a server-side `AnonSession` table with atomic append; v1 stays cookie-only.
 
-The change is a `gateAndExecute(intent)` helper inside `SqlPlayground.tsx` that wraps **both** `handleRun` and `handleSubmit` before they call the in-browser engine, new runtime server actions (`validateRunQuery` and `clearAnonRunCookie`) keyed off a signed cookie, a small chip on the Run button, a sign-in modal, a client-only `AnonStorageReset` component for post-OAuth storage cleanup, and three Vercel Analytics events. The server-only HMAC code stays out of client bundles. No schema changes. No backend rate-limiter dependency. No new auth providers.
+The change is a `gateAndExecute(intent)` helper inside `SqlPlayground.tsx` that wraps **both** `handleRun` and `handleSubmit` before they call the in-browser engine, new runtime server actions (`validateRunQuery` and `clearAnonRunCookie`) keyed off a signed cookie, a small chip on the Run button, a sign-in modal, a client-only `AnonStorageReset` component for post-OAuth storage cleanup (receives `isSignedIn` as a server-derived prop from the layout's existing `auth()` call — no extra session lookup per page load, anon mounts no-op), and three Vercel Analytics events. The server-only HMAC code stays out of client bundles. No schema changes. No backend rate-limiter dependency. No new auth providers.
 
 ## Non-goals
 
@@ -32,7 +32,7 @@ The change is a `gateAndExecute(intent)` helper inside `SqlPlayground.tsx` that 
 | Free quota | **3 problems** (one constant in code; tunable). |
 | What counts as "using" a problem | **First successful user-initiated engine action on that slug: `Run` or `Submit / Check Answer`.** Page visits, schema reads, and re-runs/re-submits on already-started slugs do not count. |
 | Storage of the counter | **localStorage** (`dl:anon:startedSlugs`) **+ signed cookie** (`dl_anon_started`, HMAC-signed JSON, server-readable). |
-| Counter reset semantics | `AnonStorageReset` mounts in the root layout, calls `clearAnonRunCookie` server-side, and clears localStorage only when the action confirms a signed-in session. This is callback-URL-independent, OAuth-remount-safe, avoids adding a root-layout `auth()` call, and avoids relying on NextAuth event hooks for response-cookie mutation. Existing server-component `Navbar` is not touched. Never refunded. |
+| Counter reset semantics | `AnonStorageReset` mounts in the root layout and receives `isSignedIn` as a server-derived boolean prop (derived from the layout's existing `auth()` call — no new session lookup). When `isSignedIn === true` on any mount, it clears localStorage and fire-and-forgets `clearAnonRunCookie` to drop the server cookie. Anon mounts short-circuit on the boolean — no HTTP work. OAuth-remount-safe (clears on every mount-while-signed-in, not on a transition). Server action still does its own `auth()` check as defense in depth against direct calls. Existing server-component `Navbar` is not touched. Never refunded. |
 | Wall UX on the 4th problem | **Centered modal overlay** with two OAuth buttons + "Maybe later". |
 | Quota indicator | **Subtle chip** next to the Run button: `"3 free runs"`, `"2 free runs left"`, `"1 free run left"` (amber). Hidden on already-started slugs and for authed users. |
 | Server enforcement | New `validateRunQuery` server action checks the signed cookie. Soft/advisory, not authoritative — accepts cookie clear, incognito, and two-tab race as acceptable bypass paths in v1. |
@@ -160,41 +160,47 @@ DuckDB / PGlite execution itself stays client-side; the server gate is on the ac
 
 The two storages clear from one root-mounted component that handles each storage through the right boundary and does not depend on which page the user lands on after OAuth.
 
-**Important architectural constraint.** The existing `components/layout/Navbar.tsx` is an **async server component** that imports `auth()`, `getNavLinks`, and `prisma`. It cannot host a `useSession()` hook directly without converting to a client component (which would break its data-fetching boundary). The reset design therefore uses a tiny client-only sibling component that asks a server action whether a signed-in session exists, not a `useSession` hook and not a root-layout `auth()` call.
+**Important architectural constraint.** The existing `components/layout/Navbar.tsx` is an **async server component** that imports `auth()`, `getNavLinks`, and `prisma`. It cannot host a `useSession()` hook directly without converting to a client component (which would break its data-fetching boundary). The reset design therefore uses a tiny client-only sibling component that receives `isSignedIn` as a server-derived boolean prop — **not** a `useSession` hook, and **not** an every-mount server action round-trip. The boolean is derived from the existing `auth()` call that the root layout already does for `<Navbar />`, so the reset adds zero new session lookups per page load.
 
-1. **Cookie (server-side).** `AnonStorageReset` calls the `clearAnonRunCookie` server action when it mounts. The action verifies the session and then clears `dl_anon_started` via the server-action cookie writer. It returns `{ signedIn: true }` only when it actually saw a signed-in session, otherwise `{ signedIn: false }`. This deliberately avoids a NextAuth `events.signIn` dependency: Auth.js event callbacks expose the event message, not a typed response writer, and the repo should not rely on undocumented response mutation from inside the event hook.
+1. **`isSignedIn` prop is the source of truth.** `app/layout.tsx` already invokes `auth()` to render `<Navbar />` (and for the existing nonce/CSP integration on `/learn/**`). That same result feeds `<AnonStorageReset isSignedIn={Boolean(session?.user?.id)} />`. No extra session lookup, no extra DB hit. Short-circuiting on `!isSignedIn` makes the anonymous-user path a single boolean check per page load — no HTTP work at all.
 
-2. **localStorage (client-side).** The same new client component, `components/auth/AnonStorageReset.tsx`, clears browser storage directly:
+2. **Cookie + localStorage clear are both triggered when `isSignedIn === true`.** `AnonStorageReset.tsx`:
    ```tsx
    "use client"
    import { useEffect } from "react"
    import { clearAnonRunCookie } from "@/actions/runtime"
+   import { clearAnonStartedSlugs } from "@/lib/anon-gate-client"
 
-   export function AnonStorageReset() {
+   export function AnonStorageReset({ isSignedIn }: { isSignedIn: boolean }) {
        useEffect(() => {
-           void clearAnonRunCookie().then((result) => {
-               if (result.signedIn) {
-                   try { localStorage.removeItem("dl:anon:startedSlugs") } catch {}
-               }
-           })
-       }, [])
+           if (!isSignedIn) return
+           clearAnonStartedSlugs()
+           // Fire-and-forget cookie clear. The server action does its own session
+           // check as defense in depth; we don't need to await the response.
+           void clearAnonRunCookie()
+       }, [isSignedIn])
        return null
    }
    ```
 
-   **Important — clear on every mounted signed-in session, not just transitions.** OAuth flows navigate away to the provider and return through `/api/auth/callback/<provider>`, then re-mount the root layout fresh. A component that only fires on a `false → true` transition (using `useRef`) sees `prevRef.current = null` and `isSignedIn = true` on first render and never clears. Asking the server action on mount and clearing when it returns `signedIn: true` is the correct, OAuth-callback-safe rule. The localStorage `removeItem` is a no-op when the key is already absent.
+   **Clear on every mount while `isSignedIn === true`, not on a `false → true` transition.** OAuth flows navigate away to the provider and return through `/api/auth/callback/<provider>`, then re-mount the root layout fresh. A component that only fires on a transition (using `useRef`) sees `prevRef.current = null` and `isSignedIn = true` on first render and never clears. Clearing whenever `isSignedIn === true` is mounted is the correct, OAuth-callback-safe rule. `clearAnonStartedSlugs()` is a no-op when the key is already absent.
+
+3. **`clearAnonRunCookie` keeps its own server-side `auth()` check as defense in depth.** A malicious or stale client could call the action directly without an `isSignedIn` prop guard. The action verifies the session before deleting the cookie. If anonymous, it no-ops. This costs at most one server-action round-trip per layout mount **for signed-in users only**; anons skip it entirely because of the `if (!isSignedIn) return` short-circuit. The previous design (server-action call on every mount regardless of session) paid an `auth()` + round-trip cost for every anonymous page load — that was the wrong trade-off.
 
    Mounted under `app/layout.tsx` (which is a server component) alongside the existing `<Navbar />`:
    ```tsx
+   const session = await auth()  // already happening for Navbar / CSP nonce
+   const isSignedIn = Boolean(session?.user?.id)
+   // ...
    <Navbar />
-   <AnonStorageReset />
+   <AnonStorageReset isSignedIn={isSignedIn} />
    ```
-   `app/layout.tsx` does not need to call `auth()` for this reset; the server action owns that check. No `SessionProvider` boundary is introduced, and Navbar's server-component status is preserved.
+   Layout already calls `auth()`; we just thread the result through as a prop. No `SessionProvider` boundary is introduced, and Navbar's server-component status is preserved.
 
 This reset path is robust against:
 
-- **OAuth callback remount.** OAuth flows navigate to the provider and return via `/api/auth/callback/<provider>`, which triggers a fresh root layout mount. `AnonStorageReset` mounts fresh, the server action sees the signed-in session, and localStorage clears. (This was the bug in the prior `prevRef === false → true` formulation; fixed.)
-- OAuth callbacks bouncing the user to any URL (the root layout renders there, `AnonStorageReset` mounts, and the cookie-clear server action runs).
+- **OAuth callback remount.** OAuth flows navigate to the provider and return via `/api/auth/callback/<provider>`, which triggers a fresh root layout mount. The layout sees a signed-in session and threads `isSignedIn={true}` into `AnonStorageReset`, which immediately clears localStorage and fire-and-forgets the cookie clear. (The prior `prevRef === false → true` formulation never fired on this path because remount starts with `prevRef = null`; fixed.)
+- OAuth callbacks bouncing the user to any URL (the root layout renders there, computes `isSignedIn` from its existing `auth()` call, and `AnonStorageReset` runs).
 - The `/auth/signin` page server-redirecting authed users elsewhere (`AnonStorageReset` is in the root layout and renders everywhere).
 - Sign-in → sign-out → fresh-anonymous cycle: localStorage is empty after sign-in (cleared on mount), so a subsequent sign-out leaves the visitor with a fresh `[]` counter for the new anonymous session. **An e2e test in Done criteria exercises a full root-layout remount with `isSignedIn=true` — not an in-place prop flip — to assert this cycle.**
 

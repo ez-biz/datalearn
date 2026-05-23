@@ -112,7 +112,52 @@ test("buildNextCounter appends new slugs once and reports exhaustion", () => {
         ],
     })
 })
+
+// Defends against a malformed-but-validly-signed cookie that arrives with
+// more entries than MAX_FREE_PROBLEMS (e.g., a future schema migration
+// rolled back, or a forged cookie signed with a leaked secret). The cap
+// must apply on the way in, and the resulting state must be treated as
+// exhausted by buildNextCounter.
+test("parseCookieValue caps incoming slugs at MAX_FREE_PROBLEMS", () => {
+    const oversized = signCounter(
+        {
+            startedSlugs: [
+                "simple-select",
+                "total-revenue-per-customer",
+                "top-selling-products",
+                "customers-by-country",
+                "orders-per-month",
+            ],
+        },
+        SECRET
+    )
+
+    const parsed = parseCookieValue(oversized, SECRET)
+    assert.equal(parsed.startedSlugs.length, MAX_FREE_PROBLEMS)
+    assert.deepEqual(parsed.startedSlugs, [
+        "simple-select",
+        "total-revenue-per-customer",
+        "top-selling-products",
+    ])
+
+    const next = buildNextCounter(parsed.startedSlugs, "orders-per-month")
+    assert.equal(next.ok, false)
+    if (next.ok === false) {
+        assert.equal(next.reason, "trial-exhausted")
+    }
+})
 ```
+
+Also update the imports at the top of the file to include `MAX_FREE_PROBLEMS`:
+
+```ts
+import {
+    ANON_STARTED_COOKIE_NAME,
+    MAX_FREE_PROBLEMS,
+} from "../lib/anon-gate-constants"
+```
+
+(The file already imports `MAX_FREE_PROBLEMS` from the constants module — confirm in your patch that the import list matches.)
 
 Add the package script:
 
@@ -496,6 +541,10 @@ test.afterEach(async () => {
     await deleteUser(USER_EMAIL)
 })
 
+// AnonStorageReset receives isSignedIn as a server-derived prop. When the
+// layout sees a session, the prop is true and the client effect clears
+// localStorage synchronously on mount (no awaited server-action round-trip).
+// The cookie clear is fire-and-forget against the server action.
 test("signed-in root layout mount clears anonymous trial storage", async ({
     page,
     context,
@@ -621,38 +670,53 @@ import { useEffect } from "react"
 import { clearAnonRunCookie } from "@/actions/runtime"
 import { clearAnonStartedSlugs } from "@/lib/anon-gate-client"
 
-export function AnonStorageReset() {
+/**
+ * Receives `isSignedIn` as a server-derived prop from the root layout's
+ * existing `auth()` call. Anonymous mounts short-circuit on the boolean,
+ * so anon users pay zero HTTP work per page load. Signed-in mounts clear
+ * localStorage immediately and fire-and-forget the server-side cookie
+ * delete; the server action does its own `auth()` check as defense in
+ * depth against direct/forged calls.
+ *
+ * Why "every mount while signedIn", not "on false -> true transition":
+ * OAuth flows navigate to /api/auth/callback/<provider> and return with a
+ * full root-layout remount. A useRef-based transition tracker mounts
+ * fresh with prevRef = null and isSignedIn = true, so the transition
+ * condition never fires. Clearing on every mount-while-signed-in is the
+ * OAuth-callback-safe rule; localStorage removeItem is a no-op when the
+ * key is already absent.
+ */
+export function AnonStorageReset({ isSignedIn }: { isSignedIn: boolean }) {
     useEffect(() => {
-        let cancelled = false
-
-        void clearAnonRunCookie().then((result) => {
-            if (!cancelled && result.signedIn) {
-                clearAnonStartedSlugs()
-            }
-        })
-
-        return () => {
-            cancelled = true
-        }
-    }, [])
+        if (!isSignedIn) return
+        clearAnonStartedSlugs()
+        // Fire-and-forget. We don't need to await the server cookie clear
+        // because localStorage is already cleared; the server side is
+        // belt-and-suspenders defense against a stale signed cookie.
+        void clearAnonRunCookie()
+    }, [isSignedIn])
 
     return null
 }
 ```
 
-- [ ] **Step 5: Mount the reset bridge in the root layout**
+- [ ] **Step 5: Mount the reset bridge in the root layout, threading the existing `auth()` result**
 
-Modify `app/layout.tsx`:
+Modify `app/layout.tsx`. The layout already calls `auth()` for `<Navbar />` (and the existing CSP nonce integration). Reuse that result — do NOT add a second `auth()` call.
 
 ```tsx
+import { auth } from "@/lib/auth";
 import { AnonStorageReset } from "@/components/auth/AnonStorageReset";
 ```
 
-Then render it next to the existing layout chrome:
+Inside the default-export async function, where `session` (or equivalent) is already being computed for `<Navbar />`:
 
 ```tsx
+const session = await auth();   // already present for Navbar; do not duplicate
+const isSignedIn = Boolean(session?.user?.id);
+// ...
 <Navbar />
-<AnonStorageReset />
+<AnonStorageReset isSignedIn={isSignedIn} />
 <div
     id="main-content"
     tabIndex={-1}
@@ -661,6 +725,8 @@ Then render it next to the existing layout chrome:
     {children}
 </div>
 ```
+
+If `app/layout.tsx` currently invokes `auth()` only indirectly (e.g., inside `Navbar`), thread the call up to the layout so the boolean can be derived once and shared. **Do not add a second `auth()` call inside `AnonStorageReset` or in a separate server action invoked from mount** — that was the previous design and it cost an extra session lookup per page load for every visitor.
 
 - [ ] **Step 6: Run the reset e2e to verify it passes**
 
@@ -966,6 +1032,35 @@ test("anonymous Run consumes three new slugs and walls the fourth", async ({
         )
         .toBe(3)
 })
+
+// The Submit shortcut must hit the same gate as the Run button. If this test
+// is missing here, an implementer could complete Task 5's chip + Run gate
+// without realizing that Submit (Cmd/Ctrl+Shift+Enter) still bypasses the
+// wall — because SqlPlayground.handleSubmit currently runs the engine
+// query *before* invoking onSubmit (which is what the server-side
+// validateSubmission auth gate blocks). Failing here forces the implementer
+// to route Submit through the same gateAndExecute helper.
+test("anonymous Submit on a fourth new slug opens the wall before engine execution", async ({
+    page,
+}) => {
+    for (const slug of SLUGS.slice(0, 3)) {
+        await page.goto(`/practice/${slug}`)
+        const runButton = await waitForRun(page)
+        await runButton.click()
+        await expect(page.getByRole("table").first()).toBeVisible({
+            timeout: 60_000,
+        })
+    }
+
+    await page.goto(`/practice/${SLUGS[3]}`)
+    await waitForRun(page)
+    await page.keyboard.press(
+        process.platform === "darwin" ? "Meta+Shift+Enter" : "Control+Shift+Enter"
+    )
+
+    await expect(page.getByTestId("anon-trial-modal")).toBeVisible()
+    await expect(page.getByRole("table").first()).toBeHidden()
+})
 ```
 
 - [ ] **Step 2: Run the e2e tests to verify they fail**
@@ -977,7 +1072,7 @@ DATABASE_URL='postgresql://anchitgupta@localhost:5432/datalearn' npm run build
 DATABASE_URL='postgresql://anchitgupta@localhost:5432/datalearn' E2E_PORT=3100 npx playwright test tests/e2e/anon-gate.spec.ts -g "anonymous"
 ```
 
-Expected: FAIL because the chip, modal wiring, and gate do not exist.
+Expected: all three "anonymous ..." tests FAIL — the chip, modal wiring, Run gate, and Submit gate do not exist yet. The Submit-bypass case in particular must fail with the result table becoming visible (the current `SqlPlayground.handleSubmit` runs the engine before calling `onSubmit`).
 
 - [ ] **Step 3: Add lock support to the editor header Run button**
 
@@ -1277,37 +1372,18 @@ git commit -m "feat(workspace): gate anonymous run and submit actions"
 
 ---
 
-### Task 6: Submit Bypass And Already-Started Submit Regressions
+### Task 6: Already-Started Submit Regression Coverage
 
 **Files:**
 - Modify: `tests/e2e/anon-gate.spec.ts`
-- Modify if needed: `components/sql/SqlPlayground.tsx`
 
-- [ ] **Step 1: Add failing Submit bypass tests**
+The Submit *bypass* case (4th new slug via Cmd/Ctrl+Shift+Enter) is now a failing test inside Task 5, so the implementer is forced to gate Submit before they can mark Task 5 complete. This task covers the **other** Submit case: pressing Submit on an *already-started* slug should still execute the engine locally and surface the existing `validateSubmission` server-side error ("Sign in to submit..."). The new gate must not regress that path.
+
+- [ ] **Step 1: Add the failing regression test**
 
 Append to `tests/e2e/anon-gate.spec.ts`:
 
 ```ts
-test("anonymous Submit on a fourth new slug opens the wall before engine execution", async ({
-    page,
-}) => {
-    for (const slug of SLUGS.slice(0, 3)) {
-        await page.goto(`/practice/${slug}`)
-        const runButton = await waitForRun(page)
-        await runButton.click()
-        await expect(page.getByRole("table").first()).toBeVisible({
-            timeout: 60_000,
-        })
-    }
-
-    await page.goto(`/practice/${SLUGS[3]}`)
-    await waitForRun(page)
-    await page.keyboard.press(process.platform === "darwin" ? "Meta+Shift+Enter" : "Control+Shift+Enter")
-
-    await expect(page.getByTestId("anon-trial-modal")).toBeVisible()
-    await expect(page.getByRole("table").first()).toBeHidden()
-})
-
 test("anonymous Submit on an already-started slug still reaches validation auth gate", async ({
     page,
 }) => {
@@ -1318,7 +1394,9 @@ test("anonymous Submit on an already-started slug still reaches validation auth 
         timeout: 60_000,
     })
 
-    await page.keyboard.press(process.platform === "darwin" ? "Meta+Shift+Enter" : "Control+Shift+Enter")
+    await page.keyboard.press(
+        process.platform === "darwin" ? "Meta+Shift+Enter" : "Control+Shift+Enter"
+    )
 
     await expect(
         page.getByText(/sign in to submit your solution/i)
@@ -1327,22 +1405,22 @@ test("anonymous Submit on an already-started slug still reaches validation auth 
 })
 ```
 
-- [ ] **Step 2: Run the Submit tests to verify current behavior**
+- [ ] **Step 2: Run the regression test**
 
 Run:
 
 ```bash
 DATABASE_URL='postgresql://anchitgupta@localhost:5432/datalearn' npm run build
-DATABASE_URL='postgresql://anchitgupta@localhost:5432/datalearn' E2E_PORT=3100 npx playwright test tests/e2e/anon-gate.spec.ts -g "Submit"
+DATABASE_URL='postgresql://anchitgupta@localhost:5432/datalearn' E2E_PORT=3100 npx playwright test tests/e2e/anon-gate.spec.ts -g "already-started slug still reaches"
 ```
 
-Expected: PASS if Task 5 implemented the shared helper correctly. If the fourth-new-slug Submit test fails by rendering a result table, fix `handleSubmit` so it calls `gateAndExecute("submit", ...)` before any `runQuery` call.
+Expected: PASS. The slug is already-started (added by the Run click on line above), so `gateAndExecute("submit", ...)` returns `ok: true, consumedNewSlot: false` and falls through to the existing `onSubmit` → `validateSubmission` path which yields the auth-gate message. If this fails by showing the `anon-trial-modal` instead of the validation message, the gate is incorrectly counting re-Submits on already-started slugs as new consumption — fix `gateAndExecute` to only consume a slot when the slug is genuinely new.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/e2e/anon-gate.spec.ts components/sql/SqlPlayground.tsx
-git commit -m "test(workspace): cover anonymous submit gating"
+git add tests/e2e/anon-gate.spec.ts
+git commit -m "test(workspace): regression coverage for already-started Submit"
 ```
 
 ---
