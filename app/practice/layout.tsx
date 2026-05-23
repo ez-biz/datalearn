@@ -21,7 +21,8 @@ export default function PracticeLayout({ children }: { children: ReactNode }) {
                 <link
                     rel="preload"
                     href="/_dl/sql-engine/duckdb-browser-eh.worker.js"
-                    as="script"
+                    as="fetch"
+                    crossOrigin="anonymous"
                 />
             ) : null}
             {children}
