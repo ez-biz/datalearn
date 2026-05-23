@@ -20,7 +20,7 @@ The change is a `gateAndExecute(intent)` helper inside `SqlPlayground.tsx` that 
 - A/B testing different quotas or copy. v1 ships one configuration.
 - Email-only sign-up. We stay on the existing GitHub + Google OAuth providers via NextAuth.
 - Refunding the three trial slots when a user signs in. Sign-in is its own unlock event; trial credits are not restored or carried over.
-- Gating `Check Answer`. That path is already blocked for anons at `actions/submissions.ts:36-42`; no change needed.
+- (Removed prior non-goal that excluded `Check Answer` from the new gate. v1 actually gates **both** Run and Submit via the shared `gateAndExecute` helper — see the trigger-semantics section. The existing server-side `validateSubmission` auth gate remains in place for already-started slugs.)
 - "Continue as guest" account persistence across browsers, devices, or sessions.
 
 ## Decisions
@@ -58,7 +58,7 @@ The change is a `gateAndExecute(intent)` helper inside `SqlPlayground.tsx` that 
 | `/me/**`, `/admin/**`, `/profile` | Already redirected (existing) | Allowed by role |
 | `/api/health` | Public (unchanged) | Same |
 
-The new gate is the single row "Click **Run** on a *new* problem". Everything else is status quo.
+**Invariant (single rule):** Every user-action path that calls `runQuery(editorSql)` from a UI handler — `handleRun` (Cmd/Ctrl+Enter), `handleSubmit` (Cmd/Ctrl+Shift+Enter), and any future handler that performs an engine call from a user click — must pass through the shared `gateAndExecute` helper before invoking the engine. Two rows in the matrix above (Run-on-new-slug and Submit-on-new-slug) are the gated cases; everything else is status quo.
 
 ## State, storage, and trigger semantics
 
@@ -153,16 +153,17 @@ The two storages clear via two independent triggers that don't depend on which p
    ```tsx
    "use client"
    export function AnonStorageReset({ isSignedIn }: { isSignedIn: boolean }) {
-       const prevRef = useRef<boolean | null>(null)
        useEffect(() => {
-           if (prevRef.current === false && isSignedIn) {
+           if (isSignedIn) {
                try { localStorage.removeItem("dl:anon:startedSlugs") } catch {}
            }
-           prevRef.current = isSignedIn
        }, [isSignedIn])
        return null
    }
    ```
+
+   **Important — clear on every mount-while-signed-in, not just transitions.** OAuth flows navigate away to the provider and return through `/api/auth/callback/<provider>`, then re-mount the root layout fresh. A component that only fires on a `false → true` transition (using `useRef`) sees `prevRef.current = null` and `isSignedIn = true` on first render and never clears. Clearing whenever `isSignedIn === true` is mounted is the correct, OAuth-callback-safe rule. The localStorage `removeItem` is a no-op when the key is already absent, so the cost is one cheap browser-API call per layout mount for signed-in users.
+
    Mounted under `app/layout.tsx` (which is a server component) alongside the existing `<Navbar />`:
    ```tsx
    const session = await auth()
@@ -175,9 +176,10 @@ The two storages clear via two independent triggers that don't depend on which p
 
 This pair of triggers is robust against:
 
+- **OAuth callback remount.** OAuth flows navigate to the provider and return via `/api/auth/callback/<provider>`, which triggers a fresh server render of the root layout. `AnonStorageReset` mounts fresh with `isSignedIn = true` and immediately clears localStorage. (This was the bug in the prior `prevRef === false → true` formulation; fixed.)
 - OAuth callbacks bouncing the user to any URL (the cookie clears server-side in the NextAuth event handler regardless of destination).
 - The `/auth/signin` page server-redirecting authed users elsewhere (`AnonStorageReset` is in the root layout and renders everywhere).
-- Sign-in → sign-out → fresh-anonymous cycle: the localStorage is empty after sign-in (the false→true transition cleared it), so a subsequent sign-out leaves the visitor with a fresh `[]` counter for the new anonymous session. The next true→false→true cycle would clear again. **An e2e test in Done criteria asserts exactly this cycle.**
+- Sign-in → sign-out → fresh-anonymous cycle: localStorage is empty after sign-in (cleared on mount), so a subsequent sign-out leaves the visitor with a fresh `[]` counter for the new anonymous session. **An e2e test in Done criteria exercises a real OAuth callback round-trip — not an in-place prop flip — to assert this cycle.**
 
 After sign-in the user has unlimited Run access. No retroactive credit for the three anon runs (they were never persisted to `Submission` anyway).
 
@@ -291,7 +293,7 @@ Conversion = `anon_signin_from_wall / anon_wall_shown`. Target after one week: >
 - [ ] Open problem A, click Run → counter = 1. Refresh the page → chip is hidden (slug already started), Run still works without counter change.
 - [ ] Click Run on three distinct new problems → counter = 3. Open a 4th distinct slug, click Run → modal appears, **the result table does not re-render** (engine not invoked), counter stays 3.
 - [ ] **Submit bypass test:** exhaust trial via Run on 3 slugs → open a 4th distinct slug → press **Submit** (or `Cmd/Ctrl+Shift+Enter`) → modal opens, **no query result is rendered**, no engine execution. (This specifically verifies the Submit-shortcut bypass closed.)
-- [ ] **Reset cycle test:** exhaust trial → sign in via mock OAuth → cookie cleared (NextAuth `events.signIn`) and localStorage cleared (`AnonStorageReset` `false → true` effect) → sign out → 5th distinct slug opens with chip showing "3 free runs" and Run works.
+- [ ] **Reset cycle test (real OAuth round-trip, not an in-place prop flip):** exhaust trial → click a sign-in button that triggers a real `signIn(<provider>)` call (use a Playwright mock route on `/api/auth/callback/<provider>` to simulate the provider redirect) → land on the post-auth destination → cookie cleared (NextAuth `events.signIn`) and localStorage cleared (`AnonStorageReset` mount-time effect with `isSignedIn=true`) → sign out → navigate to a 5th distinct slug → chip shows "3 free runs" and Run works. **The test must exercise the full OAuth callback navigation cycle**, since the bug Codex caught was specifically that an in-place `false → true` transition fires in dev but the real callback flow remounts fresh.
 - [ ] `Check Answer` (Submit) path for anonymous users on an **already-started** slug still returns the existing "Sign in to submit..." error from `validateSubmission` server-side (engine executes locally, DB write rejected). The new gate doesn't change that surface for already-started slugs; it only blocks engine execution on NEW slugs past quota.
 - [ ] **Navbar regression:** verify `components/layout/Navbar.tsx` still imports `auth()` and `prisma` and is rendered as a server component. (Asserts the reset implementation didn't accidentally convert the Navbar to a client component.)
 
