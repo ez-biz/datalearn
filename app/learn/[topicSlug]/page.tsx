@@ -6,6 +6,7 @@ import { notFound } from "next/navigation"
 import { Container } from "@/components/ui/Container"
 import { Card } from "@/components/ui/Card"
 import { Badge } from "@/components/ui/Badge"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 import { EmptyState } from "@/components/ui/EmptyState"
 
 type Props = {
@@ -40,6 +41,11 @@ export default async function TopicPage({ params }: Props) {
                 All topics
             </Link>
             <header className="mb-8">
+                <Eyebrow variant="bracket" className="mb-2">
+                    {topic.lane === "SQL"
+                        ? "SQL FUNDAMENTALS"
+                        : "DATA ENGINEERING CONCEPTS"}
+                </Eyebrow>
                 <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
                     {topic.name}
                 </h1>
