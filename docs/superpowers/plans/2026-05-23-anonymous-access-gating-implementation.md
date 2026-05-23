@@ -1177,10 +1177,26 @@ In `components/sql/SqlPlayground.tsx`, add:
         intent: AnonGateIntent,
         options: SqlQueryOptions
     ): Promise<SqlQueryResult | null> {
+        // Defense-in-depth: reject obviously malformed slugs at the caller
+        // boundary so buildNextCounter's "invalid-slug" path never reaches
+        // onTrialExhausted (which would open the wrong modal).
+        if (currentSlug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(currentSlug)) {
+            return null
+        }
+
         if (!currentSlug || isSignedIn || currentStarted) {
             return runQuery(queryRef.current, options)
         }
 
+        // Read localStorage directly instead of relying on the `startedSlugs`
+        // useState. This is intentional: another tab may have appended a slug
+        // since the last render, and we want the freshest count for the
+        // preflight check. The chip/lock UI uses `startedSlugs` from
+        // useState, so a brief inconsistency between chip text and gate
+        // behavior is possible (chip lags by one render) — that is
+        // acceptable for a soft conversion nudge. DO NOT collapse this
+        // re-read to a single-source model without thinking through the
+        // multi-tab staleness story.
         const localStarted = readAnonStartedSlugs()
         if (
             !localStarted.includes(currentSlug) &&
@@ -1460,7 +1476,10 @@ test("sign-in remount clears trial state and sign-out starts a fresh anonymous t
         .toBe(null)
 
     await context.clearCookies()
-    await page.goto("/practice/orders-in-january-2023")
+    // After sign-out, localStorage is empty (cleared on the signed-in mount)
+    // so any seeded slug should appear as fresh. Reuse SLUGS[0] rather than
+    // inventing a slug name that may not be in the seed data.
+    await page.goto(`/practice/${SLUGS[0]}`)
     await expect(page.getByText("3 free runs")).toBeVisible({ timeout: 60_000 })
     const runButton = await waitForRun(page)
     await runButton.click()
@@ -1471,7 +1490,11 @@ test("sign-in remount clears trial state and sign-out starts a fresh anonymous t
 
 test("Navbar stays a server component boundary", async () => {
     const fs = await import("node:fs/promises")
-    const source = await fs.readFile("components/layout/Navbar.tsx", "utf8")
+    const path = await import("node:path")
+    // Resolve from the repo root so the test works regardless of where
+    // Playwright is invoked from.
+    const navbarPath = path.resolve(process.cwd(), "components/layout/Navbar.tsx")
+    const source = await fs.readFile(navbarPath, "utf8")
 
     expect(source).not.toContain('"use client"')
     expect(source).not.toContain("'use client'")
@@ -1546,7 +1569,7 @@ git diff -- components/layout/Navbar.tsx app/layout.tsx components/sql/SqlPlaygr
 
 Expected:
 - `components/layout/Navbar.tsx` is unchanged.
-- `app/layout.tsx` only imports/renders `AnonStorageReset`; it does not call `auth()` for this feature.
+- `app/layout.tsx` reuses its existing `auth()` call to derive `isSignedIn` and passes it as a prop to `<AnonStorageReset isSignedIn={isSignedIn} />`. It does **not** add a second `auth()` call solely for this feature.
 - `components/sql/SqlPlayground.tsx` gates only `handleRun` and `handleSubmit`, not the shared `runQuery` from `useProblemDB`.
 - `actions/runtime.ts` is the only place that writes or deletes `dl_anon_started`.
 
@@ -1589,8 +1612,8 @@ Adds a soft anonymous free-trial gate for practice workspaces: three free proble
 
 - npm run test:anon-gate
 - npx tsc --noEmit -p .
-- DATABASE_URL='postgresql://anchitgupta@localhost:5432/datalearn' npm run build
-- DATABASE_URL='postgresql://anchitgupta@localhost:5432/datalearn' E2E_PORT=3100 npx playwright test tests/e2e/anon-gate.spec.ts
+- DATABASE_URL=$DATABASE_URL npm run build
+- DATABASE_URL=$DATABASE_URL E2E_PORT=3100 npx playwright test tests/e2e/anon-gate.spec.ts
 - git diff --check
 
 ## Not yet verified
