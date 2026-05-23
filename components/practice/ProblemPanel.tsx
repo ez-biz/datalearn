@@ -165,6 +165,7 @@ export function ProblemPanel({
                         {showDiscussion && (
                             <TabsTrigger
                                 value="discussion"
+                                aria-label="Discussion"
                                 className="px-3 py-2.5 text-[12px] font-mono"
                             >
                                 discuss

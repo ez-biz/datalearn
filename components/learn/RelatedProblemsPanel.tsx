@@ -21,7 +21,7 @@ export function RelatedProblemsPanel({
     return (
         <section className="mt-10">
             <Eyebrow variant="bracket" className="mb-3">
-                PRACTICE
+                Practice this
             </Eyebrow>
             <Card className="overflow-hidden divide-y divide-border">
                 {problems.map((p) => (
