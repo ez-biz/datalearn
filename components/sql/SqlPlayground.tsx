@@ -74,7 +74,7 @@ export function SqlPlayground({
 }: SqlPlaygroundProps) {
     const controlled = queryProp !== undefined
     const placeholder = initialSchema
-        ? "-- Write your SQL query here.\n-- Inspect the schema panel for available tables.\n"
+        ? "-- Write your SQL solution here.\n-- Table schemas and sample data are in the Description tab.\n"
         : DEFAULT_QUERY
     const [internalQuery, setInternalQuery] = useState(placeholder)
     const query = controlled ? (queryProp || placeholder) : internalQuery

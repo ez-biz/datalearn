@@ -136,29 +136,29 @@ export function ProblemPanel({
                     >
                         <TabsTrigger
                             value="description"
-                            className="px-3 py-2.5 text-[12px] font-mono"
+                            className="px-3 py-2.5 text-[13px]"
                         >
-                            prompt
+                            Description
                         </TabsTrigger>
                         {hasHints && (
                             <TabsTrigger
                                 value="hints"
-                                className="px-3 py-2.5 text-[12px] font-mono"
+                                className="px-3 py-2.5 text-[13px] gap-1.5"
                             >
-                                hints{" "}
-                                <span className="tabular-nums text-muted-foreground">
-                                    ({hints.length})
+                                Hints
+                                <span className="inline-flex items-center justify-center rounded-full bg-surface-muted px-1.5 text-[10px] font-mono tabular-nums text-muted-foreground min-w-[18px]">
+                                    {hints.length}
                                 </span>
                             </TabsTrigger>
                         )}
                         <TabsTrigger
                             value="history"
-                            className="px-3 py-2.5 text-[12px] font-mono"
+                            className="px-3 py-2.5 text-[13px] gap-1.5"
                         >
-                            history{" "}
+                            Submissions
                             {history.length > 0 && (
-                                <span className="tabular-nums text-muted-foreground">
-                                    ({history.length})
+                                <span className="inline-flex items-center justify-center rounded-full bg-surface-muted px-1.5 text-[10px] font-mono tabular-nums text-muted-foreground min-w-[18px]">
+                                    {history.length}
                                 </span>
                             )}
                         </TabsTrigger>
@@ -166,9 +166,9 @@ export function ProblemPanel({
                             <TabsTrigger
                                 value="discussion"
                                 aria-label="Discussion"
-                                className="px-3 py-2.5 text-[12px] font-mono"
+                                className="px-3 py-2.5 text-[13px]"
                             >
-                                discuss
+                                Discussion
                             </TabsTrigger>
                         )}
                     </TabsList>
@@ -248,10 +248,15 @@ function DescriptionTab({
         expectedRows.length > 0
 
     return (
-        <div className="p-5 space-y-7">
-            {/* Problem prose — first, so the user sees the task immediately */}
+        <div className="p-5 space-y-7 w-full">
+            {/* Problem prose — first, so the user sees the task immediately.
+                Note: NOT using `prose` here — Tailwind Typography sets
+                max-width: 65ch + margin auto, which centers the text in a
+                narrow column inside the panel even with max-w-none (CSS
+                cascade in Tailwind v4 doesn't always override). Styling
+                inline code manually instead. */}
             {description && (
-                <section className="prose prose-sm dark:prose-invert max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-p:leading-relaxed prose-code:font-mono prose-code:text-[0.85em] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:bg-surface-muted prose-code:before:content-none prose-code:after:content-none">
+                <section className="text-sm leading-relaxed text-foreground/90 [&_code]:font-mono [&_code]:text-[0.85em] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-surface-muted [&_code]:text-foreground">
                     <p className="whitespace-pre-wrap">{description}</p>
                 </section>
             )}
