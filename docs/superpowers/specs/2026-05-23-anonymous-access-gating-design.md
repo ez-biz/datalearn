@@ -9,7 +9,7 @@ Limit how much value an anonymous (non-signed-in) visitor can extract from `/pra
 
 **Posture (be precise about this).** The gate is a **conversion nudge backed by a soft server check**, not authoritative enforcement. A determined visitor can clear their browser storage/cookies or open a new browser for a fresh trial; two tabs racing on slug 3→4 can both pass the gate; tampered cookies fall back to localStorage or a fresh cookie state. We accept this because (a) the asset being protected is engagement value, not secrets — DuckDB-WASM runs entirely in-browser, so true enforcement would require server-mediated query execution we don't have, and (b) telemetry over the first two weeks will tell us whether bypass is statistically material. If it is, v1.1 adds a server-side `AnonSession` table with atomic append; v1 stays cookie-only.
 
-The change is a `gateAndExecute(intent)` helper inside `SqlPlayground.tsx` that wraps **both** `handleRun` and `handleSubmit` before they call the in-browser engine, new runtime server actions (`validateRunQuery` and `clearAnonRunCookie`) keyed off a signed cookie, a small chip on the Run button, a sign-in modal, a client-only `AnonStorageReset` component for post-OAuth storage cleanup, and three Vercel Analytics events. No schema changes. No backend rate-limiter dependency. No new auth providers.
+The change is a `gateAndExecute(intent)` helper inside `SqlPlayground.tsx` that wraps **both** `handleRun` and `handleSubmit` before they call the in-browser engine, new runtime server actions (`validateRunQuery` and `clearAnonRunCookie`) keyed off a signed cookie, a small chip on the Run button, a sign-in modal, a client-only `AnonStorageReset` component for post-OAuth storage cleanup, and three Vercel Analytics events. The server-only HMAC code stays out of client bundles. No schema changes. No backend rate-limiter dependency. No new auth providers.
 
 ## Non-goals
 
@@ -32,7 +32,7 @@ The change is a `gateAndExecute(intent)` helper inside `SqlPlayground.tsx` that 
 | Free quota | **3 problems** (one constant in code; tunable). |
 | What counts as "using" a problem | **First successful user-initiated engine action on that slug: `Run` or `Submit / Check Answer`.** Page visits, schema reads, and re-runs/re-submits on already-started slugs do not count. |
 | Storage of the counter | **localStorage** (`dl:anon:startedSlugs`) **+ signed cookie** (`dl_anon_started`, HMAC-signed JSON, server-readable). |
-| Counter reset semantics | `AnonStorageReset` clears localStorage client-side and calls `clearAnonRunCookie` server-side whenever it mounts with `isSignedIn === true`. This is callback-URL-independent, OAuth-remount-safe, and avoids relying on NextAuth event hooks for response-cookie mutation. Existing server-component `Navbar` is not touched. Never refunded. |
+| Counter reset semantics | `AnonStorageReset` mounts in the root layout, calls `clearAnonRunCookie` server-side, and clears localStorage only when the action confirms a signed-in session. This is callback-URL-independent, OAuth-remount-safe, avoids adding a root-layout `auth()` call, and avoids relying on NextAuth event hooks for response-cookie mutation. Existing server-component `Navbar` is not touched. Never refunded. |
 | Wall UX on the 4th problem | **Centered modal overlay** with two OAuth buttons + "Maybe later". |
 | Quota indicator | **Subtle chip** next to the Run button: `"3 free runs"`, `"2 free runs left"`, `"1 free run left"` (amber). Hidden on already-started slugs and for authed users. |
 | Server enforcement | New `validateRunQuery` server action checks the signed cookie. Soft/advisory, not authoritative — accepts cookie clear, incognito, and two-tab race as acceptable bypass paths in v1. |
@@ -144,6 +144,8 @@ New server actions in `actions/runtime.ts` (new file):
 
 The client performs a localStorage preflight before `validateRunQuery` so either storage can block the common 4th-new-problem case. The server action remains the soft same-browser check when localStorage is unavailable or stale, while localStorage still blocks if the cookie was cleared but the browser storage remains.
 
+Implementation boundary: client components import only a client-safe constants/storage module, for example `lib/anon-gate-client.ts` or `lib/anon-gate-constants.ts`. They must not import `lib/anon-gate.ts` if that file imports `node:crypto` for HMAC signing.
+
 **What this gate does and does not guarantee.** The localStorage preflight plus server action is a soft enforcement layer that catches the common case of "user clicks Run or Submit on the 4th problem in a single browser session" and produces a sign-in conversion event. It is **not** authoritative:
 
 - **Race between tabs.** If a visitor with `startedSlugs = ["a", "b"]` opens slugs `c` and `d` in two tabs simultaneously and clicks Run/Submit in both within the same ~100ms window, both requests can verify against the same incoming cookie value (length 2, OK), both pass the gate, and the response `Set-Cookie` for the second-arriving response overwrites the first. The cookie ends up with one of `{a,b,c}` or `{a,b,d}` — one slug is silently dropped from the counter. The visitor effectively gets 4 trials instead of 3. Accepted.
@@ -158,9 +160,9 @@ DuckDB / PGlite execution itself stays client-side; the server gate is on the ac
 
 The two storages clear from one root-mounted component that handles each storage through the right boundary and does not depend on which page the user lands on after OAuth.
 
-**Important architectural constraint.** The existing `components/layout/Navbar.tsx` is an **async server component** that imports `auth()`, `getNavLinks`, and `prisma`. It cannot host a `useSession()` hook directly without converting to a client component (which would break its data-fetching boundary). The reset design therefore uses a tiny client-only sibling component fed by a server-derived `isSignedIn` prop, not a `useSession` hook.
+**Important architectural constraint.** The existing `components/layout/Navbar.tsx` is an **async server component** that imports `auth()`, `getNavLinks`, and `prisma`. It cannot host a `useSession()` hook directly without converting to a client component (which would break its data-fetching boundary). The reset design therefore uses a tiny client-only sibling component that asks a server action whether a signed-in session exists, not a `useSession` hook and not a root-layout `auth()` call.
 
-1. **Cookie (server-side).** `AnonStorageReset` calls the `clearAnonRunCookie` server action whenever it mounts with `isSignedIn === true`. The action verifies the session and then clears `dl_anon_started` via the server-action cookie writer. This deliberately avoids a NextAuth `events.signIn` dependency: Auth.js event callbacks expose the event message, not a typed response writer, and the repo should not rely on undocumented response mutation from inside the event hook.
+1. **Cookie (server-side).** `AnonStorageReset` calls the `clearAnonRunCookie` server action when it mounts. The action verifies the session and then clears `dl_anon_started` via the server-action cookie writer. It returns `{ signedIn: true }` only when it actually saw a signed-in session, otherwise `{ signedIn: false }`. This deliberately avoids a NextAuth `events.signIn` dependency: Auth.js event callbacks expose the event message, not a typed response writer, and the repo should not rely on undocumented response mutation from inside the event hook.
 
 2. **localStorage (client-side).** The same new client component, `components/auth/AnonStorageReset.tsx`, clears browser storage directly:
    ```tsx
@@ -168,33 +170,31 @@ The two storages clear from one root-mounted component that handles each storage
    import { useEffect } from "react"
    import { clearAnonRunCookie } from "@/actions/runtime"
 
-   export function AnonStorageReset({ isSignedIn }: { isSignedIn: boolean }) {
+   export function AnonStorageReset() {
        useEffect(() => {
-           if (isSignedIn) {
-               try { localStorage.removeItem("dl:anon:startedSlugs") } catch {}
-               void clearAnonRunCookie()
-           }
-       }, [isSignedIn])
+           void clearAnonRunCookie().then((result) => {
+               if (result.signedIn) {
+                   try { localStorage.removeItem("dl:anon:startedSlugs") } catch {}
+               }
+           })
+       }, [])
        return null
    }
    ```
 
-   **Important — clear on every mount-while-signed-in, not just transitions.** OAuth flows navigate away to the provider and return through `/api/auth/callback/<provider>`, then re-mount the root layout fresh. A component that only fires on a `false → true` transition (using `useRef`) sees `prevRef.current = null` and `isSignedIn = true` on first render and never clears. Clearing whenever `isSignedIn === true` is mounted is the correct, OAuth-callback-safe rule. The localStorage `removeItem` is a no-op when the key is already absent, so the cost is one cheap browser-API call per layout mount for signed-in users.
+   **Important — clear on every mounted signed-in session, not just transitions.** OAuth flows navigate away to the provider and return through `/api/auth/callback/<provider>`, then re-mount the root layout fresh. A component that only fires on a `false → true` transition (using `useRef`) sees `prevRef.current = null` and `isSignedIn = true` on first render and never clears. Asking the server action on mount and clearing when it returns `signedIn: true` is the correct, OAuth-callback-safe rule. The localStorage `removeItem` is a no-op when the key is already absent.
 
    Mounted under `app/layout.tsx` (which is a server component) alongside the existing `<Navbar />`:
    ```tsx
-   const session = await auth()
-   const isSignedIn = Boolean(session?.user?.id)
-   ...
    <Navbar />
-   <AnonStorageReset isSignedIn={isSignedIn} />
+   <AnonStorageReset />
    ```
-   The boolean prop is derived from the already-existing `auth()` call in `app/layout.tsx` — no extra Prisma hit, no `SessionProvider` boundary, and Navbar's server-component status is preserved.
+   `app/layout.tsx` does not need to call `auth()` for this reset; the server action owns that check. No `SessionProvider` boundary is introduced, and Navbar's server-component status is preserved.
 
 This reset path is robust against:
 
-- **OAuth callback remount.** OAuth flows navigate to the provider and return via `/api/auth/callback/<provider>`, which triggers a fresh server render of the root layout. `AnonStorageReset` mounts fresh with `isSignedIn = true` and immediately clears localStorage. (This was the bug in the prior `prevRef === false → true` formulation; fixed.)
-- OAuth callbacks bouncing the user to any URL (the root layout renders there, `AnonStorageReset` mounts signed-in, and the cookie-clear server action runs).
+- **OAuth callback remount.** OAuth flows navigate to the provider and return via `/api/auth/callback/<provider>`, which triggers a fresh root layout mount. `AnonStorageReset` mounts fresh, the server action sees the signed-in session, and localStorage clears. (This was the bug in the prior `prevRef === false → true` formulation; fixed.)
+- OAuth callbacks bouncing the user to any URL (the root layout renders there, `AnonStorageReset` mounts, and the cookie-clear server action runs).
 - The `/auth/signin` page server-redirecting authed users elsewhere (`AnonStorageReset` is in the root layout and renders everywhere).
 - Sign-in → sign-out → fresh-anonymous cycle: localStorage is empty after sign-in (cleared on mount), so a subsequent sign-out leaves the visitor with a fresh `[]` counter for the new anonymous session. **An e2e test in Done criteria exercises a full root-layout remount with `isSignedIn=true` — not an in-place prop flip — to assert this cycle.**
 
@@ -287,16 +287,16 @@ Conversion = `anon_signin_from_wall / anon_wall_shown`. Target after one week: >
 | Existing logged-in users hit a regression | Gate paths are wrapped in `if (!isSignedIn)` client-side and `session?.user?.id` server-side; logged-in callers bypass the anon wall. Regression risk near zero. |
 | Background / non-Run engine calls (schema introspection, sample preview) accidentally consume quota | The gate hooks into `SqlPlayground.handleRun` and `handleSubmit` only — not the shared `runQuery` in `useProblemDB`. **An e2e test asserts that opening 4+ problems sequentially without clicking Run or Submit does not increment the counter** (see Done criteria). |
 | **Submit-shortcut bypass** — anon presses Submit on the 4th problem and sees the engine result table render before the server rejects the DB write | Closed: the gate wraps both `handleRun` and `handleSubmit` in a shared `gateAndExecute(intent)` helper. The engine is never invoked for trial-exhausted anons on a new slug, regardless of whether the action was Run or Submit. Dedicated e2e test (Submit bypass test) asserts no result table renders in this path. |
-| `localStorage` or cookie stale after sign-in if NextAuth callback redirects somewhere unexpected | `AnonStorageReset` mounts from the root layout on the callback destination, clears localStorage immediately, and invokes `clearAnonRunCookie` server-side with a session check. No `SessionProvider` required, no Navbar refactor. E2e test covers exhaust → sign-in → sign-out → fresh counter. |
+| `localStorage` or cookie stale after sign-in if NextAuth callback redirects somewhere unexpected | `AnonStorageReset` mounts from the root layout on the callback destination, invokes `clearAnonRunCookie` server-side, and clears localStorage when the action returns `signedIn: true`. No `SessionProvider` required, no Navbar refactor. E2e test covers exhaust -> sign-in -> sign-out -> fresh counter. |
 | **Navbar architectural drift** — implementer accidentally converts the server-component Navbar to a client component to host a `useSession` hook | The reset uses a dedicated client component (`AnonStorageReset`) fed by a prop derived from the layout's existing `auth()` call. Done criteria includes an explicit "Navbar still a server component" check. |
 
 ## Done criteria (gate)
 
 **Code + tests:**
 
-- [ ] New file `lib/anon-gate.ts` exports `MAX_FREE_PROBLEMS`, `signCounter()`, `verifyCounter()`, `parseCookieValue()`. Unit tests in `scripts/test-anon-gate.ts` cover signing, verification, and tamper detection.
-- [ ] New server actions in `actions/runtime.ts`: `validateRunQuery` returns the documented ok/blocked outcomes and mutates `dl_anon_started` only on allowed new slugs; `clearAnonRunCookie` deletes the cookie only when a signed-in session exists.
-- [ ] New client component `components/auth/AnonStorageReset.tsx` accepts `isSignedIn: boolean`, clears `localStorage["dl:anon:startedSlugs"]`, and calls `clearAnonRunCookie()` on every mount/effect run where `isSignedIn === true`. Mounted in `app/layout.tsx` alongside `<Navbar />` with `isSignedIn` derived from the layout's existing `auth()` call. **`Navbar.tsx` remains an async server component; no `useSession` hook is added to it.**
+- [ ] New file `lib/anon-gate.ts` exports `MAX_FREE_PROBLEMS`, `signCounter()`, `verifyCounter()`, `parseCookieValue()`. Unit tests in `scripts/test-anon-gate.ts` cover signing, verification, and tamper detection. If `lib/anon-gate.ts` imports `node:crypto`, client components import a separate client-safe constants/storage module instead of importing this file directly.
+- [ ] New server actions in `actions/runtime.ts`: `validateRunQuery` returns the documented ok/blocked outcomes and mutates `dl_anon_started` only on allowed new slugs; `clearAnonRunCookie` deletes the cookie only when a signed-in session exists and returns `{ signedIn: boolean }`.
+- [ ] New client component `components/auth/AnonStorageReset.tsx` mounts in `app/layout.tsx` alongside `<Navbar />`, calls `clearAnonRunCookie()` once on mount, and clears `localStorage["dl:anon:startedSlugs"]` only when the action returns `signedIn: true`. **`Navbar.tsx` remains an async server component; no `useSession` hook is added to it; `app/layout.tsx` does not add a separate `auth()` call just for the reset.**
 - [ ] `components/auth/SignInModal.tsx` renders the two OAuth buttons + "Maybe later"; opens on `trial-exhausted` from either the client localStorage preflight or the server action. It reuses the existing `SignInDialog`/`ProviderSignInActions` pattern and does not add Radix or a new dialog package.
 - [ ] `components/sql/SqlPlayground.tsx` accepts `isSignedIn`, renders the chip next to Run when `!isSignedIn && !startedSlugs.includes(currentSlug)`, and preserves a stable toolbar layout when the chip is absent. Amber border at `count == 2`. Run button shows a lock icon when `!isSignedIn && !startedSlugs.includes(currentSlug) && count >= 3` (lock never appears on already-started slugs).
 - [ ] **Both `SqlPlayground.handleRun` (`Cmd/Ctrl+Enter`) AND `SqlPlayground.handleSubmit` (`Cmd/Ctrl+Shift+Enter`) wrap the underlying `runQuery` call in the gate.** A shared `gateAndExecute(intent)` helper inside `SqlPlayground` is the single point of control. The helper first checks localStorage, then calls `validateRunQuery`, and never invokes the engine when either storage says the trial is exhausted for a new slug. The shared `runQuery` in `useProblemDB` is *not* gated (so schema introspection still works). `ProblemClient` passes `isSignedIn` and an `onTrialExhausted` callback prop that the gate invokes; the callback opens the modal.
@@ -309,7 +309,7 @@ Conversion = `anon_signin_from_wall / anon_wall_shown`. Target after one week: >
 - [ ] Open problem A, click Run → counter = 1. Refresh the page → chip is hidden (slug already started), Run still works without counter change.
 - [ ] Click Run on three distinct new problems → counter = 3. Open a 4th distinct slug, click Run → modal appears, **the result table does not re-render** (engine not invoked), counter stays 3.
 - [ ] **Submit bypass test:** exhaust trial via Run on 3 slugs → open a 4th distinct slug → press **Submit** (or `Cmd/Ctrl+Shift+Enter`) → modal opens, **no query result is rendered**, no engine execution. (This specifically verifies the Submit-shortcut bypass closed.)
-- [ ] **Reset cycle test (full layout remount, not an in-place prop flip):** exhaust trial → establish a real signed-in NextAuth session using the repo's e2e session-cookie fixture or a mocked provider callback → reload/navigate through the post-auth destination so the root layout mounts with `isSignedIn=true` on first render → cookie cleared by `clearAnonRunCookie` and localStorage cleared by `AnonStorageReset` → sign out / clear the session cookie → navigate to a 5th distinct slug → chip shows "3 free runs" and Run works. **The test must exercise a fresh mounted root layout with `isSignedIn=true`**, since the bug Codex caught was specifically that an in-place `false → true` transition fires in dev but a real callback/remount starts already signed in.
+- [ ] **Reset cycle test (full layout remount, not an in-place prop flip):** exhaust trial → establish a real signed-in NextAuth session using the repo's e2e session-cookie fixture or a mocked provider callback → reload/navigate through the post-auth destination so the root layout mounts fresh with an already-signed-in session → cookie cleared by `clearAnonRunCookie` and localStorage cleared by `AnonStorageReset` → sign out / clear the session cookie → navigate to a 5th distinct slug → chip shows "3 free runs" and Run works. **The test must exercise a fresh mounted root layout with the session already present**, since the bug Codex caught was specifically that an in-place `false -> true` transition fires in dev but a real callback/remount starts already signed in.
 - [ ] `Check Answer` (Submit) path for anonymous users on an **already-started** slug still returns the existing "Sign in to submit..." error from `validateSubmission` server-side (engine executes locally, DB write rejected). The new gate doesn't change that surface for already-started slugs; it only blocks engine execution on NEW slugs past quota.
 - [ ] **Navbar regression:** verify `components/layout/Navbar.tsx` still imports `auth()` and `prisma` and is rendered as a server component. (Asserts the reset implementation didn't accidentally convert the Navbar to a client component.)
 
