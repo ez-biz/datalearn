@@ -8,8 +8,9 @@ import { redirect } from "next/navigation"
 import { Container } from "@/components/ui/Container"
 import { Card } from "@/components/ui/Card"
 import { LinkButton } from "@/components/ui/Button"
-import { Badge } from "@/components/ui/Badge"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 import { EmptyState } from "@/components/ui/EmptyState"
+import { StatusPill, type StatusPillStatus } from "@/components/ui/StatusPill"
 
 export const dynamic = "force-dynamic"
 
@@ -29,6 +30,9 @@ export default async function MyArticlesPage() {
         <Container width="lg" className="py-10">
             <header className="flex items-end justify-between mb-6 gap-4 flex-wrap">
                 <div>
+                    <Eyebrow variant="bracket" className="mb-1">
+                        MY ARTICLES
+                    </Eyebrow>
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                         My articles
                     </h1>
@@ -64,6 +68,11 @@ export default async function MyArticlesPage() {
                                     className="grid grid-cols-1 sm:grid-cols-[1fr_8rem_8rem] items-center gap-4 px-5 py-4 hover:bg-surface-muted/60 transition-colors group"
                                 >
                                     <div className="min-w-0">
+                                        {a.hasVisualBlocks && (
+                                            <Eyebrow className="mb-1">
+                                                VISUAL
+                                            </Eyebrow>
+                                        )}
                                         <h3 className="font-medium group-hover:text-primary transition-colors truncate">
                                             {a.title || "(untitled draft)"}
                                         </h3>
@@ -93,16 +102,12 @@ export default async function MyArticlesPage() {
 }
 
 function StatusBadge({ status }: { status: ArticleStatus }) {
-    const map: Record<ArticleStatus, { variant: "primary" | "secondary" | "accent"; label: string }> = {
-        DRAFT: { variant: "secondary", label: "Draft" },
-        SUBMITTED: { variant: "accent", label: "In review" },
-        PUBLISHED: { variant: "primary", label: "Published" },
-        ARCHIVED: { variant: "secondary", label: "Archived" },
+    const map: Record<ArticleStatus, { pill: StatusPillStatus; label: string }> = {
+        DRAFT: { pill: "draft", label: "draft" },
+        SUBMITTED: { pill: "pending", label: "review" },
+        PUBLISHED: { pill: "accepted", label: "published" },
+        ARCHIVED: { pill: "rejected", label: "archived" },
     }
-    const { variant, label } = map[status]
-    return (
-        <Badge variant={variant} className="normal-case tracking-normal">
-            {label}
-        </Badge>
-    )
+    const { pill, label } = map[status]
+    return <StatusPill status={pill} label={label} />
 }

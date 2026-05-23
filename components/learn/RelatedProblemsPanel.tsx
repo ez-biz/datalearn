@@ -1,7 +1,8 @@
 import Link from "next/link"
-import { ArrowRight, Code2 } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 import { Card } from "@/components/ui/Card"
 import { DifficultyBadge } from "@/components/ui/Badge"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 
 interface RelatedProblem {
     id: string
@@ -19,12 +20,9 @@ export function RelatedProblemsPanel({
     if (problems.length === 0) return null
     return (
         <section className="mt-10">
-            <header className="flex items-center gap-2 mb-3">
-                <Code2 className="h-4 w-4 text-primary" />
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                    Practice this
-                </h2>
-            </header>
+            <Eyebrow variant="bracket" className="mb-3">
+                Practice this
+            </Eyebrow>
             <Card className="overflow-hidden divide-y divide-border">
                 {problems.map((p) => (
                     <Link

@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
 import { requireAdminPage } from "@/lib/admin-page-auth"
-import { Container } from "@/components/ui/Container"
+import { AdminListShell } from "@/components/admin/AdminListShell"
 import { ProblemForm } from "@/components/admin/ProblemForm"
 
 export const metadata = {
@@ -13,21 +13,17 @@ export default async function NewProblemPage() {
     await requireAdminPage()
 
     return (
-        <Container width="lg" className="py-10">
-            <Link
-                href="/admin/problems"
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-4"
-            >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                Back to problems
-            </Link>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-1">
-                New problem
-            </h1>
-            <p className="text-sm text-muted-foreground mb-6">
-                Submitted via{" "}
-                <code className="font-mono text-xs">POST /api/admin/problems</code>
-            </p>
+        <AdminListShell
+            eyebrow="NEW PROBLEM"
+            title="New problem"
+            description={
+                <>
+                    Submitted via{" "}
+                    <code className="font-mono text-xs">POST /api/admin/problems</code>
+                </>
+            }
+            actions={<BackLink href="/admin/problems" label="Back to problems" />}
+        >
             <ProblemForm
                 initial={{
                     mode: "create",
@@ -48,6 +44,18 @@ export default async function NewProblemPage() {
                     solutionSql: "",
                 }}
             />
-        </Container>
+        </AdminListShell>
+    )
+}
+
+function BackLink({ href, label }: { href: string; label: string }) {
+    return (
+        <Link
+            href={href}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            {label}
+        </Link>
     )
 }

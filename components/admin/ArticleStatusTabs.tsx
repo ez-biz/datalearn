@@ -2,7 +2,11 @@
 
 import Link from "next/link"
 import type { ArticleStatus } from "@prisma/client"
-import { cn } from "@/lib/utils"
+import {
+    Tabs,
+    TabsList,
+    TabsTrigger,
+} from "@/components/shadcn/tabs"
 
 const TABS: { status: ArticleStatus | null; label: string }[] = [
     { status: null, label: "All" },
@@ -21,33 +25,33 @@ export function ArticleStatusTabs({
     counts: Partial<Record<ArticleStatus, number>>
     active: ArticleStatus | null
 }) {
+    const activeValue = active ?? "ALL"
+
     return (
-        <nav className="flex flex-wrap items-center gap-1 mb-5 border-b border-border">
-            {TABS.map((tab) => {
-                const isActive = tab.status === active
-                const count = tab.status === null ? total : counts[tab.status] ?? 0
-                return (
-                    <Link
-                        key={tab.label}
-                        href={
-                            tab.status === null
-                                ? "/admin/articles"
-                                : `/admin/articles?status=${tab.status}`
-                        }
-                        className={cn(
-                            "relative inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors -mb-px",
-                            isActive
-                                ? "text-foreground border-b-2 border-primary"
-                                : "text-muted-foreground hover:text-foreground border-b-2 border-transparent"
-                        )}
-                    >
-                        {tab.label}
-                        <span className="text-[11px] tabular-nums text-muted-foreground">
-                            {count}
-                        </span>
-                    </Link>
-                )
-            })}
-        </nav>
+        <Tabs value={activeValue} className="mb-5">
+            <TabsList variant="line" className="flex-wrap justify-start">
+                {TABS.map((tab) => {
+                    const value = tab.status ?? "ALL"
+                    const count =
+                        tab.status === null ? total : counts[tab.status] ?? 0
+                    return (
+                        <TabsTrigger key={tab.label} value={value} asChild>
+                            <Link
+                                href={
+                                    tab.status === null
+                                        ? "/admin/articles"
+                                        : `/admin/articles?status=${tab.status}`
+                                }
+                            >
+                                {tab.label}
+                                <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                                    {count}
+                                </span>
+                            </Link>
+                        </TabsTrigger>
+                    )
+                })}
+            </TabsList>
+        </Tabs>
     )
 }

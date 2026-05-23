@@ -2,10 +2,12 @@ import Link from "next/link"
 import { Inbox } from "lucide-react"
 import { prisma } from "@/lib/prisma"
 import { requireAdminPage } from "@/lib/admin-page-auth"
-import { Container } from "@/components/ui/Container"
+import { AdminListShell } from "@/components/admin/AdminListShell"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Badge } from "@/components/ui/Badge"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 import { EmptyState } from "@/components/ui/EmptyState"
+import { StatusPill } from "@/components/ui/StatusPill"
 import { ReportRowActions } from "@/components/admin/ReportRowActions"
 
 export const metadata = {
@@ -37,7 +39,7 @@ export default async function AdminReportsPage() {
             orderBy: { createdAt: "desc" },
             take: OPEN_LIMIT,
             include: {
-                problem: { select: { slug: true, title: true } },
+                problem: { select: { slug: true, number: true, title: true } },
                 user: { select: { id: true, name: true, email: true } },
             },
         }),
@@ -46,26 +48,26 @@ export default async function AdminReportsPage() {
             orderBy: { resolvedAt: "desc" },
             take: RESOLVED_LIMIT,
             include: {
-                problem: { select: { slug: true, title: true } },
+                problem: { select: { slug: true, number: true, title: true } },
                 user: { select: { id: true, name: true, email: true } },
             },
         }),
     ])
 
     return (
-        <Container width="lg" className="py-10">
-            <header className="mb-6">
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                    Reports
-                </h1>
-                <p className="mt-1 text-sm text-muted-foreground">
+        <AdminListShell
+            eyebrow="REPORTS"
+            title="Reports"
+            description={
+                <>
                     {open.length} open · {resolved.length} resolved
-                </p>
-            </header>
+                </>
+            }
+        >
 
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+            <Eyebrow variant="bracket" className="mb-2">
                 Open
-            </h2>
+            </Eyebrow>
             {open.length === 0 ? (
                 <EmptyState
                     icon={<Inbox className="h-5 w-5" />}
@@ -84,6 +86,7 @@ export default async function AdminReportsPage() {
                                 message={r.message}
                                 createdAt={r.createdAt}
                                 problemSlug={r.problem.slug}
+                                problemNumber={r.problem.number}
                                 problemTitle={r.problem.title}
                                 reporter={
                                     r.user
@@ -99,9 +102,9 @@ export default async function AdminReportsPage() {
 
             {resolved.length > 0 && (
                 <>
-                    <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                    <Eyebrow variant="bracket" className="mb-2">
                         Resolved
-                    </h2>
+                    </Eyebrow>
                     <Card>
                         <CardContent className="p-0 divide-y divide-border">
                             {resolved.map((r) => (
@@ -114,6 +117,7 @@ export default async function AdminReportsPage() {
                                     createdAt={r.createdAt}
                                     resolvedAt={r.resolvedAt}
                                     problemSlug={r.problem.slug}
+                                    problemNumber={r.problem.number}
                                     problemTitle={r.problem.title}
                                     reporter={
                                         r.user
@@ -127,7 +131,7 @@ export default async function AdminReportsPage() {
                     </Card>
                 </>
             )}
-        </Container>
+        </AdminListShell>
     )
 }
 
@@ -139,6 +143,7 @@ function ReportRow({
     createdAt,
     resolvedAt,
     problemSlug,
+    problemNumber,
     problemTitle,
     reporter,
     resolved,
@@ -150,6 +155,7 @@ function ReportRow({
     createdAt: Date
     resolvedAt?: Date | null
     problemSlug: string
+    problemNumber: number
     problemTitle: string
     reporter: string
     resolved: boolean
@@ -161,10 +167,17 @@ function ReportRow({
                     <Badge variant={kind === "WRONG_ANSWER" ? "primary" : "secondary"}>
                         {kindLabel}
                     </Badge>
+                    <StatusPill
+                        status={resolved ? "accepted" : "pending"}
+                        label={resolved ? "resolved" : "open"}
+                    />
                     <Link
                         href={`/practice/${problemSlug}`}
                         className="text-sm font-medium hover:text-primary truncate"
                     >
+                        <span className="mr-1 font-mono text-[11px] font-normal tabular-nums text-muted-foreground">
+                            #{String(problemNumber).padStart(3, "0")}
+                        </span>
                         {problemTitle}
                     </Link>
                     <Link

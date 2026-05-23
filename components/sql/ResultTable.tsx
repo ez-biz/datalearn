@@ -1,6 +1,7 @@
 "use client"
 
 import { AlertCircle, Loader2, Table2, TriangleAlert } from "lucide-react"
+import { ScrollableTable } from "@/components/ui/ScrollableTable"
 
 interface ResultTableProps {
     data: any[]
@@ -74,51 +75,53 @@ export function ResultTable({
                     </span>
                 </div>
             )}
-            <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
-                <table className="min-w-full text-[13px]">
-                    <thead className="sticky top-0 z-10 bg-surface-muted/95 backdrop-blur">
-                        <tr>
-                            {columns.map((col) => (
-                                <th
-                                    key={col}
-                                    className="px-4 py-2.5 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide border-b border-border whitespace-nowrap"
-                                >
-                                    {col}
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody className="font-mono">
-                        {data.map((row, i) => (
-                            <tr
-                                key={i}
-                                className="border-b border-border last:border-0 hover:bg-surface-muted/50"
-                            >
-                                {columns.map((col) => {
-                                    const v = row[col]
-                                    return (
-                                        <td
-                                            key={`${i}-${col}`}
-                                            className={`px-4 py-2 whitespace-nowrap text-foreground/90 ${isNumeric(v) ? "tabular-nums text-right" : ""}`}
-                                        >
-                                            {v === null || v === undefined ? (
-                                                <span className="text-muted-foreground/60 italic font-sans">
-                                                    NULL
-                                                </span>
-                                            ) : typeof v === "bigint" ? (
-                                                String(v)
-                                            ) : typeof v === "object" ? (
-                                                JSON.stringify(v)
-                                            ) : (
-                                                String(v)
-                                            )}
-                                        </td>
-                                    )
-                                })}
+            <div className="min-h-0 flex-1">
+                <ScrollableTable className="h-full">
+                    <table className="min-w-full text-[13px]">
+                        <thead className="sticky top-0 z-10 bg-surface-muted/95 backdrop-blur">
+                            <tr>
+                                {columns.map((col) => (
+                                    <th
+                                        key={col}
+                                        className="px-4 py-2.5 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide border-b border-border whitespace-nowrap"
+                                    >
+                                        {col}
+                                    </th>
+                                ))}
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="font-mono">
+                            {data.map((row, i) => (
+                                <tr
+                                    key={i}
+                                    className="border-b border-border last:border-0 hover:bg-surface-muted/50"
+                                >
+                                    {columns.map((col) => {
+                                        const v = row[col]
+                                        return (
+                                            <td
+                                                key={`${i}-${col}`}
+                                                className={`px-4 py-2 whitespace-nowrap text-foreground/90 ${isNumeric(v) ? "tabular-nums text-right" : ""}`}
+                                            >
+                                                {v === null || v === undefined ? (
+                                                    <span className="text-muted-foreground/60 italic font-sans">
+                                                        NULL
+                                                    </span>
+                                                ) : typeof v === "bigint" ? (
+                                                    String(v)
+                                                ) : typeof v === "object" ? (
+                                                    JSON.stringify(v)
+                                                ) : (
+                                                    String(v)
+                                                )}
+                                            </td>
+                                        )
+                                    })}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </ScrollableTable>
             </div>
         </div>
     )

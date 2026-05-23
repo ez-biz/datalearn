@@ -1,8 +1,9 @@
 import Link from "next/link"
 import { prisma } from "@/lib/prisma"
 import { requireAdminPage } from "@/lib/admin-page-auth"
-import { Container } from "@/components/ui/Container"
+import { AdminListShell } from "@/components/admin/AdminListShell"
 import { Card, CardContent } from "@/components/ui/Card"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 import { Badge } from "@/components/ui/Badge"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { TopicNewForm } from "@/components/admin/TopicNewForm"
@@ -23,16 +24,16 @@ export default async function TopicsPage() {
     })
 
     return (
-        <Container width="lg" className="py-10">
-            <header className="mb-6">
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                    Topics
-                </h1>
-                <p className="mt-1 text-sm text-muted-foreground">
+        <AdminListShell
+            eyebrow="TOPICS"
+            title="Topics"
+            description={
+                <>
                     {topics.length} total · managed via{" "}
                     <code className="font-mono text-xs">/api/admin/topics</code>
-                </p>
-            </header>
+                </>
+            }
+        >
 
             <Card className="mb-6">
                 <CardContent className="p-5">
@@ -67,6 +68,14 @@ export default async function TopicsPage() {
                                                 {t._count.articles}{" "}
                                                 {t._count.articles === 1 ? "article" : "articles"}
                                             </Badge>
+                                            <Eyebrow>
+                                                {t.lane === "SQL"
+                                                    ? "SQL"
+                                                    : "DATA ENGINEERING"}
+                                            </Eyebrow>
+                                            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                                                order {t.displayOrder}
+                                            </span>
                                         </div>
                                         <p className="text-xs text-muted-foreground font-mono truncate">
                                             /{t.slug}
@@ -88,6 +97,6 @@ export default async function TopicsPage() {
                     </CardContent>
                 </Card>
             )}
-        </Container>
+        </AdminListShell>
     )
 }

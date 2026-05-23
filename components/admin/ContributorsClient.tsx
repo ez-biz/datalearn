@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { Loader2, Search, ShieldCheck, ShieldOff, UserPlus } from "lucide-react"
-import { Badge } from "@/components/ui/Badge"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
+import { Kbd } from "@/components/ui/Kbd"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { cn } from "@/lib/utils"
 
@@ -87,8 +87,11 @@ export function ContributorsClient({ initialUsers }: { initialUsers: UserRow[] }
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="Search by email or name…"
-                        className="pl-9"
+                        className="pl-9 pr-12"
                     />
+                    <Kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 sm:inline-flex">
+                        /
+                    </Kbd>
                 </div>
                 <div className="flex items-center gap-1 rounded-md border border-border bg-surface p-1">
                     {FILTERS.map((f) => (
@@ -153,7 +156,7 @@ export function ContributorsClient({ initialUsers }: { initialUsers: UserRow[] }
                                         </span>
                                         <RoleBadge role={u.role} />
                                         {u._count.articles > 0 && (
-                                            <span className="text-[11px] text-muted-foreground tabular-nums">
+                                            <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
                                                 {u._count.articles} article
                                                 {u._count.articles === 1 ? "" : "s"}
                                             </span>
@@ -181,28 +184,21 @@ export function ContributorsClient({ initialUsers }: { initialUsers: UserRow[] }
 }
 
 function RoleBadge({ role }: { role: UserRow["role"] }) {
-    if (role === "ADMIN")
-        return (
-            <Badge variant="accent" className="normal-case tracking-normal">
-                Admin
-            </Badge>
-        )
-    if (role === "CONTRIBUTOR")
-        return (
-            <Badge variant="primary" className="normal-case tracking-normal">
-                Contributor
-            </Badge>
-        )
-    if (role === "MODERATOR")
-        return (
-            <Badge variant="accent" className="normal-case tracking-normal">
-                Moderator
-            </Badge>
-        )
+    const tokens: Record<UserRow["role"], string> = {
+        ADMIN: "bg-primary/15 text-primary",
+        MODERATOR: "bg-warning/15 text-warning",
+        CONTRIBUTOR: "bg-accent/15 text-accent",
+        USER: "bg-muted-foreground/15 text-muted-foreground",
+    }
     return (
-        <Badge variant="secondary" className="normal-case tracking-normal">
-            User
-        </Badge>
+        <span
+            className={cn(
+                "inline-flex rounded-full px-2 py-0.5 font-mono text-[11px] font-medium lowercase",
+                tokens[role]
+            )}
+        >
+            {role.toLowerCase()}
+        </span>
     )
 }
 

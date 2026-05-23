@@ -2,7 +2,7 @@ import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
 import { prisma } from "@/lib/prisma"
 import { requireAdminPage } from "@/lib/admin-page-auth"
-import { Container } from "@/components/ui/Container"
+import { AdminListShell } from "@/components/admin/AdminListShell"
 import { ArticleForm } from "@/components/admin/ArticleForm"
 
 export const metadata = {
@@ -20,21 +20,17 @@ export default async function NewArticlePage() {
     })
 
     return (
-        <Container width="lg" className="py-10">
-            <Link
-                href="/admin/articles"
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-4"
-            >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                Back to articles
-            </Link>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-1">
-                New article
-            </h1>
-            <p className="text-sm text-muted-foreground mb-6">
-                Submitted via{" "}
-                <code className="font-mono text-xs">POST /api/admin/articles</code>
-            </p>
+        <AdminListShell
+            eyebrow="NEW ARTICLE"
+            title="New article"
+            description={
+                <>
+                    Submitted via{" "}
+                    <code className="font-mono text-xs">POST /api/admin/articles</code>
+                </>
+            }
+            actions={<BackLink href="/admin/articles" label="Back to articles" />}
+        >
             <ArticleForm
                 initial={{
                     mode: "create",
@@ -49,6 +45,18 @@ export default async function NewArticlePage() {
                     reviewNotes: null,
                 }}
             />
-        </Container>
+        </AdminListShell>
+    )
+}
+
+function BackLink({ href, label }: { href: string; label: string }) {
+    return (
+        <Link
+            href={href}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            {label}
+        </Link>
     )
 }

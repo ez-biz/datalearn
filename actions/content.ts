@@ -23,9 +23,11 @@ export async function getTopics() {
                     take: 1,
                 },
             },
-            orderBy: {
-                name: 'asc'
-            }
+            orderBy: [
+                { lane: "asc" },
+                { displayOrder: "asc" },
+                { name: "asc" },
+            ],
         })
         return { success: true, data: topics }
     } catch (error) {

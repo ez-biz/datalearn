@@ -6,7 +6,7 @@ import { TopicCreateInput } from "@/lib/admin-validation"
 
 export const GET = withAdmin(async () => {
     const topics = await prisma.topic.findMany({
-        orderBy: { name: "asc" },
+        orderBy: [{ lane: "asc" }, { displayOrder: "asc" }, { name: "asc" }],
         include: { _count: { select: { articles: true } } },
     })
     return NextResponse.json({ data: topics })

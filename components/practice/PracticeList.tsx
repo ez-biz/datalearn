@@ -8,6 +8,7 @@ import { DifficultyBadge } from "@/components/ui/Badge"
 import { Card } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { EmptyState } from "@/components/ui/EmptyState"
+import { Kbd } from "@/components/ui/Kbd"
 import { TagPill } from "@/components/ui/TagPill"
 import { cn } from "@/lib/utils"
 import { shouldWarmPostgres, warmSqlEngine } from "@/lib/sql-engine/warmup"
@@ -88,8 +89,11 @@ export function PracticeList({ problems, solvedSlugs }: PracticeListProps) {
                         placeholder="Search problems…"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        className="pl-9"
+                        className="pl-9 pr-12"
                     />
+                    <Kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 sm:inline-flex">
+                        /
+                    </Kbd>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     <div className="flex items-center gap-1 rounded-md border border-border bg-surface p-1">
@@ -186,7 +190,7 @@ export function PracticeList({ problems, solvedSlugs }: PracticeListProps) {
                                         <span className="h-2 w-2 rounded-full bg-border-strong" />
                                     )}
                                 </span>
-                                <span className="hidden md:inline text-xs tabular-nums text-muted-foreground">
+                                <span className="hidden md:inline font-mono text-[11px] tabular-nums text-muted-foreground">
                                     {String(p.number).padStart(2, "0")}
                                 </span>
                                 <div className="min-w-0">

@@ -6,7 +6,9 @@ import type { DiscussionSettings } from "@prisma/client"
 import { Loader2, Save } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 import { Field, Input } from "@/components/ui/Input"
+import { Switch } from "@/components/shadcn/switch"
 
 type SettingsFormState = Omit<
     DiscussionSettings,
@@ -145,17 +147,15 @@ export function DiscussionSettingsForm({
     return (
         <div className="space-y-4">
             <Card className="p-5">
-                <label className="flex min-h-10 items-center gap-3">
-                    <input
-                        type="checkbox"
+                <label className="flex min-h-10 cursor-pointer items-center gap-3">
+                    <Switch
                         checked={settings.globalEnabled}
-                        onChange={(e) =>
+                        onCheckedChange={(checked) =>
                             setSettings((current) => ({
                                 ...current,
-                                globalEnabled: e.target.checked,
+                                globalEnabled: checked,
                             }))
                         }
-                        className="h-5 w-5 rounded border-border bg-surface text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     />
                     <span>
                         <span className="block text-sm font-medium">
@@ -169,9 +169,9 @@ export function DiscussionSettingsForm({
             </Card>
 
             <Card className="p-5">
-                <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                <Eyebrow variant="bracket" className="mb-4">
                     Moderation and trust
-                </h2>
+                </Eyebrow>
                 <div className="grid gap-4 md:grid-cols-2">
                     {NUMBER_FIELDS.map((field) => (
                         <Field
@@ -199,9 +199,9 @@ export function DiscussionSettingsForm({
             <div className="grid gap-4 lg:grid-cols-3">
                 {RATE_LIMIT_GROUPS.map((group) => (
                     <Card key={group.title} className="p-5">
-                        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                        <Eyebrow variant="bracket" className="mb-4">
                             {group.title}
-                        </h2>
+                        </Eyebrow>
                         <div className="space-y-4">
                             {group.fields.map(([key, label]) => (
                                 <Field key={key} label={label} htmlFor={key}>

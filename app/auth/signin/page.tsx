@@ -13,6 +13,7 @@ import { auth } from "@/lib/auth"
 import { sanitizeAuthCallbackPath } from "@/lib/auth-redirect"
 import { ProviderSignInActions } from "@/components/auth/ProviderSignInActions"
 import { Card } from "@/components/ui/Card"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 import { Logo } from "@/components/ui/Logo"
 
 export const metadata: Metadata = {
@@ -126,6 +127,9 @@ LIMIT 5;`}</code></pre>
                 <section className="order-1 flex items-center lg:order-2">
                     <Card className="w-full p-6 shadow-sm sm:p-7">
                         <div className="mb-8">
+                            <Eyebrow variant="bracket" className="mb-4">
+                                SIGN IN
+                            </Eyebrow>
                             <Logo />
                             <h1 className="mt-6 text-3xl font-bold tracking-tight sm:text-4xl">
                                 Train like the query is going live.

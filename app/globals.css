@@ -1,105 +1,167 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222 47% 11%;
+  /* canvas */
+  --background: 220 13% 7%;
+  --foreground: 220 14% 92%;
 
-  --surface: 0 0% 100%;
-  --surface-muted: 220 14% 96%;
-  --surface-elevated: 0 0% 100%;
+  --surface: 220 13% 10%;
+  --surface-muted: 220 13% 13%;
+  --surface-elevated: 220 13% 17%;
 
-  --border: 220 13% 91%;
-  --border-strong: 220 13% 82%;
+  --border: 220 13% 18%;
+  --border-strong: 220 13% 26%;
 
-  --muted: 220 14% 96%;
-  --muted-foreground: 220 9% 46%;
+  --muted: 220 13% 13%;
+  --muted-foreground: 220 9% 60%;
+  --muted-foreground-dim: 220 9% 42%;
 
-  --primary: 142 71% 45%;
-  --primary-foreground: 222 47% 11%;
-  --primary-hover: 142 71% 40%;
+  --primary: 166 76% 64%;
+  --primary-foreground: 168 84% 11%;
+  --primary-hover: 166 76% 58%;
 
-  --accent: 32 95% 44%;
-  --accent-foreground: 0 0% 100%;
+  --accent: 258 89% 76%;
+  --accent-foreground: 258 70% 14%;
 
-  --destructive: 0 72% 51%;
-  --destructive-foreground: 0 0% 100%;
+  --destructive: 0 84% 71%;
+  --destructive-foreground: 220 13% 7%;
 
-  --warning: 38 92% 50%;
+  --warning: 38 92% 58%;
   --warning-foreground: 28 100% 14%;
 
-  --success: 142 71% 45%;
-  --success-foreground: 0 0% 100%;
+  --success: 166 76% 64%;
+  --success-foreground: 168 84% 11%;
 
-  --easy: 142 71% 45%;
-  --easy-bg: 142 76% 96%;
-  --easy-fg: 142 84% 24%;
+  --easy: 142 71% 64%;
+  --easy-bg: 142 50% 18%;
+  --easy-fg: 142 71% 84%;
 
-  --medium: 32 95% 44%;
-  --medium-bg: 33 100% 96%;
-  --medium-fg: 26 90% 30%;
+  --medium: 38 92% 58%;
+  --medium-bg: 38 50% 18%;
+  --medium-fg: 38 92% 84%;
 
-  --hard: 0 72% 51%;
-  --hard-bg: 0 86% 97%;
-  --hard-fg: 0 70% 35%;
+  --hard: 0 84% 71%;
+  --hard-bg: 0 50% 20%;
+  --hard-fg: 0 84% 84%;
 
-  --ring: 142 71% 45%;
+  /* shadcn surface family (aliases) */
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface-elevated);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--surface-muted);
+  --secondary-foreground: var(--foreground);
+  --input: var(--border);
+
+  --ring: var(--primary);
   --radius: 0.5rem;
-}
 
-.dark {
-  --background: 222 47% 6%;
-  --foreground: 210 20% 98%;
-
-  --surface: 220 27% 9%;
-  --surface-muted: 222 32% 12%;
-  --surface-elevated: 222 32% 14%;
-
-  --border: 220 18% 18%;
-  --border-strong: 220 14% 28%;
-
-  --muted: 222 32% 12%;
-  --muted-foreground: 220 9% 65%;
-
-  --primary: 142 71% 45%;
-  --primary-foreground: 222 47% 11%;
-  --primary-hover: 142 71% 50%;
-
-  --accent: 32 95% 50%;
-  --accent-foreground: 28 100% 14%;
-
-  --destructive: 0 72% 55%;
-  --destructive-foreground: 0 0% 100%;
-
-  --warning: 38 92% 55%;
-  --warning-foreground: 28 100% 14%;
-
-  --success: 142 71% 45%;
-  --success-foreground: 222 47% 11%;
-
-  --easy: 142 71% 50%;
-  --easy-bg: 142 50% 14%;
-  --easy-fg: 142 71% 70%;
-
-  --medium: 38 92% 55%;
-  --medium-bg: 33 50% 14%;
-  --medium-fg: 38 92% 70%;
-
-  --hard: 0 72% 60%;
-  --hard-bg: 0 40% 16%;
-  --hard-fg: 0 80% 75%;
-
-  --ring: 142 71% 50%;
-
-  /* Shadows scale up in opacity on dark surfaces so the depth still reads. */
+  /* shadow tokens — dark mode opacities */
   --shadow-xs: 0 1px 2px hsl(0 0% 0% / 0.30);
   --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.35), 0 1px 3px hsl(0 0% 0% / 0.30);
   --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.40), 0 2px 4px -2px hsl(0 0% 0% / 0.30);
   --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.45), 0 4px 6px -4px hsl(0 0% 0% / 0.35);
   --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.50), 0 8px 10px -6px hsl(0 0% 0% / 0.35);
   --shadow-primary: 0 10px 25px -5px hsl(var(--primary) / 0.25);
+}
+
+.dark {
+  /* Same as :root — .dark is preserved so Tailwind dark: variants fire. */
+  --background: 220 13% 7%;
+  --foreground: 220 14% 92%;
+  --surface: 220 13% 10%;
+  --surface-muted: 220 13% 13%;
+  --surface-elevated: 220 13% 17%;
+  --border: 220 13% 18%;
+  --border-strong: 220 13% 26%;
+  --muted: 220 13% 13%;
+  --muted-foreground: 220 9% 60%;
+  --muted-foreground-dim: 220 9% 42%;
+  --primary: 166 76% 64%;
+  --primary-foreground: 168 84% 11%;
+  --primary-hover: 166 76% 58%;
+  --accent: 258 89% 76%;
+  --accent-foreground: 258 70% 14%;
+  --destructive: 0 84% 71%;
+  --destructive-foreground: 220 13% 7%;
+  --warning: 38 92% 58%;
+  --warning-foreground: 28 100% 14%;
+  --success: 166 76% 64%;
+  --success-foreground: 168 84% 11%;
+  --easy: 142 71% 64%;
+  --easy-bg: 142 50% 18%;
+  --easy-fg: 142 71% 84%;
+  --medium: 38 92% 58%;
+  --medium-bg: 38 50% 18%;
+  --medium-fg: 38 92% 84%;
+  --hard: 0 84% 71%;
+  --hard-bg: 0 50% 20%;
+  --hard-fg: 0 84% 84%;
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface-elevated);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--surface-muted);
+  --secondary-foreground: var(--foreground);
+  --input: var(--border);
+  --ring: var(--primary);
+  --shadow-xs: 0 1px 2px hsl(0 0% 0% / 0.30);
+  --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.35), 0 1px 3px hsl(0 0% 0% / 0.30);
+  --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.40), 0 2px 4px -2px hsl(0 0% 0% / 0.30);
+  --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.45), 0 4px 6px -4px hsl(0 0% 0% / 0.35);
+  --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.50), 0 8px 10px -6px hsl(0 0% 0% / 0.35);
+  --shadow-primary: 0 10px 25px -5px hsl(var(--primary) / 0.25);
+}
+
+.light {
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+  --surface: 0 0% 100%;
+  --surface-muted: 220 14% 96%;
+  --surface-elevated: 0 0% 100%;
+  --border: 220 13% 91%;
+  --border-strong: 220 13% 82%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 9% 38%;
+  --muted-foreground-dim: 220 9% 64%;
+  --primary: 168 84% 24%;
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 168 84% 20%;
+  --accent: 258 70% 42%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 72% 42%;
+  --destructive-foreground: 0 0% 100%;
+  --warning: 28 92% 38%;
+  --warning-foreground: 0 0% 100%;
+  --success: 168 84% 24%;
+  --success-foreground: 0 0% 100%;
+  --easy: 142 76% 28%;
+  --easy-bg: 142 76% 96%;
+  --easy-fg: 142 84% 22%;
+  --medium: 28 92% 32%;
+  --medium-bg: 33 100% 96%;
+  --medium-fg: 26 90% 28%;
+  --hard: 0 78% 42%;
+  --hard-bg: 0 86% 97%;
+  --hard-fg: 0 70% 32%;
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface-elevated);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--surface-muted);
+  --secondary-foreground: var(--foreground);
+  --input: var(--border);
+  --ring: var(--primary);
+  --shadow-xs: 0 1px 2px hsl(220 13% 20% / 0.04);
+  --shadow-sm: 0 1px 2px hsl(220 13% 20% / 0.05), 0 1px 3px hsl(220 13% 20% / 0.06);
+  --shadow-md: 0 4px 6px -1px hsl(220 13% 20% / 0.08), 0 2px 4px -2px hsl(220 13% 20% / 0.06);
+  --shadow-lg: 0 10px 15px -3px hsl(220 13% 20% / 0.10), 0 4px 6px -4px hsl(220 13% 20% / 0.05);
+  --shadow-xl: 0 20px 25px -5px hsl(220 13% 20% / 0.12), 0 8px 10px -6px hsl(220 13% 20% / 0.06);
+  --shadow-primary: 0 10px 25px -5px hsl(var(--primary) / 0.15);
 }
 
 @theme inline {
@@ -112,6 +174,7 @@
   --color-border-strong: hsl(var(--border-strong));
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted-foreground-dim: hsl(var(--muted-foreground-dim));
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
   --color-primary-hover: hsl(var(--primary-hover));
@@ -133,6 +196,13 @@
   --color-hard-bg: hsl(var(--hard-bg));
   --color-hard-fg: hsl(var(--hard-fg));
   --color-ring: hsl(var(--ring));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-input: hsl(var(--input));
   --font-sans: var(--font-inter);
   --font-mono: var(--font-jetbrains);
   --radius-sm: 0.25rem;
@@ -148,6 +218,90 @@
   --shadow-xl: 0 20px 25px -5px hsl(220 13% 20% / 0.10), 0 8px 10px -6px hsl(220 13% 20% / 0.04);
   /* Brand-tinted glow — reserved for the marketing hero card. */
   --shadow-primary: 0 10px 25px -5px hsl(var(--primary) / 0.15);
+}
+
+.bracket {
+  font-family: var(--font-mono);
+  color: hsl(var(--primary));
+}
+.bracket::before {
+  content: "[ ";
+  color: hsl(var(--muted-foreground-dim));
+}
+.bracket::after {
+  content: " ]";
+  color: hsl(var(--muted-foreground-dim));
+}
+
+.prompt::before {
+  content: "$ ";
+  color: hsl(var(--accent));
+  font-family: var(--font-mono);
+}
+
+@keyframes dl-cursor-blink {
+  50% {
+    opacity: 0;
+  }
+}
+.cursor::after {
+  content: "▊";
+  color: hsl(var(--primary));
+  margin-left: 4px;
+  animation: dl-cursor-blink 1.1s steps(1) infinite;
+  font-family: var(--font-mono);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cursor::after {
+    animation: none;
+  }
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.pill-accepted {
+  background: hsl(var(--success) / 0.12);
+  color: hsl(var(--success));
+}
+.pill-rejected {
+  background: hsl(var(--destructive) / 0.12);
+  color: hsl(var(--destructive));
+}
+.pill-pending {
+  background: hsl(var(--warning) / 0.12);
+  color: hsl(var(--warning));
+}
+.pill-draft {
+  background: hsl(var(--muted-foreground) / 0.12);
+  color: hsl(var(--muted-foreground));
+}
+
+.scroll-fade {
+  position: relative;
+}
+.scroll-fade::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 36px;
+  background: linear-gradient(to right, transparent, hsl(var(--surface)));
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+.scroll-fade.at-end::after {
+  opacity: 0;
 }
 
 @layer base {

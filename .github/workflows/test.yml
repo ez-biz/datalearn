@@ -54,6 +54,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Palette guard
+        run: ./scripts/check-no-palette-colors.sh
+
       - uses: actions/setup-node@v6
         with:
           node-version: "20"

@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/Button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { Input } from "@/components/ui/Input"
+import { Kbd } from "@/components/ui/Kbd"
 import { cn } from "@/lib/utils"
 
 type PermissionKey =
@@ -276,8 +277,11 @@ export function ModeratorsClient({
                                     if (event.key === "Enter") searchCandidates()
                                 }}
                                 placeholder="Search by email or name"
-                                className="pl-9"
+                                className="pl-9 pr-12"
                             />
+                            <Kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 sm:inline-flex">
+                                /
+                            </Kbd>
                         </div>
                         <Button
                             type="button"
@@ -311,12 +315,7 @@ export function ModeratorsClient({
                                     >
                                         <Avatar user={candidate} />
                                         <UserIdentity user={candidate} />
-                                        <Badge
-                                            variant="outline"
-                                            className="ml-auto normal-case tracking-normal"
-                                        >
-                                            {candidate.role.toLowerCase()}
-                                        </Badge>
+                                        <RolePill role={candidate.role} className="ml-auto" />
                                     </button>
                                 ))}
                             </div>
@@ -547,5 +546,31 @@ function UserIdentity({
                 <p className="truncate text-xs text-muted-foreground">{user.email}</p>
             )}
         </div>
+    )
+}
+
+function RolePill({
+    role,
+    className,
+}: {
+    role: UserRole
+    className?: string
+}) {
+    const tokens: Record<UserRole, string> = {
+        ADMIN: "bg-primary/15 text-primary",
+        MODERATOR: "bg-warning/15 text-warning",
+        CONTRIBUTOR: "bg-accent/15 text-accent",
+        USER: "bg-muted-foreground/15 text-muted-foreground",
+    }
+    return (
+        <span
+            className={cn(
+                "inline-flex rounded-full px-2 py-0.5 font-mono text-[11px] font-medium lowercase",
+                tokens[role],
+                className
+            )}
+        >
+            {role.toLowerCase()}
+        </span>
     )
 }

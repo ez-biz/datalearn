@@ -17,6 +17,8 @@ import { redirect } from "next/navigation"
 import { Container } from "@/components/ui/Container"
 import { Card, CardContent } from "@/components/ui/Card"
 import { DifficultyBadge } from "@/components/ui/Badge"
+import { Eyebrow } from "@/components/ui/Eyebrow"
+import { StatusPill } from "@/components/ui/StatusPill"
 import { cn } from "@/lib/utils"
 import { getProfileData } from "@/actions/profile"
 import { ActivityHeatmap } from "@/components/profile/ActivityHeatmap"
@@ -180,8 +182,8 @@ export default async function ProfilePage() {
                                                         )}
                                                     />
                                                     <span className="flex-1 min-w-0 text-sm font-medium truncate group-hover:text-primary transition-colors">
-                                                        <span className="text-muted-foreground tabular-nums mr-1 font-normal">
-                                                            {s.problem.number}.
+                                                        <span className="font-mono text-[11px] text-muted-foreground tabular-nums mr-1 font-normal">
+                                                            #{String(s.problem.number).padStart(3, "0")}
                                                         </span>
                                                         {s.problem.title}
                                                     </span>
@@ -200,6 +202,11 @@ export default async function ProfilePage() {
                                                             }
                                                         )}
                                                     </span>
+                                                    <StatusPill
+                                                        status={ok ? "accepted" : "rejected"}
+                                                        label={ok ? "accepted" : "wrong"}
+                                                        className="hidden md:inline-flex"
+                                                    />
                                                 </Link>
                                             </li>
                                         )
@@ -261,9 +268,7 @@ function Stat({
 }) {
     return (
         <div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                {label}
-            </div>
+            <Eyebrow>{label}</Eyebrow>
             <div className="mt-1 flex items-baseline gap-1">
                 <span className="text-2xl font-semibold tabular-nums">
                     {value}
