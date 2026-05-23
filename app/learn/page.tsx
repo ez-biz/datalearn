@@ -5,6 +5,7 @@ import { getTopics } from "@/actions/content"
 import { Container } from "@/components/ui/Container"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Badge } from "@/components/ui/Badge"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 import { EmptyState } from "@/components/ui/EmptyState"
 
 export const metadata: Metadata = {
@@ -27,7 +28,7 @@ export default async function LearnPage() {
     const deTopics = list.filter((t: TopicCard) => t.lane === "DATA_ENGINEERING")
 
     return (
-        <Container width="lg" className="py-10 sm:py-14">
+        <Container width="2xl" className="py-10 sm:py-14">
             <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
                 <div>
                     <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
@@ -61,9 +62,9 @@ export default async function LearnPage() {
                     ].map(({ lane, topics }) =>
                         topics.length === 0 ? null : (
                             <section key={lane}>
-                                <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                    {laneLabel(lane)}
-                                </h2>
+                                <Eyebrow variant="bracket" className="mb-4">
+                                    {laneLabel(lane).toUpperCase()}
+                                </Eyebrow>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {topics.map((topic: TopicCard) => (
                                         <Link

@@ -1,24 +1,21 @@
 import Link from "next/link"
 import { Plus } from "lucide-react"
+import type { TrackStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { requireAdminPage } from "@/lib/admin-page-auth"
-import { Container } from "@/components/ui/Container"
-import { Card, CardContent } from "@/components/ui/Card"
+import { AdminListShell } from "@/components/admin/AdminListShell"
+import { Card } from "@/components/ui/Card"
 import { Badge } from "@/components/ui/Badge"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { LinkButton } from "@/components/ui/Button"
+import { ScrollableTable } from "@/components/ui/ScrollableTable"
+import { StatusPill, type StatusPillStatus } from "@/components/ui/StatusPill"
 
 export const metadata = {
     title: "Tracks",
     robots: { index: false, follow: false },
 }
 export const dynamic = "force-dynamic"
-
-function statusVariant(status: string): "secondary" | "primary" | "outline" {
-    if (status === "PUBLISHED") return "primary"
-    if (status === "ARCHIVED") return "outline"
-    return "secondary"
-}
 
 export default async function TracksPage() {
     await requireAdminPage()
@@ -29,24 +26,24 @@ export default async function TracksPage() {
     })
 
     return (
-        <Container width="lg" className="py-10">
-            <header className="mb-6 flex items-start justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-                        Tracks
-                    </h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        {tracks.length} total · managed via{" "}
-                        <code className="font-mono text-xs">
-                            /api/admin/tracks
-                        </code>
-                    </p>
-                </div>
+        <AdminListShell
+            eyebrow="TRACKS"
+            title="Tracks"
+            description={
+                <>
+                    {tracks.length} total · managed via{" "}
+                    <code className="font-mono text-xs">
+                        /api/admin/tracks
+                    </code>
+                </>
+            }
+            actions={
                 <LinkButton href="/admin/tracks/new" size="sm">
                     <Plus className="h-3.5 w-3.5" />
                     New track
                 </LinkButton>
-            </header>
+            }
+        >
 
             {tracks.length === 0 ? (
                 <EmptyState
@@ -54,8 +51,8 @@ export default async function TracksPage() {
                     description="Create a track to start sequencing problems into a curriculum."
                 />
             ) : (
-                <Card>
-                    <CardContent className="p-0">
+                <ScrollableTable>
+                    <Card className="min-w-[760px] overflow-hidden">
                         <ul className="divide-y divide-border">
                             {tracks.map((track) => (
                                 <li
@@ -70,13 +67,7 @@ export default async function TracksPage() {
                                             >
                                                 {track.name}
                                             </Link>
-                                            <Badge
-                                                variant={statusVariant(
-                                                    track.status,
-                                                )}
-                                            >
-                                                {track.status.toLowerCase()}
-                                            </Badge>
+                                            <TrackStatusPill status={track.status} />
                                             <Badge variant="secondary">
                                                 {track._count.items}{" "}
                                                 {track._count.items === 1
@@ -100,9 +91,19 @@ export default async function TracksPage() {
                                 </li>
                             ))}
                         </ul>
-                    </CardContent>
-                </Card>
+                    </Card>
+                </ScrollableTable>
             )}
-        </Container>
+        </AdminListShell>
     )
+}
+
+function TrackStatusPill({ status }: { status: TrackStatus }) {
+    const map: Record<TrackStatus, { pill: StatusPillStatus; label: string }> = {
+        DRAFT: { pill: "draft", label: "draft" },
+        PUBLISHED: { pill: "accepted", label: "published" },
+        ARCHIVED: { pill: "rejected", label: "archived" },
+    }
+    const { pill, label } = map[status]
+    return <StatusPill status={pill} label={label} />
 }

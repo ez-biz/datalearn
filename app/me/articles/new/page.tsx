@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
 import { prisma } from "@/lib/prisma"
 import { Container } from "@/components/ui/Container"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 import { MyArticleForm } from "@/components/me/MyArticleForm"
 
 export const metadata = {
@@ -24,6 +25,9 @@ export default async function NewMyArticlePage() {
                 <ChevronLeft className="h-3.5 w-3.5" />
                 Back
             </Link>
+            <Eyebrow variant="bracket" className="mb-1">
+                NEW ARTICLE
+            </Eyebrow>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-1">
                 New article
             </h1>

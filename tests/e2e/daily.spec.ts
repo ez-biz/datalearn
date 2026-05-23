@@ -224,6 +224,8 @@ test("signed-in home shows daily solved state after accepted submission", async 
     await page.goto("/")
     skipIfUtcDayChanged(date)
 
-    await expect(page.getByText("Daily problem")).toBeVisible()
+    await expect(
+        page.getByRole("heading", { name: "Daily problem" })
+    ).toBeVisible()
     await expect(page.getByText("Solved today")).toBeVisible()
 })

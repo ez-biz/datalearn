@@ -5,6 +5,7 @@ import { getArticle, getArticleNeighbors } from "@/actions/content"
 import { notFound } from "next/navigation"
 import { Container } from "@/components/ui/Container"
 import { Badge } from "@/components/ui/Badge"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 import { extractToc } from "@/lib/markdown-toc"
 import { TableOfContents } from "@/components/learn/TableOfContents"
 import { RelatedProblemsPanel } from "@/components/learn/RelatedProblemsPanel"
@@ -33,7 +34,7 @@ export default async function ArticlePage({ params }: Props) {
     const toc = extractToc(article.content)
 
     return (
-        <Container width="xl" className="py-10 sm:py-14">
+        <Container width="md" className="py-10 sm:py-14">
             <div className="flex gap-8">
                 <article className="flex-1 min-w-0 max-w-3xl mx-auto lg:mx-0">
                     <Link
@@ -45,7 +46,10 @@ export default async function ArticlePage({ params }: Props) {
                     </Link>
 
                     <header className="mb-8 pb-6 border-b border-border">
-                        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight leading-tight">
+                        <Eyebrow variant="bracket" className="mb-2">
+                            {article.topic.name.toUpperCase()}
+                        </Eyebrow>
+                        <h1 className="text-[32px] sm:text-[34px] font-bold tracking-tight leading-tight">
                             {article.title}
                         </h1>
                         {article.summary && (

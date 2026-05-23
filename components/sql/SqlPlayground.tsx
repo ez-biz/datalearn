@@ -18,6 +18,9 @@ import type {
     SqlQueryResult,
 } from "@/lib/use-problem-db"
 import { Button } from "@/components/ui/Button"
+import { Eyebrow } from "@/components/ui/Eyebrow"
+import { Kbd } from "@/components/ui/Kbd"
+import { StatusPill, type StatusPillStatus } from "@/components/ui/StatusPill"
 import { cn } from "@/lib/utils"
 
 const DEFAULT_QUERY = "-- Write your SQL query here.\n\nSELECT 1 AS hello;"
@@ -208,6 +211,20 @@ export function SqlPlayground({
         : !hasRunOnce
             ? "Run your query at least once before submitting."
             : `Submit (${modKey} ⇧ ↵)`
+    const elapsedLabel =
+        elapsedMs == null ? "—" : `${(elapsedMs / 1000).toFixed(2)}s`
+    const resultStatus: StatusPillStatus | null =
+        loading || submitting || dbRecovering
+            ? "pending"
+            : error
+                ? "rejected"
+                : validation
+                    ? validation.ok
+                        ? "accepted"
+                        : "rejected"
+                    : hasRunOnce
+                        ? "accepted"
+                        : null
 
     return (
         <div className="flex flex-col h-full gap-3">
@@ -282,7 +299,8 @@ export function SqlPlayground({
                         ) : (
                             <>
                                 <Play className="h-3.5 w-3.5" />
-                                Run
+                                <span>▸ Run</span>
+                                <Kbd>{modKey}↵</Kbd>
                             </>
                         )}
                     </Button>
@@ -301,7 +319,8 @@ export function SqlPlayground({
                             ) : (
                                 <>
                                     <Send className="h-3.5 w-3.5" />
-                                    Submit
+                                    <span>Submit</span>
+                                    <Kbd tone="on-primary">{modKey}⇧↵</Kbd>
                                 </>
                             )}
                         </Button>
@@ -309,23 +328,38 @@ export function SqlPlayground({
                 </div>
             </div>
 
-            <div className="h-[34vh] min-h-[260px] rounded-lg border border-border overflow-hidden bg-surface">
+            <div className="flex h-[34vh] min-h-[260px] flex-col overflow-hidden rounded-lg border border-border bg-surface">
+                <div className="flex items-center justify-between border-b border-border px-4 py-2">
+                    <div className="flex items-center gap-3 text-[12px] font-mono">
+                        <Eyebrow variant="bracket">RESULT</Eyebrow>
+                        <span className="text-muted-foreground tabular-nums">
+                            {results.length.toLocaleString()} rows
+                        </span>
+                        <span className="text-muted-foreground-dim">·</span>
+                        <span className="text-muted-foreground tabular-nums">
+                            {elapsedLabel}
+                        </span>
+                    </div>
+                    {resultStatus && <StatusPill status={resultStatus} />}
+                </div>
                 {tab === "results" ? (
-                    <ResultTable
-                        data={results}
-                        error={error}
-                        loading={loading}
-                        loadingLabel={
-                            dbRecovering
-                                ? "Resetting SQL engine…"
-                                : undefined
-                        }
-                        rowCount={queryResult?.rowCount}
-                        truncated={queryResult?.truncated}
-                        cap={queryResult?.cap}
-                    />
+                    <div className="min-h-0 flex-1">
+                        <ResultTable
+                            data={results}
+                            error={error}
+                            loading={loading}
+                            loadingLabel={
+                                dbRecovering
+                                    ? "Resetting SQL engine…"
+                                    : undefined
+                            }
+                            rowCount={queryResult?.rowCount}
+                            truncated={queryResult?.truncated}
+                            cap={queryResult?.cap}
+                        />
+                    </div>
                 ) : (
-                    <div className="h-full overflow-auto p-4 scrollbar-thin">
+                    <div className="min-h-0 flex-1 overflow-auto p-4 scrollbar-thin">
                         {validation ? (
                             <>
                                 <ValidationResultView result={validation} />

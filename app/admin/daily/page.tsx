@@ -3,11 +3,13 @@ import { redirect } from "next/navigation"
 import { setManualDailyProblem, listDailyProblems, toDailyKey } from "@/actions/daily"
 import { prisma } from "@/lib/prisma"
 import { requireAdminPage } from "@/lib/admin-page-auth"
-import { Container } from "@/components/ui/Container"
+import { AdminListShell } from "@/components/admin/AdminListShell"
 import { Card } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { Field, Input } from "@/components/ui/Input"
-import { Badge, DifficultyBadge } from "@/components/ui/Badge"
+import { DifficultyBadge } from "@/components/ui/Badge"
+import { ScrollableTable } from "@/components/ui/ScrollableTable"
+import { StatusPill } from "@/components/ui/StatusPill"
 
 export const dynamic = "force-dynamic"
 
@@ -55,60 +57,72 @@ export default async function AdminDailyPage({
     const todayKey = toDailyKey(new Date())
 
     return (
-        <Container width="xl" className="py-10">
-            <header className="mb-6">
-                <h1 className="flex items-center gap-2 text-2xl sm:text-3xl font-bold tracking-tight">
-                    <CalendarCheck2 className="h-6 w-6 text-primary" />
-                    Daily problems
-                </h1>
-                <p className="mt-1 text-sm text-muted-foreground">
+        <AdminListShell
+            eyebrow="DAILY"
+            title="Daily problems"
+            description={
+                <>
                     Schedule a published problem for a UTC date. Missing dates auto-fill on first request.
-                </p>
-            </header>
+                </>
+            }
+            actions={
+                <span className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm text-muted-foreground">
+                    <CalendarCheck2 className="h-4 w-4 text-primary" />
+                    UTC schedule
+                </span>
+            }
+        >
 
             <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-                <Card className="overflow-hidden">
-                    <div className="hidden md:grid grid-cols-[8rem_1fr_7rem_10rem] gap-4 border-b border-border bg-surface-muted/40 px-5 py-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        <span>Date</span>
-                        <span>Problem</span>
-                        <span>Source</span>
-                        <span>Updated</span>
-                    </div>
-                    <ul className="divide-y divide-border">
-                        {rows.map((row) => (
-                            <li
-                                key={row.id}
-                                className="grid gap-3 px-5 py-3 md:grid-cols-[8rem_1fr_7rem_10rem] md:items-center"
-                            >
-                                <span className="text-sm tabular-nums text-muted-foreground">
-                                    {toDailyKey(row.date)}
-                                </span>
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm font-medium truncate">
-                                            <span className="mr-1 text-muted-foreground tabular-nums">
-                                                {row.problem.number}.
+                <ScrollableTable>
+                    <Card className="min-w-[720px] overflow-hidden">
+                        <div className="hidden md:grid grid-cols-[8rem_1fr_7rem_10rem] gap-4 border-b border-border bg-surface-muted/40 px-5 py-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            <span>Date</span>
+                            <span>Problem</span>
+                            <span>Source</span>
+                            <span>Updated</span>
+                        </div>
+                        <ul className="divide-y divide-border">
+                            {rows.map((row) => (
+                                <li
+                                    key={row.id}
+                                    className="grid gap-3 px-5 py-3 md:grid-cols-[8rem_1fr_7rem_10rem] md:items-center"
+                                >
+                                    <span className="text-sm tabular-nums text-muted-foreground">
+                                        {toDailyKey(row.date)}
+                                    </span>
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-medium truncate">
+                                                <span className="mr-1 font-mono text-[11px] text-muted-foreground tabular-nums">
+                                                    #{String(row.problem.number).padStart(3, "0")}
+                                                </span>
+                                                {row.problem.title}
                                             </span>
-                                            {row.problem.title}
-                                        </span>
-                                        <DifficultyBadge difficulty={row.problem.difficulty} />
+                                            <DifficultyBadge difficulty={row.problem.difficulty} />
+                                        </div>
                                     </div>
-                                </div>
-                                <Badge variant={row.source === "MANUAL" ? "primary" : "secondary"}>
-                                    {row.source.toLowerCase()}
-                                </Badge>
-                                <span className="text-xs text-muted-foreground tabular-nums">
-                                    {updatedFormatter.format(row.updatedAt)}
-                                </span>
-                            </li>
-                        ))}
-                        {rows.length === 0 && (
-                            <li className="px-5 py-10 text-center text-sm text-muted-foreground">
-                                No daily rows yet. Save a manual schedule or visit /daily to auto-fill today.
-                            </li>
-                        )}
-                    </ul>
-                </Card>
+                                    <StatusPill
+                                        status={
+                                            row.source === "MANUAL"
+                                                ? "accepted"
+                                                : "draft"
+                                        }
+                                        label={row.source.toLowerCase()}
+                                    />
+                                    <span className="text-xs text-muted-foreground tabular-nums">
+                                        {updatedFormatter.format(row.updatedAt)}
+                                    </span>
+                                </li>
+                            ))}
+                            {rows.length === 0 && (
+                                <li className="px-5 py-10 text-center text-sm text-muted-foreground">
+                                    No daily rows yet. Save a manual schedule or visit /daily to auto-fill today.
+                                </li>
+                            )}
+                        </ul>
+                    </Card>
+                </ScrollableTable>
 
                 <Card className="p-5">
                     {sp.saved === "1" && (
@@ -152,6 +166,6 @@ export default async function AdminDailyPage({
                     </form>
                 </Card>
             </div>
-        </Container>
+        </AdminListShell>
     )
 }

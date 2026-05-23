@@ -2,15 +2,19 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import type { TopicLane } from "@prisma/client"
 import { Check, Loader2, Save } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Field, Input, Textarea } from "@/components/ui/Input"
 import { Card, CardContent } from "@/components/ui/Card"
+import { RadioGroup, RadioGroupItem } from "@/components/shadcn/radio-group"
 
 export interface TopicInitial {
     name: string
     slug: string
     description: string
+    lane: TopicLane
+    displayOrder: number
 }
 
 export function TopicEditForm({
@@ -24,6 +28,8 @@ export function TopicEditForm({
     const [name, setName] = useState(initial.name)
     const [slug, setSlug] = useState(initial.slug)
     const [description, setDescription] = useState(initial.description)
+    const [lane, setLane] = useState<TopicLane>(initial.lane)
+    const [displayOrder, setDisplayOrder] = useState(initial.displayOrder)
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [savedAt, setSavedAt] = useState<number | null>(null)
@@ -46,6 +52,8 @@ export function TopicEditForm({
                     name,
                     slug,
                     description: description.trim() || null,
+                    lane,
+                    displayOrder,
                 }),
             })
             const json = await res.json().catch(() => ({}))
@@ -99,6 +107,50 @@ export function TopicEditForm({
                             className="font-sans"
                         />
                     </Field>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <Field label="Lane" htmlFor="topic-lane">
+                            <RadioGroup
+                                value={lane}
+                                onValueChange={(value) =>
+                                    setLane(value as TopicLane)
+                                }
+                                className="grid gap-2"
+                            >
+                                <label
+                                    htmlFor="topic-lane-sql"
+                                    className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-surface-muted"
+                                >
+                                    <RadioGroupItem
+                                        id="topic-lane-sql"
+                                        value="SQL"
+                                    />
+                                    SQL fundamentals
+                                </label>
+                                <label
+                                    htmlFor="topic-lane-de"
+                                    className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-surface-muted"
+                                >
+                                    <RadioGroupItem
+                                        id="topic-lane-de"
+                                        value="DATA_ENGINEERING"
+                                    />
+                                    Data engineering concepts
+                                </label>
+                            </RadioGroup>
+                        </Field>
+                        <Field label="Display order" htmlFor="topic-order">
+                            <Input
+                                id="topic-order"
+                                type="number"
+                                min={0}
+                                max={1000}
+                                value={displayOrder}
+                                onChange={(e) =>
+                                    setDisplayOrder(Number(e.target.value))
+                                }
+                            />
+                        </Field>
+                    </div>
                 </CardContent>
             </Card>
             <div className="mt-4 flex items-center gap-3">

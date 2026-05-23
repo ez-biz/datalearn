@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { requireAdminPage } from "@/lib/admin-page-auth"
-import { Container } from "@/components/ui/Container"
+import { AdminListShell } from "@/components/admin/AdminListShell"
 import { LinkButton } from "@/components/ui/Button"
 import { Card, CardContent } from "@/components/ui/Card"
 import { ContributorsClient } from "@/components/admin/ContributorsClient"
@@ -34,13 +34,12 @@ export default async function ContributorsPage() {
     const userCount = users.filter((u) => u.role === "USER").length
 
     return (
-        <Container width="lg" className="py-10">
-            <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                        Contributors
-                    </h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
+        <AdminListShell
+            eyebrow="CONTRIBUTORS"
+            title="Contributors"
+            description={
+                <>
+                    <p>
                         {adminCount} admin · {moderatorCount} moderator ·{" "}
                         {contributorCount} contributor · {userCount} user —
                         promote/revoke contributors via{" "}
@@ -48,11 +47,13 @@ export default async function ContributorsPage() {
                             PATCH /api/admin/users/[id]
                         </code>
                     </p>
-                    <p className="mt-2 text-xs text-muted-foreground">
+                    <p className="mt-2 text-xs">
                         ADMIN changes stay DB-only. Moderator permissions are managed
                         from the dedicated moderator page.
                     </p>
-                </div>
+                </>
+            }
+            actions={
                 <LinkButton
                     href="/admin/moderators"
                     variant="outline"
@@ -60,13 +61,14 @@ export default async function ContributorsPage() {
                 >
                     Manage moderators
                 </LinkButton>
-            </header>
+            }
+        >
 
             <Card>
                 <CardContent className="p-5">
                     <ContributorsClient initialUsers={users} />
                 </CardContent>
             </Card>
-        </Container>
+        </AdminListShell>
     )
 }

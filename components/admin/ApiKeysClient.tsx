@@ -5,8 +5,20 @@ import { useRouter } from "next/navigation"
 import { Copy, Check, Loader2, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Field, Input } from "@/components/ui/Input"
-import { Badge } from "@/components/ui/Badge"
+import { Kbd } from "@/components/ui/Kbd"
+import { StatusPill } from "@/components/ui/StatusPill"
 import { EmptyState } from "@/components/ui/EmptyState"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/shadcn/alert-dialog"
 
 interface KeyRow {
     id: string
@@ -53,10 +65,7 @@ export function ApiKeysClient({ initialKeys }: { initialKeys: KeyRow[] }) {
         }
     }
 
-    async function revoke(id: string, label: string) {
-        if (!confirm(`Revoke "${label}"? Any client using it will be locked out.`)) {
-            return
-        }
+    async function revoke(id: string) {
         setRevokingId(id)
         try {
             const res = await fetch(`/api/admin/api-keys/${id}`, {
@@ -102,6 +111,7 @@ export function ApiKeysClient({ initialKeys }: { initialKeys: KeyRow[] }) {
                                 <Copy className="h-3.5 w-3.5" />
                             )}
                             {copied ? "Copied" : "Copy"}
+                            <Kbd>⌘C</Kbd>
                         </Button>
                     </div>
                     <button
@@ -168,14 +178,7 @@ export function ApiKeysClient({ initialKeys }: { initialKeys: KeyRow[] }) {
                                         <span className="text-sm font-medium truncate">
                                             {k.name}
                                         </span>
-                                        {k.revokedAt ? (
-                                            <Badge variant="secondary">Revoked</Badge>
-                                        ) : k.expiresAt &&
-                                          new Date(k.expiresAt) < new Date() ? (
-                                            <Badge variant="secondary">Expired</Badge>
-                                        ) : (
-                                            <Badge variant="primary">Active</Badge>
-                                        )}
+                                        <KeyStatusPill keyRow={k} />
                                     </div>
                                     <div className="mt-0.5 text-xs text-muted-foreground font-mono">
                                         {k.prefix}…
@@ -188,20 +191,45 @@ export function ApiKeysClient({ initialKeys }: { initialKeys: KeyRow[] }) {
                                     </div>
                                 </div>
                                 {!k.revokedAt && (
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => revoke(k.id, k.name)}
-                                        disabled={revokingId === k.id}
-                                        aria-label={`Revoke ${k.name}`}
-                                        className="text-muted-foreground hover:text-destructive"
-                                    >
-                                        {revokingId === k.id ? (
-                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                        ) : (
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                        )}
-                                    </Button>
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                disabled={revokingId === k.id}
+                                                aria-label={`Revoke ${k.name}`}
+                                                className="text-muted-foreground hover:text-destructive"
+                                            >
+                                                {revokingId === k.id ? (
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                ) : (
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                )}
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>
+                                                    Revoke {k.name}?
+                                                </AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Any client using this API key
+                                                    will be locked out immediately.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>
+                                                    Cancel
+                                                </AlertDialogCancel>
+                                                <AlertDialogAction
+                                                    variant="destructive"
+                                                    onClick={() => revoke(k.id)}
+                                                >
+                                                    Revoke
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
                                 )}
                             </li>
                         ))}
@@ -210,6 +238,16 @@ export function ApiKeysClient({ initialKeys }: { initialKeys: KeyRow[] }) {
             </div>
         </div>
     )
+}
+
+function KeyStatusPill({ keyRow }: { keyRow: KeyRow }) {
+    if (keyRow.revokedAt) {
+        return <StatusPill status="rejected" label="revoked" />
+    }
+    if (keyRow.expiresAt && new Date(keyRow.expiresAt) < new Date()) {
+        return <StatusPill status="draft" label="expired" />
+    }
+    return <StatusPill status="accepted" label="active" />
 }
 
 function fmt(d: Date | string): string {

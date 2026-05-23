@@ -4,13 +4,16 @@ import { useState } from "react"
 import {
     CheckCircle2,
     ChevronRight,
-    FileText,
-    History as HistoryIcon,
     Lightbulb,
     Loader2,
-    MessagesSquare,
 } from "lucide-react"
 import { DifficultyBadge, Badge } from "@/components/ui/Badge"
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from "@/components/shadcn/tabs"
 import { cn } from "@/lib/utils"
 import { HistoryPanel } from "./HistoryPanel"
 import { RelatedArticlesPanel } from "./RelatedArticlesPanel"
@@ -121,42 +124,59 @@ export function ProblemPanel({
                     </div>
                 </div>
             </div>
-            <div className="border-b border-border px-2 overflow-x-auto scrollbar-thin">
-                <div className="flex gap-1">
-                    <TabBtn
-                        active={activeTab === "description"}
-                        onClick={() => setTab("description")}
-                        icon={<FileText className="h-3.5 w-3.5" />}
-                        label="Description"
-                    />
-                    {hasHints && (
-                        <TabBtn
-                            active={activeTab === "hints"}
-                            onClick={() => setTab("hints")}
-                            icon={<Lightbulb className="h-3.5 w-3.5" />}
-                            label="Hints"
-                            count={hints.length}
-                        />
-                    )}
-                    <TabBtn
-                        active={activeTab === "history"}
-                        onClick={() => setTab("history")}
-                        icon={<HistoryIcon className="h-3.5 w-3.5" />}
-                        label="History"
-                        count={history.length || undefined}
-                    />
-                    {showDiscussion && (
-                        <TabBtn
-                            active={activeTab === "discussion"}
-                            onClick={() => setTab("discussion")}
-                            icon={<MessagesSquare className="h-3.5 w-3.5" />}
-                            label="Discussion"
-                        />
-                    )}
+            <Tabs
+                value={activeTab}
+                onValueChange={(value) => setTab(value as Tab)}
+                className="min-h-0 flex-1 gap-0"
+            >
+                <div className="border-b border-border px-2 overflow-x-auto scrollbar-thin">
+                    <TabsList
+                        variant="line"
+                        className="h-auto min-w-max justify-start gap-1 p-0"
+                    >
+                        <TabsTrigger
+                            value="description"
+                            className="px-3 py-2.5 text-[12px] font-mono"
+                        >
+                            prompt
+                        </TabsTrigger>
+                        {hasHints && (
+                            <TabsTrigger
+                                value="hints"
+                                className="px-3 py-2.5 text-[12px] font-mono"
+                            >
+                                hints{" "}
+                                <span className="tabular-nums text-muted-foreground">
+                                    ({hints.length})
+                                </span>
+                            </TabsTrigger>
+                        )}
+                        <TabsTrigger
+                            value="history"
+                            className="px-3 py-2.5 text-[12px] font-mono"
+                        >
+                            history{" "}
+                            {history.length > 0 && (
+                                <span className="tabular-nums text-muted-foreground">
+                                    ({history.length})
+                                </span>
+                            )}
+                        </TabsTrigger>
+                        {showDiscussion && (
+                            <TabsTrigger
+                                value="discussion"
+                                aria-label="Discussion"
+                                className="px-3 py-2.5 text-[12px] font-mono"
+                            >
+                                discuss
+                            </TabsTrigger>
+                        )}
+                    </TabsList>
                 </div>
-            </div>
-            <div className="flex-1 overflow-y-auto scrollbar-thin">
-                {activeTab === "description" && (
+                <TabsContent
+                    value="description"
+                    className="min-h-0 overflow-y-auto scrollbar-thin"
+                >
                     <DescriptionTab
                         description={description}
                         schemaDescription={schemaDescription}
@@ -166,27 +186,39 @@ export function ProblemPanel({
                         expectedColumns={expectedColumns}
                         relatedArticles={relatedArticles}
                     />
+                </TabsContent>
+                {hasHints && (
+                    <TabsContent
+                        value="hints"
+                        className="min-h-0 overflow-y-auto scrollbar-thin"
+                    >
+                        <HintsTab hints={hints} />
+                    </TabsContent>
                 )}
-                {activeTab === "hints" && hasHints && <HintsTab hints={hints} />}
-                {activeTab === "history" && (
+                <TabsContent
+                    value="history"
+                    className="min-h-0 overflow-y-auto scrollbar-thin"
+                >
                     <HistoryPanel
                         history={history}
                         onLoadCode={onLoadCode}
                         onShareApproach={shareApproach}
                     />
+                </TabsContent>
+                {showDiscussion && (
+                    <TabsContent value="discussion" className="min-h-0">
+                        <DiscussionPanel
+                            problemSlug={slug}
+                            isSignedIn={isSignedIn}
+                            viewerUserId={viewerUserId}
+                            discussionMode={discussionMode}
+                            discussionEnabled={discussionEnabled}
+                            prefillMarkdown={discussionPrefill}
+                            onPrefillConsumed={onDiscussionPrefillConsumed}
+                        />
+                    </TabsContent>
                 )}
-                {activeTab === "discussion" && showDiscussion && (
-                    <DiscussionPanel
-                        problemSlug={slug}
-                        isSignedIn={isSignedIn}
-                        viewerUserId={viewerUserId}
-                        discussionMode={discussionMode}
-                        discussionEnabled={discussionEnabled}
-                        prefillMarkdown={discussionPrefill}
-                        onPrefillConsumed={onDiscussionPrefillConsumed}
-                    />
-                )}
-            </div>
+            </Tabs>
         </div>
     )
 }
@@ -484,47 +516,5 @@ function HintsTab({ hints }: { hints: string[] }) {
                 </p>
             )}
         </div>
-    )
-}
-
-function TabBtn({
-    active,
-    onClick,
-    icon,
-    label,
-    count,
-}: {
-    active: boolean
-    onClick: () => void
-    icon: React.ReactNode
-    label: string
-    count?: number
-}) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            aria-pressed={active}
-            className={cn(
-                "relative px-3 py-2.5 text-sm font-medium inline-flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap",
-                active
-                    ? "text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-            )}
-        >
-            {icon}
-            {label}
-            {count != null && (
-                <span className="text-[10px] tabular-nums text-muted-foreground">
-                    {count}
-                </span>
-            )}
-            {active && (
-                <span
-                    aria-hidden
-                    className="absolute left-2 right-2 -bottom-px h-0.5 bg-primary rounded-full"
-                />
-            )}
-        </button>
     )
 }

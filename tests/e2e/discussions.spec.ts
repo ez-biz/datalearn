@@ -178,7 +178,7 @@ test.describe("problem discussions", () => {
 
         const body = `${PREFIX} learner UI comment`
         await page.goto(`/practice/${PROBLEM_SLUG}`)
-        await page.getByRole("button", { name: "Discussion" }).click()
+        await page.getByRole("tab", { name: "Discussion" }).click()
         await expect(
             page.getByRole("heading", { name: "Discussion", exact: true })
         ).toBeVisible()
@@ -220,7 +220,7 @@ test.describe("problem discussions", () => {
         })
 
         await page.goto(`/practice/${PROBLEM_SLUG}`)
-        await page.getByRole("button", { name: "Discussion" }).click()
+        await page.getByRole("tab", { name: "Discussion" }).click()
         await expect(page.getByText(comment.bodyMarkdown)).toBeVisible()
 
         await page
@@ -246,7 +246,7 @@ test.describe("problem discussions", () => {
         ])
 
         await page.goto(`/practice/${PROBLEM_SLUG}`)
-        await page.getByRole("button", { name: "Discussion" }).click()
+        await page.getByRole("tab", { name: "Discussion" }).click()
 
         await expect(page.getByText(/discussion is locked/i)).toBeVisible()
         await expect(page.getByLabel("Discussion comment")).toBeHidden()
@@ -259,7 +259,7 @@ test.describe("problem discussions", () => {
         await page.goto(`/practice/${PROBLEM_SLUG}`)
 
         await expect(
-            page.getByRole("button", { name: "Discussion" })
+            page.getByRole("tab", { name: "Discussion" })
         ).toHaveCount(0)
     })
 
@@ -337,12 +337,12 @@ test.describe("problem discussions", () => {
         ])
 
         await page.goto(`/practice/${PROBLEM_SLUG}`)
-        await page.getByRole("button", { name: /history/i }).click()
+        await page.getByRole("tab", { name: /history/i }).click()
         await page.getByRole("button", { name: /accepted/i }).click()
         await page.getByRole("button", { name: /share approach/i }).click()
 
-        await expect(page.getByRole("button", { name: "Discussion" })).toHaveAttribute(
-            "aria-pressed",
+        await expect(page.getByRole("tab", { name: "Discussion" })).toHaveAttribute(
+            "aria-selected",
             "true"
         )
         await expect(page.getByLabel("Discussion comment")).toHaveValue(

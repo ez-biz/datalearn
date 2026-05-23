@@ -2,21 +2,19 @@
 
 import ReactMarkdown from "react-markdown"
 import type { Components } from "react-markdown"
-import type { ComponentPropsWithoutRef, CSSProperties } from "react"
+import type { ComponentPropsWithoutRef } from "react"
 import remarkGfm from "remark-gfm"
 import remarkDirective from "remark-directive"
 import rehypeSlug from "rehype-slug"
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
 import { Callout } from "@/components/markdown/directives/Callout"
 import { Figure } from "@/components/markdown/directives/Figure"
 import { Mermaid } from "@/components/markdown/directives/Mermaid"
 import { SideBySide } from "@/components/markdown/directives/SideBySide"
 import { Steps } from "@/components/markdown/directives/Steps"
+import { CodeBlock } from "@/components/ui/CodeBlock"
+import { ScrollableTable } from "@/components/ui/ScrollableTable"
 import { remarkBlockDirectives } from "@/lib/markdown/remark-block-directives"
 import { cn } from "@/lib/utils"
-
-const prismTheme = vscDarkPlus as { [key: string]: CSSProperties }
 
 interface MarkdownRendererProps {
     content: string
@@ -38,25 +36,24 @@ export function MarkdownRenderer({
         code({ className, children }: ComponentPropsWithoutRef<"code">) {
             const match = /language-(\w+)/.exec(className || "")
             return match ? (
-                <SyntaxHighlighter
-                    style={prismTheme}
-                    language={match[1]}
-                    PreTag="div"
-                    customStyle={{
-                        borderRadius: "0.375rem",
-                        fontSize: "12px",
-                        lineHeight: "1.55",
-                        padding: "0.75rem",
-                        margin: "0.75rem 0",
-                        border: "1px solid hsl(var(--border))",
-                    }}
-                >
-                    {String(children).replace(/\n$/, "")}
-                </SyntaxHighlighter>
+                <CodeBlock language={match[1]}>{String(children)}</CodeBlock>
             ) : (
                 <code className={className}>
                     {children}
                 </code>
+            )
+        },
+        table({
+            children,
+            className,
+            ...props
+        }: ComponentPropsWithoutRef<"table">) {
+            return (
+                <ScrollableTable className="my-3 rounded-md border border-border">
+                    <table className={cn("w-full text-[12px]", className)} {...props}>
+                        {children}
+                    </table>
+                </ScrollableTable>
             )
         },
         "dl-callout": Callout,

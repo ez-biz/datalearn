@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { Eyebrow } from "@/components/ui/Eyebrow"
 
 const KIND_STYLE: Record<string, string> = {
     tip: "border-l-primary bg-primary/5 [&_.dl-callout-tag]:text-primary",
@@ -28,9 +29,9 @@ export function Callout({ kind, children }: CalloutProps) {
         <aside
             className={`my-6 rounded-md border-l-[3px] px-4 py-3 ${KIND_STYLE[safeKind]}`}
         >
-            <div className="dl-callout-tag mb-1 text-[11px] font-semibold uppercase">
-                {KIND_LABEL[safeKind]}
-            </div>
+            <Eyebrow variant="bracket" className="dl-callout-tag mb-1">
+                {KIND_LABEL[safeKind].toUpperCase()}
+            </Eyebrow>
             <div>{children}</div>
         </aside>
     )
