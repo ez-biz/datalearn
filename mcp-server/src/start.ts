@@ -1,11 +1,15 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { DataLearnClient } from "./client.js"
+import { registerApiKeyTools } from "./tools/api-keys.js"
 import { registerArticleTools } from "./tools/articles.js"
+import { registerAssetTools } from "./tools/assets.js"
+import { registerModeratorTools } from "./tools/moderators.js"
 import { registerProblemTools } from "./tools/problems.js"
 import { registerSchemaTools } from "./tools/schemas.js"
 import { registerTagTools } from "./tools/tags.js"
 import { registerTopicTools } from "./tools/topics.js"
 import { registerTrackTools } from "./tools/tracks.js"
+import { registerUserTools } from "./tools/users.js"
 
 export interface StartConfig {
     apiKey: string
@@ -25,7 +29,7 @@ export function buildServer(config: StartConfig): {
     const client = new DataLearnClient(config.apiKey, config.baseUrl)
     const server = new McpServer({
         name: "datalearn",
-        version: "0.1.0",
+        version: "0.8.0",
     })
     registerTopicTools(server, client)
     registerTagTools(server, client)
@@ -33,5 +37,9 @@ export function buildServer(config: StartConfig): {
     registerProblemTools(server, client)
     registerTrackTools(server, client)
     registerArticleTools(server, client)
+    registerApiKeyTools(server, client)
+    registerUserTools(server, client)
+    registerModeratorTools(server, client)
+    registerAssetTools(server, client)
     return { server, client }
 }

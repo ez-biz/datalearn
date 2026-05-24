@@ -136,6 +136,10 @@ async function main() {
 
     let mcp
     let exitCode = 0
+    // Captured outside the main try so the outer finally can revoke this
+    // newly-minted full-admin key even if the harness throws mid-run.
+    // Left as null when create_api_key hasn't run yet.
+    let testCreatedApiKeyId = null
     try {
         console.log("[harness] spawning MCP server...")
         const child = spawn(
@@ -400,15 +404,193 @@ async function main() {
             passes.push(false)
         }
 
-        // Cleanup the test records
+        // ── Article review workflow (v0.6.0) ───────────────────────────
+        // DRAFT → SUBMITTED → DRAFT (reject) → SUBMITTED → PUBLISHED → ARCHIVED
+        console.log("\n[harness] article review workflow...")
+        const articleSlug = `mcp-article-${stamp}`
+        const article = await mcp.callTool("create_article", {
+            title: `MCP Test Article ${stamp}`,
+            slug: articleSlug,
+            topicSlug,
+            content: "Plain markdown body — no directives, so Layer 2 validation has nothing to check.",
+            summary: "e2e harness — safe to delete.",
+        })
+        passes.push(logResult("create_article", article))
+        const articlePayload = JSON.parse(
+            article.result?.content?.[0]?.text ?? "{}"
+        )
+        if (articlePayload.status === "DRAFT") {
+            console.log(`  ✓ create_article landed as DRAFT`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ create_article expected status=DRAFT, got ${articlePayload.status}`
+            )
+            passes.push(false)
+        }
+
+        const expectStatus = (name, result, expected) => {
+            const payload = JSON.parse(result.result?.content?.[0]?.text ?? "{}")
+            passes.push(logResult(name, result))
+            if (payload.status === expected) {
+                console.log(`  ✓ ${name} → status=${expected}`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ ${name} expected status=${expected}, got ${payload.status}`
+                )
+                passes.push(false)
+            }
+        }
+
+        expectStatus(
+            "submit_article",
+            await mcp.callTool("submit_article", { slug: articleSlug }),
+            "SUBMITTED"
+        )
+        expectStatus(
+            "reject_article",
+            await mcp.callTool("reject_article", {
+                slug: articleSlug,
+                reviewNotes: "Needs more examples in section 2.",
+            }),
+            "DRAFT"
+        )
+        expectStatus(
+            "submit_article (re-submit)",
+            await mcp.callTool("submit_article", { slug: articleSlug }),
+            "SUBMITTED"
+        )
+        expectStatus(
+            "approve_article",
+            await mcp.callTool("approve_article", { slug: articleSlug }),
+            "PUBLISHED"
+        )
+        expectStatus(
+            "archive_article",
+            await mcp.callTool("archive_article", { slug: articleSlug }),
+            "ARCHIVED"
+        )
+
+        // 404 path for any workflow tool — using submit_article as the smoke check
+        const articleWorkflow404 = await mcp.callTool("submit_article", {
+            slug: "definitely-not-real-xyz",
+        })
+        const wf404Text = articleWorkflow404.result?.content?.[0]?.text ?? ""
+        if (wf404Text.includes('"found": false')) {
+            console.log(`  ✓ submit_article 404 returns {found:false}`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ submit_article 404 expected {found:false}, got: ${wf404Text}`
+            )
+            passes.push(false)
+        }
+
+        // ── Ops surface smoke checks (v0.7.0) ──────────────────────────
+        console.log("\n[harness] ops surface (list smoke checks)...")
+        const usersList = await mcp.callTool("list_users", { role: "ADMIN" })
+        passes.push(logResult("list_users", usersList))
+        const usersPayload = JSON.parse(
+            usersList.result?.content?.[0]?.text ?? "[]"
+        )
+        if (Array.isArray(usersPayload)) {
+            console.log(`  ✓ list_users returned array (${usersPayload.length} admin(s))`)
+            passes.push(true)
+        } else {
+            console.log(`  ✗ list_users expected array, got ${typeof usersPayload}`)
+            passes.push(false)
+        }
+
+        const modsList = await mcp.callTool("list_moderators", {})
+        passes.push(logResult("list_moderators", modsList))
+        const modsPayload = JSON.parse(
+            modsList.result?.content?.[0]?.text ?? "{}"
+        )
+        if (Array.isArray(modsPayload.moderators) && Array.isArray(modsPayload.candidates)) {
+            console.log(`  ✓ list_moderators returned { moderators, candidates }`)
+            passes.push(true)
+        } else {
+            console.log(`  ✗ list_moderators wrong shape: ${modsList.result?.content?.[0]?.text}`)
+            passes.push(false)
+        }
+
+        const keysList = await mcp.callTool("list_api_keys", {})
+        passes.push(logResult("list_api_keys", keysList))
+
+        const newKey = await mcp.callTool("create_api_key", {
+            name: `MCP Test Key ${stamp}`,
+        })
+        passes.push(logResult("create_api_key", newKey))
+        const newKeyPayload = JSON.parse(
+            newKey.result?.content?.[0]?.text ?? "{}"
+        )
+        // Hoist the id to the outer scope IMMEDIATELY so the finally
+        // block can revoke it if anything below this point throws.
+        if (typeof newKeyPayload.id === "string") {
+            testCreatedApiKeyId = newKeyPayload.id
+        }
+        if (
+            typeof newKeyPayload.plaintext === "string" &&
+            newKeyPayload.plaintext.length > 20 &&
+            typeof newKeyPayload.prefix === "string"
+        ) {
+            console.log(`  ✓ create_api_key returned plaintext + prefix=${newKeyPayload.prefix}`)
+            passes.push(true)
+        } else {
+            console.log(`  ✗ create_api_key missing plaintext/prefix`)
+            passes.push(false)
+        }
+
+        const revokeKeyResult = await mcp.callTool("revoke_api_key", {
+            id: newKeyPayload.id,
+        })
+        passes.push(logResult("revoke_api_key", revokeKeyResult))
+        // Only release the safety net when revoke_api_key actually
+        // succeeded. JSON-RPC tool errors come back as `result.error`
+        // (not thrown), so a logged-failure here would otherwise leak a
+        // 90-day full-admin key. The finally block's direct DB revoke is
+        // the backstop.
+        if (!revokeKeyResult.error) {
+            testCreatedApiKeyId = null
+        }
+
+        // ── Lifecycle deletes (v0.7.0) — replaces direct Prisma cleanup ─
+        // delete_track first: was PUBLISHED earlier, so expect archived path
+        const deleteTrackResult = await mcp.callTool("delete_track", {
+            slug: trackSlug,
+        })
+        passes.push(logResult("delete_track", deleteTrackResult))
+        const deleteTrackPayload = JSON.parse(
+            deleteTrackResult.result?.content?.[0]?.text ?? "{}"
+        )
+        if (deleteTrackPayload.archived === true) {
+            console.log(`  ✓ delete_track soft-archived (was PUBLISHED)`)
+            passes.push(true)
+        } else {
+            console.log(`  ✗ delete_track expected archived:true, got ${deleteTrackResult.result?.content?.[0]?.text}`)
+            passes.push(false)
+        }
+
+        // delete_topic should 409 if the test article is still on it — we
+        // archived but didn't delete the article above. Article row still
+        // references topic, so use Prisma to clear the article first, then
+        // try delete_topic via MCP.
+        await prisma.article.deleteMany({ where: { slug: articleSlug } })
+        const deleteTopicResult = await mcp.callTool("delete_topic", {
+            slug: topicSlug,
+        })
+        passes.push(logResult("delete_topic", deleteTopicResult))
+
+        // Cleanup remaining test records (no MCP tool for problem/schema/tag delete)
         console.log("\n[harness] cleaning up test records...")
         await prisma.sQLProblem.deleteMany({
             where: { slug: { in: [problemSlug, sneakSlug] } },
         })
         await prisma.sqlSchema.delete({ where: { id: schemaId } })
         await prisma.tag.delete({ where: { slug: tagSlug } })
-        await prisma.topic.delete({ where: { slug: topicSlug } })
-        await prisma.track.delete({ where: { slug: trackSlug } })
+        // The track row was soft-archived by delete_track; clean it up.
+        await prisma.track.deleteMany({ where: { slug: trackSlug } })
         console.log("  ✓ test records deleted")
 
         const failed = passes.filter((p) => !p).length
@@ -424,6 +606,18 @@ async function main() {
         child.kill()
     } finally {
         if (mcp?.child && !mcp.child.killed) mcp.child.kill()
+        // Revoke the test-created MCP key first (only if create_api_key
+        // succeeded but the happy-path revoke didn't run because the harness
+        // threw between them). Leaving this active would orphan a 90-day
+        // full-admin key in the dev DB.
+        if (testCreatedApiKeyId) {
+            console.log("[harness] revoking test-created API key (safety net)...")
+            try {
+                await revokeKey(testCreatedApiKeyId)
+            } catch (e) {
+                console.error("[harness] safety revoke failed:", e)
+            }
+        }
         console.log("[harness] revoking API key...")
         await revokeKey(keyId)
         await prisma.$disconnect()

@@ -1,8 +1,20 @@
 # MCP Server for Data Learn — v1 Design
 
 **Date:** 2026-04-26
-**Status:** Approved (awaiting written-spec review)
-**Branch:** `feat/mcp-server`
+**Status:** Shipped; partially superseded by post-v1 iterations.
+**Branch:** `feat/mcp-server` (merged)
+
+> **Post-v1 status (updated 2026-05-24).** The v1 non-goals list ("Article authoring, updates, approval, or archive flows") is **no longer accurate**:
+>
+> | Release | Tools added | Note |
+> |---|---|---|
+> | v0.4.12 (May 17) | tracks: `list_tracks`, `get_track`, `create_track`, `update_track`, `add_track_item`, `remove_track_item`, `reorder_track_items` | followed v1 patterns; no separate spec |
+> | v0.5.0 (May 21) | articles: `list_articles`, `get_article`, `create_article`, `update_article` | DRAFT-guard preserved on `create_article` |
+> | v0.6.0 (May 24) | article review workflow: `submit_article`, `approve_article`, `reject_article`, `archive_article` | adds `DataLearnClient.requestRaw` for `{ ok, status }` endpoints |
+> | v0.7.0 (May 24) | ops + admin lifecycle: `list_api_keys` / `create_api_key` / `revoke_api_key`; `list_users` / `update_user_role`; `list_moderators` / `grant_moderator` / `update_moderator_permissions` / `revoke_moderator`; `delete_topic`, `delete_track` | `create_api_key` returns plaintext once; `update_user_role` schema rejects ADMIN at validation time; `delete_track` soft-archives when non-empty |
+> | v0.8.0 (May 24) | assets: `list_assets`, `delete_asset` | `delete_asset` strips `:::figure` references from referencing articles and snapshots affected PUBLISHED versions; discussion-moderation tools intentionally excluded (incompatible with Bearer auth — needs separate design) |
+>
+> The DRAFT-guard contract and the "validation module stays Prisma-free" contract are unchanged. Future tool work is tracked in PR descriptions rather than separate design docs unless a new pattern is introduced.
 
 ## Goal
 

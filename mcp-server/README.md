@@ -17,6 +17,17 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that lets an 
 | `get_article` | Fetch a single article's full record by slug, including `content` markdown. |
 | `create_article` | Create a new Learn article. **Always lands as DRAFT** — publish via `update_article` or the admin UI. Supports v0.5.0 directive syntax. |
 | `update_article` | Patch an existing article by slug. PATCH semantics — `content` REPLACES the current value entirely. Can rename via `newSlug` and transition `status`. |
+| `submit_article` | Move a DRAFT article to SUBMITTED for admin review. Idempotent. Clears prior `reviewNotes`. |
+| `approve_article` | Promote SUBMITTED (or DRAFT/ARCHIVED) → PUBLISHED. Runs Layer 2 directive validation; snapshots an immutable article version. |
+| `reject_article` | Send a SUBMITTED article back to DRAFT with required `reviewNotes` (1–4000 chars) for the author. |
+| `archive_article` | Hide an article from the public reader without deleting it. Version history is preserved. |
+| `delete_topic` | Permanently delete a topic. 409 if articles still reference it. |
+| `delete_track` | Delete a track. Hard-delete if DRAFT with zero items; otherwise soft-archived to ARCHIVED. |
+| `list_api_keys`, `create_api_key`, `revoke_api_key` | Admin API-key lifecycle. **`create_api_key` returns the plaintext key once** — surface it with an explicit "save now" warning. |
+| `list_users`, `update_user_role` | List users (filterable by role and substring); change a user's role to USER, CONTRIBUTOR, or MODERATOR. ADMIN transitions are intentionally rejected — use psql. |
+| `list_moderators`, `grant_moderator`, `update_moderator_permissions`, `revoke_moderator` | Moderator role + permission management. Permissions: `VIEW_DISCUSSION_QUEUE`, `HIDE_COMMENT`, `RESTORE_COMMENT`, `DISMISS_REPORT`, `MARK_SPAM`, `LOCK_PROBLEM_DISCUSSION`, `HIDE_PROBLEM_DISCUSSION`. |
+| `list_assets`, `delete_asset` | Vercel Blob asset management. `delete_asset` strips referencing `:::figure` blocks and snapshots affected PUBLISHED articles. |
+| `list_assets`, `delete_asset` | Vercel Blob asset management. `delete_asset` strips referencing `:::figure` blocks and snapshots affected PUBLISHED articles. |
 
 ## Install
 
@@ -56,7 +67,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) a
 }
 ```
 
-Restart Claude Desktop. The 15 tools appear under the `datalearn` namespace.
+Restart Claude Desktop. The full tool surface (40 tools as of v0.8.0) appears under the `datalearn` namespace.
 
 ### Local development
 
@@ -107,12 +118,12 @@ The AI will:
 
 ## Visual article authoring
 
-MCP v1 does not create Learn articles. Visual article authoring happens in the app UI:
+From v0.5.0, Learn articles can be authored through MCP (`create_article` / `update_article`) — DRAFT only at create time, with the review workflow (`submit_article` / `approve_article` / `reject_article` / `archive_article`) shipping in v0.6.0. The app UI remains the human-friendly alternative:
 
 - Contributors: `/me/articles/new` and `/me/articles/<slug>/edit`
 - Admins: `/admin/articles/new` and `/admin/articles/<slug>/edit`
 
-The article editor has an insert menu for the five supported visual directives and a My uploads panel that inserts active uploads as `figure` blocks. Publishing runs the same validation used by the public renderer:
+Whichever surface you use, the same directives + publish validation apply. The article editor has an insert menu for the five supported visual directives and a My uploads panel that inserts active uploads as `figure` blocks. Publishing runs the same validation used by the public renderer:
 
 - `figure` requires `src` and `alt`; `src` must be `/learn/...` or an active Vercel Blob asset owned by the article author.
 - `mermaid` requires `alt`; Mermaid SVG output is sanitized client-side before insertion.
@@ -309,9 +320,18 @@ The Next API runs Zod validation server-side; failures come back as `McpError(In
 
 **`update_problem`** — input `{ slug, ...fields }`, with `newSlug` for slug rename. Returns the same full shape as `get_problem`, or `{ found: false }` if the current slug does not exist.
 
-### Articles (v0.5.0+)
+### Articles (v0.5.0+, review workflow v0.6.0+)
 
-Article tools mirror the problem-tool shape: `list_articles`, `get_article`, `create_article`, `update_article`. The DRAFT-guard pattern is the same — `create_article` does not accept a `status` field; articles always land in DRAFT and require a human publish via `update_article` or the admin UI.
+Article tools mirror the problem-tool shape: `list_articles`, `get_article`, `create_article`, `update_article`. The DRAFT-guard pattern is the same — `create_article` does not accept a `status` field; articles always land in DRAFT and require a human publish via the review workflow below.
+
+**Review workflow (v0.6.0+).** Four dedicated tools drive status transitions so the lifecycle is explicit instead of buried in `update_article`:
+
+- **`submit_article({ slug })`** — DRAFT → SUBMITTED. Author handoff for admin review. Idempotent. Clears any prior `reviewNotes`. Rejected if the article is PUBLISHED or ARCHIVED (move back to DRAFT first via `update_article`).
+- **`approve_article({ slug })`** — SUBMITTED → PUBLISHED (also accepted from DRAFT or ARCHIVED for direct publishes). Runs **Layer 2 directive validation** server-side — every `:::figure` URL must resolve to an `ACTIVE` `Asset` row owned by the article author; foreign Blob URLs and missing alts are rejected with the per-directive error list. Snapshots an immutable article version on success.
+- **`reject_article({ slug, reviewNotes })`** — SUBMITTED → DRAFT. `reviewNotes` is required (1–4000 chars) and is shown to the author when they reopen the editor; be specific. Rejected if the article is not currently SUBMITTED.
+- **`archive_article({ slug })`** — any → ARCHIVED. Hides the article from the public reader; version history is kept. Idempotent.
+
+All four return `{ ok: true, status: "<NEW_STATUS>" }` on success, or `{ found: false }` if the slug does not exist.
 
 **Directive syntax in `content`:** v0.5.0 ships five `remark-directive` block directives — `:::figure`, `:::mermaid`, `:::steps`, `:::side-by-side`, `:::callout`. See `docs/superpowers/prompts/learn-v2-article-author.md` for the full directive grammar and authoring conventions. The MCP server runs a Prisma-free Layer 1 directive check before POSTing — bad `alt`, foreign `src` URLs, or invalid `callout` kinds fail fast with a clear error.
 
@@ -321,9 +341,10 @@ Article tools mirror the problem-tool shape: `list_articles`, `get_article`, `cr
 
 **Read-before-write for edits.** `update_article.content` REPLACES the article body wholesale. Always call `get_article` first, modify the markdown locally, then send the full modified content back. Same applies to `tagSlugs` and `relatedProblemSlugs` arrays — present means replace, absent means leave unchanged.
 
-### What's NOT in v1
+### What's NOT exposed
 
-- **Delete tools.** There is intentionally no `delete_problem` or `delete_article`; archive with `update_*` (status=ARCHIVED) instead so submission history is preserved.
+- **`delete_problem` / `delete_article`** — intentionally absent. Archive with `update_problem` / `update_article` / `archive_article` (status=ARCHIVED) so submission history and version snapshots are preserved. `delete_topic` and `delete_track` are available from v0.7.0 (topic deletion blocks on referencing articles; tracks soft-archive when non-empty).
+- **Discussion moderation tools.** The `/api/admin/discussions*` routes use session-cookie auth that explicitly rejects Bearer headers — designing a bearer-compatible path is its own security-design conversation. Until then, comment moderation happens through the admin UI.
 - **Validation pre-flight.** A `validate_problem` tool that runs `solutionSql` against `schemaInline` and checks the produced rows match `expectedOutput` — deferred. For now, errors surface only when a learner actually runs the query.
 
 ## Tests

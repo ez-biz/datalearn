@@ -141,6 +141,31 @@ export function registerTrackTools(
     )
 
     server.tool(
+        "delete_track",
+        [
+            "Delete a track by slug.",
+            "If the track is DRAFT and has zero items: hard-deleted, response { ok: true, deleted: true }.",
+            "Otherwise (PUBLISHED, ARCHIVED, or has items): soft-archived to status=ARCHIVED instead, response { ok: true, archived: true }.",
+            "Returns {found:false} if no track exists at that slug.",
+        ].join("\n"),
+        { slug: SlugSchema },
+        async ({ slug }) => {
+            try {
+                const result = await client.requestRaw<
+                    | { ok: true; deleted: true }
+                    | { ok: true; archived: true }
+                >("DELETE", `/api/admin/tracks/${encodeURIComponent(slug)}`)
+                return ok(result)
+            } catch (err) {
+                if (err instanceof ApiError && err.status === 404) {
+                    return ok({ found: false })
+                }
+                throw toMcpError(err)
+            }
+        }
+    )
+
+    server.tool(
         "add_track_item",
         "Append a problem to a track, or insert it at an explicit 0-indexed position. Pass `problemSlug` and optional `position`. If position is omitted the item is appended. Duplicates within a track are rejected by the server.",
         {

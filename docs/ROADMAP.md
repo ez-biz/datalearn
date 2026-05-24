@@ -1,10 +1,20 @@
 # 🚀 Antigravity Data Learning Platform — Long-Term Roadmap
 
-> **Last updated:** 2026-05-21
+> **Last updated:** 2026-05-24
 > **Status:** Live — <https://www.learndatanow.com>
-> **Version:** 0.5.0 (next release)
+> **Version:** 0.7.0 (next release)
 
 ## Recently shipped
+
+### v0.7.0 — MCP enhancements (article workflow + ops + assets)
+
+Three stacked PRs that take the MCP server from 23 → 40 tools, closing every coverage gap an AI-authoring user would hit short of discussion moderation (which intentionally stays out — see below).
+
+- **Article review workflow (PR #139, v0.6.0)** — 4 new tools (`submit_article`, `approve_article`, `reject_article`, `archive_article`) that drive DRAFT → SUBMITTED → PUBLISHED transitions with Layer 2 directive validation server-side. `approve_article` formats per-directive validation errors as multi-line messages so authors fix issues in one round-trip. Added `DataLearnClient.requestRaw` for endpoints that reply with `{ ok, status }` instead of `{ data }`. Central `toMcpError` now maps 409 conflicts to `InvalidRequest` with the upstream message so state-conflict errors are actionable instead of masked.
+- **Ops + admin lifecycle (PR #140, v0.7.0)** — 11 new tools covering admin API keys (list/create/revoke; `create_api_key` returns plaintext once with an explicit save-now warning bolted onto the response), users (list/role-update with ADMIN transitions rejected at the schema level), moderators (list/grant/permissions/revoke), and lifecycle deletes (`delete_topic` blocks on referencing articles; `delete_track` soft-archives when non-empty). `delete_problem` and `delete_article` stay deliberately out — archive-only for history + version preservation.
+- **Asset management (PR #141, v0.8.0)** — 2 new tools (`list_assets`, `delete_asset`). `delete_asset` strips `:::figure` references from referencing articles and snapshots affected PUBLISHED article versions, so cleaning up orphan uploads doesn't silently break live content. Discussion-moderation tools were drafted then removed during Codex review: `/api/admin/discussions*` routes use session-cookie auth that explicitly rejects Bearer headers, and adding bearer auth would weaken the CSRF + audit-log guarantees moderation expects. Tracked as a separate design conversation.
+- **e2e harness** — full article state-machine assertion (DRAFT → SUBMITTED → DRAFT[reject] → SUBMITTED → PUBLISHED → ARCHIVED), API-key roundtrip with plaintext-shape check, ops list smoke checks, delete_topic / delete_track. Safety net: the test-created API key is captured at outer scope so the `finally` block direct-revokes it even if `revoke_api_key` itself errors mid-test.
+- **Bundle isolation maintained** — `lib/admin-validation.ts` stays Prisma-free; bundle isolation check at 24 modules. `tsup` build at 1.92 MB. 53 vitest tests pass.
 
 ### v0.5.0 — Learn v2 visual articles
 
@@ -265,10 +275,16 @@ Build the **go-to open platform** for data engineering education — combining i
 | Task | Status | Notes |
 |------|--------|-------|
 | **MCP v1: problem authoring tools** | ✅ Done | 9 tools, stdio transport, forced DRAFT on writes. |
-| **MCP v2: article authoring tools** | ⬜ Todo | `create_article`, `submit_article`, plus update flows. |
-| **MCP v2: problem update / archive / publish** | ⬜ Todo | Currently editable only via admin UI after the AI lands a DRAFT. |
-| **MCP v2: `validate_problem` pre-flight** | ⬜ Todo | Run `solutionSql` against `schemaInline` and surface mismatches before persistence. |
-| **MCP: HTTP / remote transport** | ⬜ Todo | Today's stdio transport requires local install. Hosted SSE/HTTP MCP would let it run as a Vercel route. |
+| **MCP v0.4.12: track authoring tools** | ✅ Done | `list_tracks`, `get_track`, `create_track`, `update_track`, `add_track_item`, `remove_track_item`, `reorder_track_items`. |
+| **MCP v0.5.0: article authoring tools** | ✅ Done | `create_article`, `update_article` (DRAFT-only at create). |
+| **MCP v0.6.0: article review workflow** | ✅ Done | `submit_article`, `approve_article`, `reject_article`, `archive_article`. Layer 2 directive validation surfaced as multi-line per-directive errors. |
+| **MCP v0.7.0: ops + admin lifecycle** | ✅ Done | API keys, users, moderators, `delete_topic`, `delete_track`. ADMIN role transitions rejected at schema level. |
+| **MCP v0.8.0: asset management** | ✅ Done | `list_assets`, `delete_asset` (strips `:::figure` refs + snapshots PUBLISHED articles). |
+| **MCP: problem update / archive / publish** | ✅ Done | Shipped with v0.5.0 `update_problem`. `update_problem` accepts `status` transitions. |
+| **MCP: `validate_problem` pre-flight** | ⬜ Todo | Run `solutionSql` against `schemaInline` and surface mismatches before persistence. |
+| **MCP: pagination + filters on list_problems / list_articles** | ⬜ Todo | Admin REST endpoints don't currently accept `cursor`/`limit`; needs joint API + tool change. |
+| **MCP: discussion moderation tools** | ⬜ Todo (design needed) | `/api/admin/discussions*` routes use session-cookie auth that rejects Bearer headers. Adding a Bearer path weakens CSRF + audit-log guarantees; needs a separate security design before implementation. |
+| **MCP: HTTP / remote transport** | ⬜ Todo | Today's stdio transport requires local install. Hosted streamable-HTTP MCP at `mcp.learndatanow.com` would unblock ChatGPT custom connectors and zero-install Claude.ai usage. |
 | **MCP: extract to npm package** | ⬜ Todo | When external collaborators need it. Currently a sibling project in this repo. |
 
 ---
