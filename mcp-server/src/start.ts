@@ -25,7 +25,7 @@ export function buildServer(config: StartConfig): {
     const client = new DataLearnClient(config.apiKey, config.baseUrl)
     const server = new McpServer({
         name: "datalearn",
-        version: "0.1.0",
+        version: "0.6.0",
     })
     registerTopicTools(server, client)
     registerTagTools(server, client)

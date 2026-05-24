@@ -41,6 +41,31 @@ export class DataLearnClient {
         path: string,
         body?: unknown
     ): Promise<T> {
+        const parsed = await this.fetchAndParse(method, path, body)
+        // The Next admin API consistently wraps success bodies as { data: ... };
+        // void endpoints (e.g. DELETE) may return {} → callers get undefined as T.
+        const okBody = parsed as { data?: T }
+        return okBody.data as T
+    }
+
+    /**
+     * Workflow endpoints (article submit/approve/reject/archive, etc.) reply
+     * with a flat `{ ok: true, ... }` shape instead of the `{ data: ... }`
+     * wrapper. Use this when you want the parsed body verbatim.
+     */
+    async requestRaw<T>(
+        method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
+        path: string,
+        body?: unknown
+    ): Promise<T> {
+        return (await this.fetchAndParse(method, path, body)) as T
+    }
+
+    private async fetchAndParse(
+        method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
+        path: string,
+        body: unknown
+    ): Promise<unknown> {
         const url = `${this.normalizedBase}${path.startsWith("/") ? path : `/${path}`}`
         const res = await this.fetchImpl(url, {
             method,
@@ -68,9 +93,6 @@ export class DataLearnClient {
                 errBody?.details
             )
         }
-        // The Next admin API consistently wraps success bodies as { data: ... };
-        // void endpoints (e.g. DELETE) may return {} → callers get undefined as T.
-        const okBody = parsed as { data?: T }
-        return okBody.data as T
+        return parsed
     }
 }

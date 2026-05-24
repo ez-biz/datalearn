@@ -17,6 +17,10 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that lets an 
 | `get_article` | Fetch a single article's full record by slug, including `content` markdown. |
 | `create_article` | Create a new Learn article. **Always lands as DRAFT** — publish via `update_article` or the admin UI. Supports v0.5.0 directive syntax. |
 | `update_article` | Patch an existing article by slug. PATCH semantics — `content` REPLACES the current value entirely. Can rename via `newSlug` and transition `status`. |
+| `submit_article` | Move a DRAFT article to SUBMITTED for admin review. Idempotent. Clears prior `reviewNotes`. |
+| `approve_article` | Promote SUBMITTED (or DRAFT/ARCHIVED) → PUBLISHED. Runs Layer 2 directive validation; snapshots an immutable article version. |
+| `reject_article` | Send a SUBMITTED article back to DRAFT with required `reviewNotes` (1–4000 chars) for the author. |
+| `archive_article` | Hide an article from the public reader without deleting it. Version history is preserved. |
 
 ## Install
 
@@ -309,9 +313,18 @@ The Next API runs Zod validation server-side; failures come back as `McpError(In
 
 **`update_problem`** — input `{ slug, ...fields }`, with `newSlug` for slug rename. Returns the same full shape as `get_problem`, or `{ found: false }` if the current slug does not exist.
 
-### Articles (v0.5.0+)
+### Articles (v0.5.0+, review workflow v0.6.0+)
 
-Article tools mirror the problem-tool shape: `list_articles`, `get_article`, `create_article`, `update_article`. The DRAFT-guard pattern is the same — `create_article` does not accept a `status` field; articles always land in DRAFT and require a human publish via `update_article` or the admin UI.
+Article tools mirror the problem-tool shape: `list_articles`, `get_article`, `create_article`, `update_article`. The DRAFT-guard pattern is the same — `create_article` does not accept a `status` field; articles always land in DRAFT and require a human publish via the review workflow below.
+
+**Review workflow (v0.6.0+).** Four dedicated tools drive status transitions so the lifecycle is explicit instead of buried in `update_article`:
+
+- **`submit_article({ slug })`** — DRAFT → SUBMITTED. Author handoff for admin review. Idempotent. Clears any prior `reviewNotes`. Rejected if the article is PUBLISHED or ARCHIVED (move back to DRAFT first via `update_article`).
+- **`approve_article({ slug })`** — SUBMITTED → PUBLISHED (also accepted from DRAFT or ARCHIVED for direct publishes). Runs **Layer 2 directive validation** server-side — every `:::figure` URL must resolve to an `ACTIVE` `Asset` row owned by the article author; foreign Blob URLs and missing alts are rejected with the per-directive error list. Snapshots an immutable article version on success.
+- **`reject_article({ slug, reviewNotes })`** — SUBMITTED → DRAFT. `reviewNotes` is required (1–4000 chars) and is shown to the author when they reopen the editor; be specific. Rejected if the article is not currently SUBMITTED.
+- **`archive_article({ slug })`** — any → ARCHIVED. Hides the article from the public reader; version history is kept. Idempotent.
+
+All four return `{ ok: true, status: "<NEW_STATUS>" }` on success, or `{ found: false }` if the slug does not exist.
 
 **Directive syntax in `content`:** v0.5.0 ships five `remark-directive` block directives — `:::figure`, `:::mermaid`, `:::steps`, `:::side-by-side`, `:::callout`. See `docs/superpowers/prompts/learn-v2-article-author.md` for the full directive grammar and authoring conventions. The MCP server runs a Prisma-free Layer 1 directive check before POSTing — bad `alt`, foreign `src` URLs, or invalid `callout` kinds fail fast with a clear error.
 

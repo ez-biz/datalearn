@@ -3,6 +3,7 @@ import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js"
 import { z } from "zod"
 import {
     ArticleCreateInput,
+    ArticleRejectInput,
     ArticleUpdateInput,
     SlugSchema,
     validateArticleDirectivesSyntactic,
@@ -170,6 +171,121 @@ export function registerArticleTools(
                 )
                 return ok(created)
             } catch (err) {
+                throw toMcpError(err)
+            }
+        }
+    )
+
+    server.tool(
+        "submit_article",
+        [
+            "Submit a DRAFT article for admin review. Transitions DRAFT → SUBMITTED.",
+            "Idempotent: re-submitting an already-SUBMITTED article returns success without change.",
+            "Rejected if the article is PUBLISHED or ARCHIVED — move it back to DRAFT first.",
+            "Clears any prior reviewNotes so the reviewer starts with a clean slate.",
+        ].join("\n"),
+        { slug: SlugSchema },
+        async ({ slug }) => {
+            try {
+                const result = await client.requestRaw<{
+                    ok: true
+                    status: "SUBMITTED"
+                }>(
+                    "POST",
+                    `/api/admin/articles/${encodeURIComponent(slug)}/submit`
+                )
+                return ok(result)
+            } catch (err) {
+                if (err instanceof ApiError && err.status === 404) {
+                    return ok({ found: false })
+                }
+                throw toMcpError(err)
+            }
+        }
+    )
+
+    server.tool(
+        "approve_article",
+        [
+            "Approve a SUBMITTED article. Transitions to PUBLISHED, snapshots an immutable version, marks the article live for learners.",
+            "Also allowed from DRAFT or ARCHIVED (admin can publish directly without the SUBMITTED step). Idempotent for already-PUBLISHED.",
+            "",
+            "Server runs Layer 2 directive validation before the transition: every :::figure URL must resolve to an ACTIVE Asset row owned by the article author; foreign Blob URLs and missing alts are rejected.",
+            "If validation fails, the tool surfaces the per-directive error list and the article stays at its current status.",
+        ].join("\n"),
+        { slug: SlugSchema },
+        async ({ slug }) => {
+            try {
+                const result = await client.requestRaw<{
+                    ok: true
+                    status: "PUBLISHED"
+                }>(
+                    "POST",
+                    `/api/admin/articles/${encodeURIComponent(slug)}/approve`
+                )
+                return ok(result)
+            } catch (err) {
+                if (err instanceof ApiError && err.status === 404) {
+                    return ok({ found: false })
+                }
+                throw toMcpError(err)
+            }
+        }
+    )
+
+    server.tool(
+        "reject_article",
+        [
+            "Reject a SUBMITTED article. Transitions SUBMITTED → DRAFT and stores reviewNotes for the author.",
+            "Rejected if the article is not currently SUBMITTED — call get_article first if unsure.",
+            "",
+            "Required: reviewNotes (1–4000 chars) — shown to the author when they reopen the editor. Be specific about what needs to change.",
+        ].join("\n"),
+        {
+            slug: SlugSchema,
+            reviewNotes: ArticleRejectInput.shape.reviewNotes,
+        },
+        async ({ slug, reviewNotes }) => {
+            try {
+                const result = await client.requestRaw<{
+                    ok: true
+                    status: "DRAFT"
+                }>(
+                    "POST",
+                    `/api/admin/articles/${encodeURIComponent(slug)}/reject`,
+                    { reviewNotes }
+                )
+                return ok(result)
+            } catch (err) {
+                if (err instanceof ApiError && err.status === 404) {
+                    return ok({ found: false })
+                }
+                throw toMcpError(err)
+            }
+        }
+    )
+
+    server.tool(
+        "archive_article",
+        [
+            "Archive an article — hides it from the public reader, keeps the row and version history. Allowed from any non-ARCHIVED status.",
+            "Idempotent for already-ARCHIVED. To re-publish, use approve_article (DRAFT → PUBLISHED) after moving through update_article to DRAFT.",
+        ].join("\n"),
+        { slug: SlugSchema },
+        async ({ slug }) => {
+            try {
+                const result = await client.requestRaw<{
+                    ok: true
+                    status: "ARCHIVED"
+                }>(
+                    "POST",
+                    `/api/admin/articles/${encodeURIComponent(slug)}/archive`
+                )
+                return ok(result)
+            } catch (err) {
+                if (err instanceof ApiError && err.status === 404) {
+                    return ok({ found: false })
+                }
                 throw toMcpError(err)
             }
         }

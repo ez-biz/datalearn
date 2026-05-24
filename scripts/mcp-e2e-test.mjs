@@ -400,8 +400,92 @@ async function main() {
             passes.push(false)
         }
 
+        // ── Article review workflow (v0.6.0) ───────────────────────────
+        // DRAFT → SUBMITTED → DRAFT (reject) → SUBMITTED → PUBLISHED → ARCHIVED
+        console.log("\n[harness] article review workflow...")
+        const articleSlug = `mcp-article-${stamp}`
+        const article = await mcp.callTool("create_article", {
+            title: `MCP Test Article ${stamp}`,
+            slug: articleSlug,
+            topicSlug,
+            content: "Plain markdown body — no directives, so Layer 2 validation has nothing to check.",
+            summary: "e2e harness — safe to delete.",
+        })
+        passes.push(logResult("create_article", article))
+        const articlePayload = JSON.parse(
+            article.result?.content?.[0]?.text ?? "{}"
+        )
+        if (articlePayload.status === "DRAFT") {
+            console.log(`  ✓ create_article landed as DRAFT`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ create_article expected status=DRAFT, got ${articlePayload.status}`
+            )
+            passes.push(false)
+        }
+
+        const expectStatus = (name, result, expected) => {
+            const payload = JSON.parse(result.result?.content?.[0]?.text ?? "{}")
+            passes.push(logResult(name, result))
+            if (payload.status === expected) {
+                console.log(`  ✓ ${name} → status=${expected}`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ ${name} expected status=${expected}, got ${payload.status}`
+                )
+                passes.push(false)
+            }
+        }
+
+        expectStatus(
+            "submit_article",
+            await mcp.callTool("submit_article", { slug: articleSlug }),
+            "SUBMITTED"
+        )
+        expectStatus(
+            "reject_article",
+            await mcp.callTool("reject_article", {
+                slug: articleSlug,
+                reviewNotes: "Needs more examples in section 2.",
+            }),
+            "DRAFT"
+        )
+        expectStatus(
+            "submit_article (re-submit)",
+            await mcp.callTool("submit_article", { slug: articleSlug }),
+            "SUBMITTED"
+        )
+        expectStatus(
+            "approve_article",
+            await mcp.callTool("approve_article", { slug: articleSlug }),
+            "PUBLISHED"
+        )
+        expectStatus(
+            "archive_article",
+            await mcp.callTool("archive_article", { slug: articleSlug }),
+            "ARCHIVED"
+        )
+
+        // 404 path for any workflow tool — using submit_article as the smoke check
+        const articleWorkflow404 = await mcp.callTool("submit_article", {
+            slug: "definitely-not-real-xyz",
+        })
+        const wf404Text = articleWorkflow404.result?.content?.[0]?.text ?? ""
+        if (wf404Text.includes('"found": false')) {
+            console.log(`  ✓ submit_article 404 returns {found:false}`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ submit_article 404 expected {found:false}, got: ${wf404Text}`
+            )
+            passes.push(false)
+        }
+
         // Cleanup the test records
         console.log("\n[harness] cleaning up test records...")
+        await prisma.article.deleteMany({ where: { slug: articleSlug } })
         await prisma.sQLProblem.deleteMany({
             where: { slug: { in: [problemSlug, sneakSlug] } },
         })
