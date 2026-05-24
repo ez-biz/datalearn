@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { FileText, KeyRound, Plus, Route, Tags } from "lucide-react"
+import { FileText, KeyRound, Plus, Route, Tags, Trophy } from "lucide-react"
 import { Kbd } from "@/components/ui/Kbd"
 
 const actions = [
@@ -20,6 +20,12 @@ const actions = [
         href: "/admin/tracks/new",
         shortcut: "T",
         icon: Route,
+    },
+    {
+        label: "new contest",
+        href: "/admin/contests/new",
+        shortcut: "C",
+        icon: Trophy,
     },
     {
         label: "tags",

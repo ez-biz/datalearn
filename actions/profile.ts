@@ -1,6 +1,7 @@
 "use server"
 
 import { auth } from "@/lib/auth"
+import { excludeLockedProblems } from "@/lib/contest-locks"
 import { prisma } from "@/lib/prisma"
 import {
     buildHeatmap,
@@ -37,7 +38,13 @@ export type ProfileData = {
         id: string
         status: "ACCEPTED" | "WRONG_ANSWER"
         createdAt: Date
-        problem: { number: number; slug: string; title: string; difficulty: string }
+        problem: {
+            number: number
+            slug: string
+            title: string
+            difficulty: string
+            contestLock: { unlocksAt: Date } | null
+        }
     }>
 }
 
@@ -100,6 +107,9 @@ export async function getProfileData(): Promise<ProfileData | null> {
                             slug: true,
                             title: true,
                             difficulty: true,
+                            contestLock: {
+                                select: { unlocksAt: true },
+                            },
                         },
                     },
                 },
@@ -121,7 +131,7 @@ export async function getProfileData(): Promise<ProfileData | null> {
             }),
             prisma.sQLProblem.groupBy({
                 by: ["difficulty"],
-                where: { status: "PUBLISHED" },
+                where: excludeLockedProblems({ status: "PUBLISHED" }),
                 _count: { _all: true },
             }),
             // For Skills: which tags each PUBLISHED problem has, so we
@@ -133,7 +143,11 @@ export async function getProfileData(): Promise<ProfileData | null> {
                     name: true,
                     _count: {
                         select: {
-                            problems: { where: { status: "PUBLISHED" } },
+                            problems: {
+                                where: excludeLockedProblems({
+                                    status: "PUBLISHED",
+                                }),
+                            },
                         },
                     },
                 },

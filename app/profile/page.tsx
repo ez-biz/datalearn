@@ -166,48 +166,76 @@ export default async function ProfilePage() {
                                 <ul className="divide-y divide-border -my-2">
                                     {recent.map((s) => {
                                         const ok = s.status === "ACCEPTED"
+                                        const locked = Boolean(
+                                            s.problem.contestLock
+                                        )
+                                        const rowClass =
+                                            "group flex items-center gap-3 py-3 -mx-2 px-2 rounded-md transition-colors min-h-[44px]"
+                                        const content = (
+                                            <>
+                                                <span
+                                                    aria-hidden
+                                                    className={cn(
+                                                        "h-1.5 w-1.5 rounded-full shrink-0",
+                                                        ok
+                                                            ? "bg-easy"
+                                                            : "bg-hard"
+                                                    )}
+                                                />
+                                                <span className="flex-1 min-w-0 text-sm font-medium truncate group-hover:text-primary transition-colors">
+                                                    <span className="font-mono text-[11px] text-muted-foreground tabular-nums mr-1 font-normal">
+                                                        #{String(s.problem.number).padStart(3, "0")}
+                                                    </span>
+                                                    {s.problem.title}
+                                                    {locked && (
+                                                        <span className="ml-2 text-[11px] font-normal text-warning">
+                                                            Locked
+                                                        </span>
+                                                    )}
+                                                </span>
+                                                <DifficultyBadge
+                                                    difficulty={
+                                                        s.problem.difficulty
+                                                    }
+                                                />
+                                                <span className="text-xs text-muted-foreground tabular-nums shrink-0 hidden sm:inline">
+                                                    {s.createdAt.toLocaleDateString(
+                                                        undefined,
+                                                        {
+                                                            month: "short",
+                                                            day: "numeric",
+                                                        }
+                                                    )}
+                                                </span>
+                                                <StatusPill
+                                                    status={ok ? "accepted" : "rejected"}
+                                                    label={ok ? "accepted" : "wrong"}
+                                                    className="hidden md:inline-flex"
+                                                />
+                                            </>
+                                        )
                                         return (
                                             <li key={s.id}>
-                                                <Link
-                                                    href={`/practice/${s.problem.slug}`}
-                                                    className="group flex items-center gap-3 py-3 -mx-2 px-2 rounded-md hover:bg-surface-muted transition-colors min-h-[44px]"
-                                                >
-                                                    <span
-                                                        aria-hidden
+                                                {locked ? (
+                                                    <div
                                                         className={cn(
-                                                            "h-1.5 w-1.5 rounded-full shrink-0",
-                                                            ok
-                                                                ? "bg-easy"
-                                                                : "bg-hard"
+                                                            rowClass,
+                                                            "opacity-80"
                                                         )}
-                                                    />
-                                                    <span className="flex-1 min-w-0 text-sm font-medium truncate group-hover:text-primary transition-colors">
-                                                        <span className="font-mono text-[11px] text-muted-foreground tabular-nums mr-1 font-normal">
-                                                            #{String(s.problem.number).padStart(3, "0")}
-                                                        </span>
-                                                        {s.problem.title}
-                                                    </span>
-                                                    <DifficultyBadge
-                                                        difficulty={
-                                                            s.problem
-                                                                .difficulty
-                                                        }
-                                                    />
-                                                    <span className="text-xs text-muted-foreground tabular-nums shrink-0 hidden sm:inline">
-                                                        {s.createdAt.toLocaleDateString(
-                                                            undefined,
-                                                            {
-                                                                month: "short",
-                                                                day: "numeric",
-                                                            }
+                                                    >
+                                                        {content}
+                                                    </div>
+                                                ) : (
+                                                    <Link
+                                                        href={`/practice/${s.problem.slug}`}
+                                                        className={cn(
+                                                            rowClass,
+                                                            "hover:bg-surface-muted"
                                                         )}
-                                                    </span>
-                                                    <StatusPill
-                                                        status={ok ? "accepted" : "rejected"}
-                                                        label={ok ? "accepted" : "wrong"}
-                                                        className="hidden md:inline-flex"
-                                                    />
-                                                </Link>
+                                                    >
+                                                        {content}
+                                                    </Link>
+                                                )}
                                             </li>
                                         )
                                     })}

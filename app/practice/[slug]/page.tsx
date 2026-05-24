@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ChevronLeft } from "lucide-react"
+import { ChevronLeft, LockKeyhole } from "lucide-react"
 import { getProblem, getSlugByNumber } from "@/actions/problems"
 import {
     getProblemHistory,
@@ -90,6 +90,7 @@ export default async function ProblemPage({ params }: Props) {
         ])
     const isSolved = solvedSlugs.includes(slug)
     const isSignedIn = Boolean(session?.user?.id)
+    const lock = problem.contestLock
     const { columns: expectedColumns, rows: expectedRows } =
         parseExpectedOutput(problem.expectedOutput)
 
@@ -104,14 +105,32 @@ export default async function ProblemPage({ params }: Props) {
                     All problems
                 </Link>
                 <div className="flex items-center gap-4">
-                    <AddToListButton
-                        problemSlug={problem.slug}
-                        problemId={problem.id}
-                        isSignedIn={isSignedIn}
-                    />
+                    {lock ? (
+                        <span className="text-xs text-muted-foreground">
+                            Locked for contest
+                        </span>
+                    ) : (
+                        <AddToListButton
+                            problemSlug={problem.slug}
+                            problemId={problem.id}
+                            isSignedIn={isSignedIn}
+                        />
+                    )}
                     <ReportDialog problemSlug={problem.slug} isSignedIn={isSignedIn} />
                 </div>
             </div>
+            {lock && (
+                <div className="border-b border-warning/30 bg-warning/5 px-4 sm:px-6 py-2.5 text-sm text-warning">
+                    <div className="mx-auto flex max-w-7xl items-center gap-2">
+                        <LockKeyhole className="h-4 w-4 shrink-0" />
+                        <span>
+                            Locked: in contest until{" "}
+                            {lock.unlocksAt.toLocaleString()}. Public practice
+                            submissions are blocked until then.
+                        </span>
+                    </div>
+                </div>
+            )}
             <ProblemClient
                 number={problem.number}
                 title={problem.title}
@@ -132,6 +151,11 @@ export default async function ProblemPage({ params }: Props) {
                 discussionMode={discussionState?.mode ?? "OPEN"}
                 initialTableInfos={parseSchema(problem.schema?.sql)}
                 relatedArticles={problem.relatedArticles ?? []}
+                submissionDisabledReason={
+                    lock
+                        ? `Public practice submissions are blocked until ${lock.unlocksAt.toLocaleString()}.`
+                        : undefined
+                }
             />
         </div>
     )

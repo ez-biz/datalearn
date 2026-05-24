@@ -612,6 +612,71 @@ export const TrackItemAddInput = z.object({
     position: z.coerce.number().int().min(0).optional(),
 })
 
+const ContestKindAdmin = z.enum(["WEEKLY", "BIWEEKLY", "SPECIAL"])
+const ContestDate = z.coerce.date()
+export const MIN_CONTEST_MINUTES = 5
+export const MAX_CONTEST_MINUTES = 24 * 60 * 7
+
+export function isContestDurationInRange(durationMinutes: number): boolean {
+    return (
+        durationMinutes >= MIN_CONTEST_MINUTES &&
+        durationMinutes <= MAX_CONTEST_MINUTES
+    )
+}
+
+export const ContestCreateInput = z
+    .object({
+        slug: SlugSchema,
+        title: z.string().min(1).max(200),
+        description: z.string().min(1).max(20_000),
+        kind: ContestKindAdmin,
+        startsAt: ContestDate,
+        endsAt: ContestDate,
+        rated: z.boolean().default(true),
+        maxParticipants: z.number().int().positive().nullable().optional(),
+    })
+    .refine((value) => value.endsAt > value.startsAt, {
+        message: "endsAt must be after startsAt.",
+        path: ["endsAt"],
+    })
+    .refine(
+        (value) => {
+            const minutes = Math.round(
+                (value.endsAt.getTime() - value.startsAt.getTime()) / 60_000
+            )
+            return isContestDurationInRange(minutes)
+        },
+        {
+            message: `Contest must be between ${MIN_CONTEST_MINUTES} minutes and 1 week.`,
+            path: ["endsAt"],
+        }
+    )
+
+export const ContestUpdateInput = z
+    .object({
+        title: z.string().min(1).max(200).optional(),
+        description: z.string().min(1).max(20_000).optional(),
+        startsAt: ContestDate.optional(),
+        endsAt: ContestDate.optional(),
+        rated: z.boolean().optional(),
+        maxParticipants: z.number().int().positive().nullable().optional(),
+    })
+    .strict()
+    .refine(
+        (value) =>
+            !value.startsAt || !value.endsAt || value.endsAt > value.startsAt,
+        {
+            message: "endsAt must be after startsAt.",
+            path: ["endsAt"],
+        }
+    )
+
+export const ContestProblemAttachInput = z.object({
+    problemId: z.string().min(20).max(40),
+    position: z.number().int().min(1).max(20),
+    points: z.number().int().min(1).max(20),
+})
+
 /**
  * words / 200 wpm, rounded up. Strips markdown punctuation crudely
  * — perfect-is-the-enemy-of-good for a reading-time pill.
