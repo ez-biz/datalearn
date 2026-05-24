@@ -136,6 +136,10 @@ async function main() {
 
     let mcp
     let exitCode = 0
+    // Captured outside the main try so the outer finally can revoke this
+    // newly-minted full-admin key even if the harness throws mid-run.
+    // Left as null when create_api_key hasn't run yet.
+    let testCreatedApiKeyId = null
     try {
         console.log("[harness] spawning MCP server...")
         const child = spawn(
@@ -521,6 +525,11 @@ async function main() {
         const newKeyPayload = JSON.parse(
             newKey.result?.content?.[0]?.text ?? "{}"
         )
+        // Hoist the id to the outer scope IMMEDIATELY so the finally
+        // block can revoke it if anything below this point throws.
+        if (typeof newKeyPayload.id === "string") {
+            testCreatedApiKeyId = newKeyPayload.id
+        }
         if (
             typeof newKeyPayload.plaintext === "string" &&
             newKeyPayload.plaintext.length > 20 &&
@@ -537,6 +546,9 @@ async function main() {
             id: newKeyPayload.id,
         })
         passes.push(logResult("revoke_api_key", revokeKeyResult))
+        // Happy path took care of revoke — null out the safety net so the
+        // finally block doesn't double-revoke.
+        testCreatedApiKeyId = null
 
         // ── Lifecycle deletes (v0.7.0) — replaces direct Prisma cleanup ─
         // delete_track first: was PUBLISHED earlier, so expect archived path
@@ -589,6 +601,20 @@ async function main() {
         child.kill()
     } finally {
         if (mcp?.child && !mcp.child.killed) mcp.child.kill()
+        // Revoke the test-created MCP key first (only if create_api_key
+        // succeeded but the happy-path revoke didn't run because the harness
+        // threw between them). Leaving this active would orphan a 90-day
+        // full-admin key in the dev DB.
+        if (testCreatedApiKeyId) {
+            console.log(
+                `[harness] revoking test-created API key ${testCreatedApiKeyId} (safety net)...`
+            )
+            try {
+                await revokeKey(testCreatedApiKeyId)
+            } catch (e) {
+                console.error("[harness] safety revoke failed:", e)
+            }
+        }
         console.log("[harness] revoking API key...")
         await revokeKey(keyId)
         await prisma.$disconnect()

@@ -145,7 +145,13 @@ export function registerModeratorTools(
         { id: z.string().min(1) },
         async ({ id }) => {
             try {
-                const result = await client.requestRaw<{ ok: true }>(
+                // DELETE /api/admin/moderators/:id wraps its success body in
+                // `{ data: { id, role: "USER" } }`, same as the rest of the
+                // admin CRUD surface, so use `request<T>` to unwrap.
+                const result = await client.request<{
+                    id: string
+                    role: "USER"
+                }>(
                     "DELETE",
                     `/api/admin/moderators/${encodeURIComponent(id)}`
                 )
