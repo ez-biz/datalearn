@@ -77,6 +77,9 @@ describe("buildServer", () => {
                 "grant_moderator",
                 "update_moderator_permissions",
                 "revoke_moderator",
+                // assets (v0.8.0)
+                "list_assets",
+                "delete_asset",
             ].sort()
         )
     })
