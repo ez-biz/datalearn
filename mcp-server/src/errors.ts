@@ -20,6 +20,13 @@ export function toMcpError(err: unknown): McpError {
                 `auth failed (check DATALEARN_API_KEY): ${err.message}`
             )
         }
+        if (err.status === 409) {
+            // State conflicts (e.g. "Cannot submit from status PUBLISHED",
+            // "Topic still has N articles"). The upstream message is the
+            // actionable part — surface it so the caller can correct state
+            // instead of seeing a generic InternalError.
+            return new McpError(ErrorCode.InvalidRequest, err.message)
+        }
         // Don't leak raw upstream messages on 5xx (or any unmapped status):
         // they may contain paths, stack traces, or other operational details.
         // Log to stderr for ops; surface a generic message to the MCP client.

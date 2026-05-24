@@ -41,6 +41,31 @@ export class DataLearnClient {
         path: string,
         body?: unknown
     ): Promise<T> {
+        const parsed = await this.fetchAndParse(method, path, body)
+        // The Next admin API consistently wraps success bodies as { data: ... };
+        // void endpoints (e.g. DELETE) may return {} → callers get undefined as T.
+        const okBody = parsed as { data?: T }
+        return okBody.data as T
+    }
+
+    /**
+     * Workflow endpoints (article submit/approve/reject/archive, etc.) reply
+     * with a flat `{ ok: true, ... }` shape instead of the `{ data: ... }`
+     * wrapper. Use this when you want the parsed body verbatim.
+     */
+    async requestRaw<T>(
+        method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
+        path: string,
+        body?: unknown
+    ): Promise<T> {
+        return (await this.fetchAndParse(method, path, body)) as T
+    }
+
+    private async fetchAndParse(
+        method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
+        path: string,
+        body: unknown
+    ): Promise<unknown> {
         const url = `${this.normalizedBase}${path.startsWith("/") ? path : `/${path}`}`
         const res = await this.fetchImpl(url, {
             method,
@@ -61,16 +86,19 @@ export class DataLearnClient {
             const errBody = parsed as {
                 error?: string
                 details?: unknown
+                errors?: unknown
             }
+            // Some admin routes return per-item validation in `errors` (e.g.
+            // POST /api/admin/articles/:slug/approve sends { error,
+            // errors: [...] } for Layer-2 directive failures). Surface those
+            // through ApiError.details so tool handlers can format them.
+            const details = errBody?.details ?? errBody?.errors
             throw new ApiError(
                 res.status,
                 errBody?.error ?? `HTTP ${res.status}`,
-                errBody?.details
+                details
             )
         }
-        // The Next admin API consistently wraps success bodies as { data: ... };
-        // void endpoints (e.g. DELETE) may return {} → callers get undefined as T.
-        const okBody = parsed as { data?: T }
-        return okBody.data as T
+        return parsed
     }
 }
