@@ -312,7 +312,7 @@ Major platform expansions that take Data Learn from "SQL practice + learning hub
 
 ### V2 — Contest
 
-**Phase 1 foundation shipped:** `Contest`, `ContestProblem`, `ContestRegistration`, and `ContestProblemLock` are in place, with admin CRUD, public `/contests` browsing/detail pages, registration, and defensive lock sweeping. Follow-on phases add the server-side hidden-test judge, contest workspace, leaderboard, rating finalization, custom contests, and social sharing. Source plan/spec: `docs/superpowers/specs/2026-05-24-contests-design.md`.
+**Phase 1 foundation shipped:** `Contest`, `ContestProblem`, `ContestRegistration`, and `ContestProblemLock` are in place, with admin CRUD, public `/contests` browsing/detail pages, registration, time-aware lock filtering, and a guarded manual sweep endpoint. Follow-on phases add scheduled cleanup, the server-side hidden-test judge, contest workspace, leaderboard, rating finalization, custom contests, and social sharing. Source plan/spec: `docs/superpowers/specs/2026-05-24-contests-design.md`.
 
 **What:** Weekly + monthly timed contests with multiple problems, a leaderboard, and a **mathematically-backed rating system** that updates each user's rating after every contest. Rating shown on the profile page (the placeholder card already exists).
 
