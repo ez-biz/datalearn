@@ -337,7 +337,7 @@ test.describe("problem discussions", () => {
         ])
 
         await page.goto(`/practice/${PROBLEM_SLUG}`)
-        await page.getByRole("tab", { name: /history/i }).click()
+        await page.getByRole("tab", { name: /submissions/i }).click()
         await page.getByRole("button", { name: /accepted/i }).click()
         await page.getByRole("button", { name: /share approach/i }).click()
 
