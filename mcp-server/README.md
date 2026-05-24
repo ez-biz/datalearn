@@ -26,6 +26,8 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that lets an 
 | `list_api_keys`, `create_api_key`, `revoke_api_key` | Admin API-key lifecycle. **`create_api_key` returns the plaintext key once** — surface it with an explicit "save now" warning. |
 | `list_users`, `update_user_role` | List users (filterable by role and substring); change a user's role to USER, CONTRIBUTOR, or MODERATOR. ADMIN transitions are intentionally rejected — use psql. |
 | `list_moderators`, `grant_moderator`, `update_moderator_permissions`, `revoke_moderator` | Moderator role + permission management. Permissions: `VIEW_DISCUSSION_QUEUE`, `HIDE_COMMENT`, `RESTORE_COMMENT`, `DISMISS_REPORT`, `MARK_SPAM`, `LOCK_PROBLEM_DISCUSSION`, `HIDE_PROBLEM_DISCUSSION`. |
+| `list_assets`, `delete_asset` | Vercel Blob asset management. `delete_asset` strips referencing `:::figure` blocks and snapshots affected PUBLISHED articles. |
+| `list_assets`, `delete_asset` | Vercel Blob asset management. `delete_asset` strips referencing `:::figure` blocks and snapshots affected PUBLISHED articles. |
 
 ## Install
 
@@ -65,7 +67,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) a
 }
 ```
 
-Restart Claude Desktop. The 15 tools appear under the `datalearn` namespace.
+Restart Claude Desktop. The full tool surface (40 tools as of v0.8.0) appears under the `datalearn` namespace.
 
 ### Local development
 
@@ -116,12 +118,12 @@ The AI will:
 
 ## Visual article authoring
 
-MCP v1 does not create Learn articles. Visual article authoring happens in the app UI:
+From v0.5.0, Learn articles can be authored through MCP (`create_article` / `update_article`) — DRAFT only at create time, with the review workflow (`submit_article` / `approve_article` / `reject_article` / `archive_article`) shipping in v0.6.0. The app UI remains the human-friendly alternative:
 
 - Contributors: `/me/articles/new` and `/me/articles/<slug>/edit`
 - Admins: `/admin/articles/new` and `/admin/articles/<slug>/edit`
 
-The article editor has an insert menu for the five supported visual directives and a My uploads panel that inserts active uploads as `figure` blocks. Publishing runs the same validation used by the public renderer:
+Whichever surface you use, the same directives + publish validation apply. The article editor has an insert menu for the five supported visual directives and a My uploads panel that inserts active uploads as `figure` blocks. Publishing runs the same validation used by the public renderer:
 
 - `figure` requires `src` and `alt`; `src` must be `/learn/...` or an active Vercel Blob asset owned by the article author.
 - `mermaid` requires `alt`; Mermaid SVG output is sanitized client-side before insertion.
@@ -339,9 +341,10 @@ All four return `{ ok: true, status: "<NEW_STATUS>" }` on success, or `{ found: 
 
 **Read-before-write for edits.** `update_article.content` REPLACES the article body wholesale. Always call `get_article` first, modify the markdown locally, then send the full modified content back. Same applies to `tagSlugs` and `relatedProblemSlugs` arrays — present means replace, absent means leave unchanged.
 
-### What's NOT in v1
+### What's NOT exposed
 
-- **Delete tools.** There is intentionally no `delete_problem` or `delete_article`; archive with `update_*` (status=ARCHIVED) instead so submission history is preserved.
+- **`delete_problem` / `delete_article`** — intentionally absent. Archive with `update_problem` / `update_article` / `archive_article` (status=ARCHIVED) so submission history and version snapshots are preserved. `delete_topic` and `delete_track` are available from v0.7.0 (topic deletion blocks on referencing articles; tracks soft-archive when non-empty).
+- **Discussion moderation tools.** The `/api/admin/discussions*` routes use session-cookie auth that explicitly rejects Bearer headers — designing a bearer-compatible path is its own security-design conversation. Until then, comment moderation happens through the admin UI.
 - **Validation pre-flight.** A `validate_problem` tool that runs `solutionSql` against `schemaInline` and checks the produced rows match `expectedOutput` — deferred. For now, errors surface only when a learner actually runs the query.
 
 ## Tests
