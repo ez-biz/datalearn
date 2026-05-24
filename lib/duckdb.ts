@@ -141,7 +141,10 @@ export async function initDuckDB(): Promise<duckdb.AsyncDuckDB> {
         revokeWorkerBlobUrl: (url) => URL.revokeObjectURL(url),
         createWorker: (url) => new Worker(url),
         createDatabase: (worker) =>
-            new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker),
+            new duckdb.AsyncDuckDB(
+                new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING),
+                worker
+            ),
         warn: (message, error) => console.warn(message, error),
     })()
 }
