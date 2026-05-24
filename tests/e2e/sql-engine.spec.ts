@@ -7,6 +7,36 @@ const SIMPLE_SELECT_SLUG = "simple-select"
 const SIMPLE_SELECT_DRAFT_KEY = `${DRAFT_PREFIX}${SIMPLE_SELECT_SLUG}`
 
 test.describe("SQL engine result caps", () => {
+    test("loads DuckDB without seed or worker preload console noise", async ({
+        page,
+    }) => {
+        test.slow()
+
+        const noisyMessages: string[] = []
+        page.on("console", (message) => {
+            const text = message.text()
+            if (
+                /INSERT INTO|duckdb-browser-eh\.worker\.js.*preloaded|duckdb-browser-eh\.worker\.js.*preload/i.test(
+                    text
+                )
+            ) {
+                noisyMessages.push(text)
+            }
+        })
+
+        await page.addInitScript((dialectKey) => {
+            window.localStorage.removeItem(dialectKey)
+        }, `${DIALECT_PREFIX}${SIMPLE_SELECT_SLUG}`)
+        await page.goto(`/practice/${SIMPLE_SELECT_SLUG}`)
+
+        await expect(page.getByTestId("workspace-run-footer")).toBeEnabled({
+            timeout: 45_000,
+        })
+        await page.waitForTimeout(5_000)
+
+        expect(noisyMessages).toEqual([])
+    })
+
     test("large learner results are truncated in the workspace", async ({
         page,
     }) => {
