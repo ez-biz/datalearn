@@ -483,16 +483,97 @@ async function main() {
             passes.push(false)
         }
 
-        // Cleanup the test records
-        console.log("\n[harness] cleaning up test records...")
+        // ── Ops surface smoke checks (v0.7.0) ──────────────────────────
+        console.log("\n[harness] ops surface (list smoke checks)...")
+        const usersList = await mcp.callTool("list_users", { role: "ADMIN" })
+        passes.push(logResult("list_users", usersList))
+        const usersPayload = JSON.parse(
+            usersList.result?.content?.[0]?.text ?? "[]"
+        )
+        if (Array.isArray(usersPayload)) {
+            console.log(`  ✓ list_users returned array (${usersPayload.length} admin(s))`)
+            passes.push(true)
+        } else {
+            console.log(`  ✗ list_users expected array, got ${typeof usersPayload}`)
+            passes.push(false)
+        }
+
+        const modsList = await mcp.callTool("list_moderators", {})
+        passes.push(logResult("list_moderators", modsList))
+        const modsPayload = JSON.parse(
+            modsList.result?.content?.[0]?.text ?? "{}"
+        )
+        if (Array.isArray(modsPayload.moderators) && Array.isArray(modsPayload.candidates)) {
+            console.log(`  ✓ list_moderators returned { moderators, candidates }`)
+            passes.push(true)
+        } else {
+            console.log(`  ✗ list_moderators wrong shape: ${modsList.result?.content?.[0]?.text}`)
+            passes.push(false)
+        }
+
+        const keysList = await mcp.callTool("list_api_keys", {})
+        passes.push(logResult("list_api_keys", keysList))
+
+        const newKey = await mcp.callTool("create_api_key", {
+            name: `MCP Test Key ${stamp}`,
+        })
+        passes.push(logResult("create_api_key", newKey))
+        const newKeyPayload = JSON.parse(
+            newKey.result?.content?.[0]?.text ?? "{}"
+        )
+        if (
+            typeof newKeyPayload.plaintext === "string" &&
+            newKeyPayload.plaintext.length > 20 &&
+            typeof newKeyPayload.prefix === "string"
+        ) {
+            console.log(`  ✓ create_api_key returned plaintext + prefix=${newKeyPayload.prefix}`)
+            passes.push(true)
+        } else {
+            console.log(`  ✗ create_api_key missing plaintext/prefix`)
+            passes.push(false)
+        }
+
+        const revokeKeyResult = await mcp.callTool("revoke_api_key", {
+            id: newKeyPayload.id,
+        })
+        passes.push(logResult("revoke_api_key", revokeKeyResult))
+
+        // ── Lifecycle deletes (v0.7.0) — replaces direct Prisma cleanup ─
+        // delete_track first: was PUBLISHED earlier, so expect archived path
+        const deleteTrackResult = await mcp.callTool("delete_track", {
+            slug: trackSlug,
+        })
+        passes.push(logResult("delete_track", deleteTrackResult))
+        const deleteTrackPayload = JSON.parse(
+            deleteTrackResult.result?.content?.[0]?.text ?? "{}"
+        )
+        if (deleteTrackPayload.archived === true) {
+            console.log(`  ✓ delete_track soft-archived (was PUBLISHED)`)
+            passes.push(true)
+        } else {
+            console.log(`  ✗ delete_track expected archived:true, got ${deleteTrackResult.result?.content?.[0]?.text}`)
+            passes.push(false)
+        }
+
+        // delete_topic should 409 if the test article is still on it — we
+        // archived but didn't delete the article above. Article row still
+        // references topic, so use Prisma to clear the article first, then
+        // try delete_topic via MCP.
         await prisma.article.deleteMany({ where: { slug: articleSlug } })
+        const deleteTopicResult = await mcp.callTool("delete_topic", {
+            slug: topicSlug,
+        })
+        passes.push(logResult("delete_topic", deleteTopicResult))
+
+        // Cleanup remaining test records (no MCP tool for problem/schema/tag delete)
+        console.log("\n[harness] cleaning up test records...")
         await prisma.sQLProblem.deleteMany({
             where: { slug: { in: [problemSlug, sneakSlug] } },
         })
         await prisma.sqlSchema.delete({ where: { id: schemaId } })
         await prisma.tag.delete({ where: { slug: tagSlug } })
-        await prisma.topic.delete({ where: { slug: topicSlug } })
-        await prisma.track.delete({ where: { slug: trackSlug } })
+        // The track row was soft-archived by delete_track; clean it up.
+        await prisma.track.deleteMany({ where: { slug: trackSlug } })
         console.log("  ✓ test records deleted")
 
         const failed = passes.filter((p) => !p).length
