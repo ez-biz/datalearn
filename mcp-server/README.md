@@ -26,10 +26,6 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that lets an 
 | `list_api_keys`, `create_api_key`, `revoke_api_key` | Admin API-key lifecycle. **`create_api_key` returns the plaintext key once** — surface it with an explicit "save now" warning. |
 | `list_users`, `update_user_role` | List users (filterable by role and substring); change a user's role to USER, CONTRIBUTOR, or MODERATOR. ADMIN transitions are intentionally rejected — use psql. |
 | `list_moderators`, `grant_moderator`, `update_moderator_permissions`, `revoke_moderator` | Moderator role + permission management. Permissions: `VIEW_DISCUSSION_QUEUE`, `HIDE_COMMENT`, `RESTORE_COMMENT`, `DISMISS_REPORT`, `MARK_SPAM`, `LOCK_PROBLEM_DISCUSSION`, `HIDE_PROBLEM_DISCUSSION`. |
-| `list_moderation_queue` | Discussion moderation queue with 4 buckets (needsReview, hidden, spam, dismissedReports) and the current reportThreshold. Requires `VIEW_DISCUSSION_QUEUE`. |
-| `hide_comment`, `restore_comment`, `mark_comment_spam`, `dismiss_comment_reports` | Comment-level moderation actions. Each requires the matching moderator permission on the calling key. |
-| `update_discussion_settings` | Admin-only global discussion settings: `globalEnabled`, `reportThreshold`, `editWindowMinutes`. |
-| `set_problem_discussion_mode` | Lock or hide discussions on a specific problem: `OPEN` / `LOCKED` / `HIDDEN`. |
 | `list_assets`, `delete_asset` | Vercel Blob asset management. `delete_asset` strips referencing `:::figure` blocks and snapshots affected PUBLISHED articles. |
 
 ## Install

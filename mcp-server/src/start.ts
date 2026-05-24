@@ -3,7 +3,6 @@ import { DataLearnClient } from "./client.js"
 import { registerApiKeyTools } from "./tools/api-keys.js"
 import { registerArticleTools } from "./tools/articles.js"
 import { registerAssetTools } from "./tools/assets.js"
-import { registerDiscussionTools } from "./tools/discussions.js"
 import { registerModeratorTools } from "./tools/moderators.js"
 import { registerProblemTools } from "./tools/problems.js"
 import { registerSchemaTools } from "./tools/schemas.js"
@@ -41,7 +40,6 @@ export function buildServer(config: StartConfig): {
     registerApiKeyTools(server, client)
     registerUserTools(server, client)
     registerModeratorTools(server, client)
-    registerDiscussionTools(server, client)
     registerAssetTools(server, client)
     return { server, client }
 }
