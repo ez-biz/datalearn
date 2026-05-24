@@ -21,6 +21,11 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that lets an 
 | `approve_article` | Promote SUBMITTED (or DRAFT/ARCHIVED) → PUBLISHED. Runs Layer 2 directive validation; snapshots an immutable article version. |
 | `reject_article` | Send a SUBMITTED article back to DRAFT with required `reviewNotes` (1–4000 chars) for the author. |
 | `archive_article` | Hide an article from the public reader without deleting it. Version history is preserved. |
+| `delete_topic` | Permanently delete a topic. 409 if articles still reference it. |
+| `delete_track` | Delete a track. Hard-delete if DRAFT with zero items; otherwise soft-archived to ARCHIVED. |
+| `list_api_keys`, `create_api_key`, `revoke_api_key` | Admin API-key lifecycle. **`create_api_key` returns the plaintext key once** — surface it with an explicit "save now" warning. |
+| `list_users`, `update_user_role` | List users (filterable by role and substring); change a user's role to USER, CONTRIBUTOR, or MODERATOR. ADMIN transitions are intentionally rejected — use psql. |
+| `list_moderators`, `grant_moderator`, `update_moderator_permissions`, `revoke_moderator` | Moderator role + permission management. Permissions: `VIEW_DISCUSSION_QUEUE`, `HIDE_COMMENT`, `RESTORE_COMMENT`, `DISMISS_REPORT`, `MARK_SPAM`, `LOCK_PROBLEM_DISCUSSION`, `HIDE_PROBLEM_DISCUSSION`. |
 
 ## Install
 

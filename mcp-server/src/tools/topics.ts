@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { TopicCreateInput, TopicUpdateInput, SlugSchema } from "../../../lib/admin-validation"
-import { DataLearnClient } from "../client.js"
+import { ApiError, DataLearnClient } from "../client.js"
 import { toMcpError } from "../errors.js"
 
 type Topic = {
@@ -70,6 +70,29 @@ export function registerTopicTools(
                 )
                 return ok(created)
             } catch (err) {
+                throw toMcpError(err)
+            }
+        }
+    )
+
+    server.tool(
+        "delete_topic",
+        [
+            "Permanently delete a topic. Blocked if any articles still reference the topic — move or delete them first (the API returns a 409 with the count).",
+            "Returns {found:false} if no topic exists at that slug. Idempotent only in the {found:false} sense — the row goes away.",
+        ].join("\n"),
+        { slug: SlugSchema },
+        async ({ slug }) => {
+            try {
+                const result = await client.requestRaw<{ ok: true }>(
+                    "DELETE",
+                    `/api/admin/topics/${encodeURIComponent(slug)}`
+                )
+                return ok(result)
+            } catch (err) {
+                if (err instanceof ApiError && err.status === 404) {
+                    return ok({ found: false })
+                }
                 throw toMcpError(err)
             }
         }
