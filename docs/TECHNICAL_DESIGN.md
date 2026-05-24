@@ -68,7 +68,7 @@ Data Learn is a single Next.js 16 application backed by Postgres. The runtime ar
 | 6 | SQL execution engine | Browser SQL engine sessions, DuckDB-WASM/PGlite adapters, validator, expected-output capture |
 | 7 | Learn CMS | Topics, articles, status state machine, snapshot-on-publish, contributor authoring |
 | 8 | Admin REST API | `/api/admin/*` endpoints, Bearer-key auth, validation pipeline |
-| 9 | MCP server | Standalone stdio process, 9 tools, forced-DRAFT writes |
+| 9 | MCP server | Standalone stdio process, 40 tools (v0.8.0), forced-DRAFT writes |
 | 10 | Profile & stats | Activity heatmap, streaks, solved donut, skills-by-tag |
 | 11 | Custom problem lists | Private user-curated collections — `/me/lists`, drag-drop reorder, sort options, add-from-workspace popover |
 | 11.6 | Problem discussions | Learner discussion tab, moderation queue, moderator permissions, settings, reputation |
@@ -114,7 +114,7 @@ Data Learn is a single Next.js 16 application backed by Postgres. The runtime ar
 | **GitHub Actions** | Postgres service container, seeded data, dialect audit, `npx tsc --noEmit`, `npm run build`, `npx playwright test` on every PR |
 | **CodeQL** | High-severity static analysis (e.g., the clear-text-logging finding caught on the MCP harness) |
 | **`tsup`** | Bundles `mcp-server/` to a single `dist/index.js` |
-| **`vitest`** | MCP server unit tests (40 cases) |
+| **`vitest`** | MCP server unit tests (53 cases) |
 
 ---
 
