@@ -79,14 +79,34 @@ enum ContestStatus {
   CANCELLED   // admin-cancelled; never rated
 }
 
-enum ProblemStatus {
-  DRAFT
-  BETA
-  PUBLISHED
-  ARCHIVED
-  CONTEST_LOCKED   // NEW — set when assigned to an official LIVE/SCHEDULED contest
+// ProblemStatus is UNCHANGED. Earlier drafts of this spec proposed a
+// CONTEST_LOCKED value; that approach was rejected because every public
+// surface (practice list, tracks, tags, profile, lists, search) gates on
+// status == PUBLISHED, and reusing the status field to hide a problem from
+// those surfaces would silently break learning paths whenever a problem
+// was assigned to a contest. Locking is modeled separately — see §3.4.
+
+enum ContestVerdict {
+  ACCEPTED         // hidden run matched expected output
+  WRONG_ANSWER     // hidden run completed but output differed
+  TIME_LIMIT       // judge killed the query after the wall-clock cap
+  MEMORY_LIMIT     // engine hit the memory cap
+  RUNTIME_ERROR    // query parsed but errored (e.g., division by zero, type cast)
+  COMPILE_ERROR    // query failed to parse / referenced unknown identifier
+  REJECTED         // pre-execution rejection (statement allowlist, size cap, banned function)
+  INTERNAL_ERROR   // judge crashed / queue overflow / dispatcher fault — NEVER counts as a wrong attempt
 }
 ```
+
+`ContestVerdict` is a new enum, distinct from the existing `SubmissionStatus`
+(which only has `ACCEPTED`/`WRONG_ANSWER` and is unchanged). The underlying
+`Submission` row created by the judge stores `SubmissionStatus.ACCEPTED` or
+`WRONG_ANSWER` for compatibility with existing UI, while `ContestSubmission`
+carries the richer `ContestVerdict`. Only `WRONG_ANSWER` and `RUNTIME_ERROR`
+count as wrong attempts for penalty purposes; `TIME_LIMIT`, `MEMORY_LIMIT`,
+`COMPILE_ERROR`, `REJECTED`, and `INTERNAL_ERROR` are recorded for history
+and admin review but do **not** contribute to penalty (these are usually
+infrastructure or user-typo signals, not "wrong solve" signals).
 
 ### 3.2 New tables (sketch)
 
@@ -144,25 +164,56 @@ model ContestRegistration {
 }
 
 model ContestSubmission {
-  id            String   @id @default(cuid())
+  id              String          @id @default(cuid())
+  contestId       String
+  userId          String
+  problemId       String
+  submissionId    String          @unique     // FK to the underlying Submission row created by the judge
+  idempotencyKey  String                       // client-supplied per click; see §10
+  sqlHash         String                       // sha256 of normalized SQL; powers SimHash batch
+  simhash         BigInt                       // 64-bit SimHash
+  attemptNumber   Int                          // 1-based per (contest,user,problem)
+  verdict         ContestVerdict
+  acceptedAt      DateTime?                    // server-stamped iff verdict=ACCEPTED
+  submittedAt     DateTime        @default(now())
+  ipHash          String                       // sha256(ip + per-contest salt) — never raw IP
+  userAgent       String
+  contest         Contest         @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id])
+  problem         SQLProblem      @relation(fields: [problemId], references: [id])
+
+  // ---- Durable de-duplication / double-count defenses ----
+  // 1. Same (user, contest, idempotencyKey) submit twice → DB rejects, server
+  //    returns the cached row's verdict. Survives multi-instance/serverless
+  //    races and outlives any in-process cache.
+  @@unique([contestId, userId, idempotencyKey])
+  // 2. attemptNumber is monotonic per (contest, user, problem). Server picks
+  //    it via SELECT MAX inside the same transaction that inserts the row;
+  //    the unique constraint catches racing inserts and forces a retry.
+  @@unique([contestId, userId, problemId, attemptNumber])
+
+  @@index([contestId, userId])
+  @@index([contestId, problemId, verdict])
+}
+
+// First-accept is the load-bearing fact for scoring/rating. We model it as
+// its own table with a hard uniqueness constraint so that a concurrent
+// double-accept can never produce two "first solve" rows even under retry
+// storms, leader failovers, or judge instance restarts.
+model ContestProblemSolve {
   contestId     String
   userId        String
   problemId     String
-  submissionId  String   @unique     // FK to the underlying Submission row created by the judge
-  sqlHash       String                // sha256 of normalized SQL; powers SimHash batch
-  simhash       BigInt               // 64-bit SimHash
-  attemptNumber Int                  // 1-based per (contest,user,problem)
-  isAccepted    Boolean
-  acceptedAt    DateTime?            // server-stamped on first accept
-  submittedAt   DateTime @default(now())
-  ipHash        String                // sha256(ip + per-contest salt) — never raw IP
-  userAgent     String
+  submissionId  String   @unique     // points at the winning ContestSubmission.submissionId
+  acceptedAt    DateTime              // server-stamped, immutable
+  wrongAttemptsBeforeAccept Int       // computed at insert time from ContestSubmission history
   contest       Contest    @relation(fields: [contestId], references: [id], onDelete: Cascade)
   user          User       @relation(fields: [userId], references: [id])
   problem       SQLProblem @relation(fields: [problemId], references: [id])
 
-  @@index([contestId, userId])
-  @@index([contestId, problemId, isAccepted])
+  // Hard guarantee: at most ONE first-solve row per (contest, user, problem).
+  @@id([contestId, userId, problemId])
+  @@index([contestId, problemId, acceptedAt])
 }
 
 model ContestLeaderboardEntry {
@@ -212,7 +263,60 @@ model ContestRatingHistory {
 }
 ```
 
-### 3.3 Hidden test cases on `SQLProblem`
+### 3.3 Problem locking (replaces the rejected `CONTEST_LOCKED` approach)
+
+`ProblemStatus` stays exactly as it is today. Locking lives in its own table
+so that **no existing visibility code path needs to change unless we
+explicitly opt it in**:
+
+```prisma
+model ContestProblemLock {
+  problemId   String   @id                      // one active lock per problem, enforced by PK
+  contestId   String
+  lockedAt    DateTime @default(now())
+  unlocksAt   DateTime                          // = contest.endsAt at lock time
+  problem     SQLProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  contest     Contest    @relation(fields: [contestId], references: [id], onDelete: Cascade)
+
+  @@index([unlocksAt])
+}
+```
+
+Lifecycle:
+
+1. Admin assigns a problem to an official contest → server `INSERT` into
+   `ContestProblemLock` inside the same transaction as the `ContestProblem`
+   row. If the problem is already locked for another active contest, the PK
+   uniqueness rejects the insert and the admin sees a clear error.
+2. Contest finalization (or contest cancellation) → `DELETE` the lock rows
+   for that contest in the same transaction that flips status to
+   `FINALIZED`/`CANCELLED`.
+3. A background sweep (`/api/contests/sweep-locks`, cron every 5 min) deletes
+   any locks where `unlocksAt < now()` as a safety net for missed
+   finalization.
+
+Practice / list / tag / track / search / profile queries get a **single
+opt-in helper** `excludeLockedProblems(query)` that adds
+`WHERE id NOT IN (SELECT problemId FROM ContestProblemLock)` (or a
+`LEFT JOIN ... WHERE lock.problemId IS NULL`). The audit list is fixed and
+small:
+
+- `actions/problems.ts` (list, search, getBySlug-for-practice)
+- `actions/tracks.ts` (track problem listings)
+- `actions/lists.ts` (custom list rendering — locked problems render as
+  "Locked: in contest until <time>" rather than disappearing, so users
+  don't think their list is corrupt)
+- `actions/profile.ts` (recent solved — historical entries are fine; only
+  new "practice this" CTAs need gating)
+- `actions/submissions.ts` (search / history — show but disable rerun CTA)
+- Any admin surface uses the raw query (locked problems remain visible to
+  admins).
+
+Custom contests (`USER_CUSTOM`) **do not create locks** — they reuse
+already-public problems and never need to hide them. Only official
+(`WEEKLY`/`BIWEEKLY`/`SPECIAL`) contests lock.
+
+### 3.4 Hidden test cases on `SQLProblem`
 
 Two new optional fields:
 
@@ -257,21 +361,117 @@ client (Monaco) --SQL--> POST /api/contests/[slug]/submit
                   upsert ContestLeaderboardEntry
 ```
 
-### 4.2 Sandbox guarantees
+### 4.2 Sandbox guarantees — defense in depth
 
-- **Per-submission isolation**: a fresh DuckDB instance (`@duckdb/node-api`) or PGlite instance per request. Disposed immediately after.
-- **Timeouts**: 10s statement timeout enforced both by the engine and by a wrapper `setTimeout` that kills the worker.
-- **Memory cap**: 256MB per instance (DuckDB `SET memory_limit='256MB'`).
-- **Disabled surface**: DuckDB extensions, `INSTALL`, `LOAD`, `COPY ... FROM`, `READ_CSV_AUTO`, HTTP/`httpfs` functions, file IO, `pragma_*` writes. Done via a whitelist of statement types parsed pre-execution; reject on any unknown form with `400 UNSUPPORTED_STATEMENT`.
-- **Resource queue**: single Node worker pool of size `CONTEST_JUDGE_CONCURRENCY` (default 4). Submissions queue; if queue depth exceeds 100, return `503 JUDGE_BUSY` (client retries with backoff).
-- **SQL size cap**: 64 KB; rejected before reaching the judge.
+A statement-type allowlist alone is insufficient: dangerous behavior lives
+inside SELECT expressions (e.g., `SELECT * FROM read_csv_auto('/etc/passwd')`,
+`SELECT httpfs_get('http://169.254.169.254/latest/meta-data/iam/security-credentials/')`,
+`SELECT ... FROM (ATTACH 'malicious.duckdb'; SELECT * FROM …)`). The judge
+must defend at four layers:
+
+**Layer 1 — Process isolation**
+
+Each submission runs in a forked Node worker (`worker_threads` or
+`child_process.fork`), not in the main API process. The worker:
+
+- inherits no inheritable env (we pass `{}` plus an explicit allowlist),
+- runs with `--no-addons --disable-proto=delete --no-deprecation`,
+- has its CWD set to an empty tmpdir created per submission, deleted after,
+- on Linux production (Vercel/Node 22), uses `process.kill(worker.pid, 'SIGKILL')` on timeout,
+- is recycled after every submission (no long-lived state).
+
+**Layer 2 — Engine configuration (DuckDB)**
+
+Before loading any user SQL, the judge runs this fixed prelude and rejects
+the submission if any statement fails:
+
+```sql
+SET memory_limit = '256MB';
+SET threads = 1;
+SET allow_unsigned_extensions = false;
+SET autoinstall_known_extensions = false;
+SET autoload_known_extensions = false;
+SET enable_external_access = false;       -- disables httpfs, http_get, COPY FROM URL
+SET disabled_filesystems = 'LocalFileSystem,HTTPFileSystem,S3FileSystem';
+SET lock_configuration = true;             -- subsequent SET statements no-op
+```
+
+`enable_external_access=false` is the most important line — it blocks every
+file/network function in one switch. The other lines are belt-and-suspenders
+in case a future DuckDB release adds a new external surface.
+
+**Layer 3 — Statement-level validation**
+
+User SQL is parsed with `duckdb.parse_sql()` (returns the parsed AST without
+executing it) and then walked:
+
+- Top-level statement type must be `SELECT_STATEMENT` or `WITH` (CTE) wrapping a SELECT.
+  Reject `COPY`, `ATTACH`, `DETACH`, `INSTALL`, `LOAD`, `PRAGMA`, `SET`, `CALL`,
+  `EXPORT DATABASE`, `IMPORT DATABASE`, `CREATE ... AS`, `INSERT`, `UPDATE`,
+  `DELETE`, `BEGIN`, `COMMIT`, `ROLLBACK`.
+- Recursive walk of every expression: function names checked against a
+  **denylist** that includes (non-exhaustive, kept in `lib/contest-judge-denylist.ts`):
+  `read_csv`, `read_csv_auto`, `read_parquet`, `read_json`, `read_json_auto`,
+  `read_text`, `read_blob`, `parquet_scan`, `glob`, `parquet_metadata`,
+  `httpfs_get`, `http_get`, `http_post`, `s3_*`, `azure_*`, `gcs_*`,
+  `copy_from`, `execute`, `pragma_*`, `attach`, `detach`, `install`,
+  `load_extension`, `force_install`, anything starting with `duckdb_` that
+  introspects extensions/filesystems.
+- Reject (verdict `REJECTED`, status 400) on any denylisted function with the
+  function name surfaced in the error so the user knows why.
+
+**Layer 4 — Resource bounds**
+
+- 10s wall-clock budget enforced by both the engine (`SET statement_timeout`)
+  and a worker-level `setTimeout` that hard-kills if the engine ignores it.
+- 256MB memory cap (engine), worker recycled if RSS exceeds 512MB (safety net).
+- Worker pool size `CONTEST_JUDGE_CONCURRENCY` (default 4). Queue depth >100
+  returns `503 JUDGE_BUSY` (client retries with backoff + jitter).
+- SQL size cap: 64 KB, rejected before the parser runs.
+
+**Layer 5 — Regression tests**
+
+A test file `lib/contest-judge.escape-attempts.test.ts` runs a fixed corpus
+of known escape attempts on every CI run. Each test asserts `verdict =
+REJECTED` (or `RUNTIME_ERROR` if the engine refuses) and that no file/network
+side effect occurred. The corpus starts with at minimum:
+
+| # | Attack | Expected |
+| --- | --- | --- |
+| 1 | `SELECT * FROM read_csv_auto('/etc/passwd')` | REJECTED (denylist) |
+| 2 | `SELECT httpfs_get('http://169.254.169.254/…')` | REJECTED (denylist) |
+| 3 | `INSTALL httpfs; LOAD httpfs; SELECT …` | REJECTED (top-level INSTALL) |
+| 4 | `ATTACH 'x.duckdb'; SELECT 1;` | REJECTED (top-level ATTACH) |
+| 5 | `PRAGMA disable_verification; SELECT 1` | REJECTED (top-level PRAGMA) |
+| 6 | `WITH t AS (SELECT read_csv('x')) SELECT * FROM t` | REJECTED (denylist inside CTE) |
+| 7 | `SELECT generate_series(1, 1e12)` | TIME_LIMIT (resource bound) |
+| 8 | `SELECT repeat('x', 1000000000)` | MEMORY_LIMIT |
+| 9 | 64 KB + 1 byte SELECT | REJECTED (size cap) |
+| 10 | `SELECT pg_read_file('x')` (PGlite) | REJECTED (denylist) |
+
+New escape vectors discovered post-launch land in this corpus before the fix
+ships.
+
+**PGlite-specific notes**
+
+PGlite runs Postgres compiled to WASM in-process, so it inherits the worker
+isolation automatically (it cannot see the host filesystem). The Layer-3
+denylist gains Postgres-specific entries: `pg_read_file`, `pg_read_binary_file`,
+`pg_ls_dir`, `lo_import`, `lo_export`, `copy ... program`. Extensions are
+not installable in PGlite, so layers 2 and 4 simplify.
 
 ### 4.3 Verdict
 
-Standard verdict enum (re-used from existing `Submission.status`):
-`ACCEPTED | WRONG_ANSWER | TIME_LIMIT | RUNTIME_ERROR | COMPILE_ERROR | INTERNAL_ERROR`.
+Verdicts are stored on `ContestSubmission.verdict` using the dedicated
+`ContestVerdict` enum defined in §3.1. The underlying `Submission` row uses
+the existing `SubmissionStatus` enum (`ACCEPTED` | `WRONG_ANSWER`) for UI
+compatibility — non-ACCEPTED contest verdicts map to `WRONG_ANSWER` on the
+`Submission` row but retain their precise classification on the
+`ContestSubmission` row.
 
-Acceptance comparison reuses `lib/sql-validator.ts` (order-aware vs order-insensitive per problem, same comparator the practice flow uses).
+Acceptance comparison reuses `lib/sql-validator.ts` (order-aware vs
+order-insensitive per problem, same comparator the practice flow uses).
+Penalty accrual rules are in §5.1.
 
 ### 4.4 Client-side preview vs official verdict
 
@@ -288,21 +488,63 @@ The in-contest workspace still runs the user's SQL against the **public** seed c
 
 For each user in a contest:
 
-- `points = Σ ContestProblem.points where ContestSubmission.isAccepted=true for first accept`.
-- `penaltySeconds = Σ (acceptedAt - contest.startsAt)_seconds on solved + 300 * wrongAttemptsBeforeAccept on solved`.
+- `points = Σ ContestProblem.points` joined to `ContestProblemSolve` for that user (the table guarantees at most one solve row per `(contest, user, problem)`, so double-counting is impossible by construction).
+- `penaltySeconds = Σ (ContestProblemSolve.acceptedAt - contest.startsAt)_seconds + 300 * ContestProblemSolve.wrongAttemptsBeforeAccept`.
   - Mirrors LeetCode: wrong submissions on **unsolved** problems do not contribute penalty.
-- Ranking: `ORDER BY points DESC, penaltySeconds ASC, firstAcceptedAt ASC` (third key breaks ties deterministically).
+  - Only `verdict IN (WRONG_ANSWER, RUNTIME_ERROR)` count toward `wrongAttemptsBeforeAccept`. `TIME_LIMIT`, `MEMORY_LIMIT`, `COMPILE_ERROR`, `REJECTED`, and `INTERNAL_ERROR` are excluded — those reflect infrastructure or pre-execution issues, not "you got the answer wrong."
+- Ranking: `ORDER BY points DESC, penaltySeconds ASC, MIN(ContestProblemSolve.acceptedAt) ASC` (third key breaks ties deterministically using the earliest first-solve time).
 
-### 5.2 Incremental updates
+### 5.2 Submit pipeline (idempotent + safe under concurrency)
 
-On each accepted submission:
+Every submit goes through this single transaction in `lib/contest-judge.ts`:
 
-1. Insert `ContestSubmission` row in a transaction.
-2. Recompute `(points, penaltySeconds, solvedCount)` for that user only (single query over their `ContestSubmission` rows).
-3. Upsert their `ContestLeaderboardEntry`.
-4. Recompute `rank` for affected rows lazily on the next leaderboard read using a window function (`RANK() OVER (...)`) — avoids contention from rank rewrites on every submit.
+```
+BEGIN
+  -- 1. Idempotency check (DB-enforced, not in-process cache)
+  SELECT * FROM ContestSubmission
+   WHERE contestId = $c AND userId = $u AND idempotencyKey = $k
+   FOR UPDATE;
+  IF FOUND: return cached verdict, COMMIT.
 
-Rejected submissions only insert a `ContestSubmission(isAccepted=false)` row.
+  -- 2. Liveness check uses server clock only (see §10)
+  SELECT startsAt, endsAt FROM Contest WHERE id = $c FOR SHARE;
+  IF NOT LIVE: COMMIT, return 409 CONTEST_NOT_LIVE.
+
+  -- 3. Reserve attemptNumber atomically
+  SELECT COALESCE(MAX(attemptNumber), 0) + 1
+    FROM ContestSubmission
+   WHERE contestId = $c AND userId = $u AND problemId = $p
+   FOR UPDATE;
+
+  -- 4. Run judge OUTSIDE the txn (released advisory lock), then re-enter
+  -- 5. Insert ContestSubmission with (idempotencyKey, attemptNumber, verdict)
+  --    Unique constraints catch any race; on conflict we retry once with
+  --    a fresh attemptNumber.
+
+  -- 6. If verdict = ACCEPTED, attempt first-solve insert:
+  INSERT INTO ContestProblemSolve (contestId, userId, problemId, submissionId,
+                                   acceptedAt, wrongAttemptsBeforeAccept)
+       VALUES (...)
+  ON CONFLICT (contestId, userId, problemId) DO NOTHING;
+  -- The PK guarantees only the FIRST accept wins. Any second accept for the
+  -- same triple silently does nothing — the user still sees ACCEPTED, but
+  -- their score/penalty is not double-counted.
+
+  -- 7. If first-solve insert succeeded (FOUND), recompute leaderboard row
+  --    for THIS user only:
+  UPDATE ContestLeaderboardEntry SET ...
+  -- otherwise leaderboard unchanged.
+COMMIT;
+```
+
+Rank is **not** stored eagerly on every submit. The leaderboard read path
+computes rank with `RANK() OVER (ORDER BY points DESC, penaltySeconds ASC, ...)`
+in the same query that fetches the page; this avoids cross-row writes on
+every submit and removes one whole class of concurrency bug.
+
+Rejected submissions (`verdict != ACCEPTED`) still insert their
+`ContestSubmission` row (for history, anti-cheat audit, attempt count) but
+never touch `ContestProblemSolve` or the leaderboard.
 
 ---
 
@@ -319,7 +561,7 @@ Rejected submissions only insert a `ContestSubmission(isAccepted=false)` row.
   - 3 active (`SCHEDULED` or `LIVE`) at any time.
   - 50 participants per contest (`maxParticipants`).
   - 50 invitations sent per day (if explicit invitations land in v1.x).
-- **Problem pool**: published problems only. Cannot select `CONTEST_LOCKED`, `DRAFT`, or `ARCHIVED`. No hidden test requirement — judging falls back to the existing client-side flow against the public dataset. The contest is unrated, so the weaker trust model is acceptable.
+- **Problem pool**: published problems only (`status = PUBLISHED`). Locked problems (those in an active official contest — see §3.3) are also excluded. No hidden test requirement — judging falls back to the existing client-side flow against the public dataset. The contest is unrated, so the weaker trust model is acceptable.
 - **Leaderboard**: materialized like official contests so the share surface works.
 - **Lifecycle**: SCHEDULED → LIVE → CLOSED → FINALIZED, but FINALIZE skips the rating job.
 
@@ -465,7 +707,7 @@ The client clock is for display only. Every trust decision uses `Date.now()` on 
 - **`Contest.startsAt`/`endsAt`** are UTC; the server compares `new Date()` against them on every submit.
 - **Submit guards**: any submission with `serverNow < startsAt` or `serverNow > endsAt` returns `409 CONTEST_NOT_LIVE`. No grace window.
 - **`acceptedAt`** is set to `new Date()` on the server when the judge returns `ACCEPTED`. The client never supplies times.
-- **Idempotency**: submit requests carry an `Idempotency-Key` header (random per click). Identical keys within 5s return the cached verdict — prevents double counting on network retries.
+- **Idempotency**: submit requests carry an `Idempotency-Key` header (UUID, generated client-side per click). The key is persisted on `ContestSubmission.idempotencyKey` with a DB unique constraint per `(contestId, userId)` (§3.2). A retry with the same key — within the same process, across processes, after a serverless cold start, or hours later — returns the cached verdict without re-running the judge. There is no in-memory cache to expire.
 - **Late-tab handling**: server rejects cleanly with `CONTEST_NOT_LIVE`; client shows "Contest ended" with a link to the leaderboard.
 
 ### 10.2 Client timer
@@ -501,7 +743,7 @@ A tampered client clock cannot make a late submission count, cannot change `acce
 
 - Per-submission DuckDB / PGlite instance, disposed after.
 - 10s statement timeout, 256MB memory cap, file/network/extension functions disabled.
-- Pre-execution AST allowlist: `SELECT`, `WITH` (CTE). Reject everything else with `400 UNSUPPORTED_STATEMENT`.
+- Five layers of defense per §4.2 (process isolation, engine config, statement-level + expression-level validation, resource bounds, regression test corpus). A pure statement-type allowlist is **not** sufficient and is explicitly rejected as insecure (functions like `read_csv_auto` live inside SELECT).
 - Worker pool size 4 (configurable via `CONTEST_JUDGE_CONCURRENCY`); queue depth >100 returns `503 JUDGE_BUSY`.
 
 ### 11.4 Rate limits (token bucket; Postgres-backed in v1, Redis later)
@@ -581,7 +823,7 @@ Each phase is a self-contained PR sequence. Later phases assume earlier phases a
 
 | # | Phase | Why it lands separately |
 | --- | --- | --- |
-| 1 | **Foundation** — schema (incl. hidden fields, `CONTEST_LOCKED`), admin CRUD, public listing, registration | Establishes the data model + admin tools without any judging code. Mergeable on its own. |
+| 1 | **Foundation** — schema (Contest, ContestProblem, ContestProblemLock, hidden fields on SQLProblem, ContestVerdict enum), admin CRUD, `excludeLockedProblems` helper + audit of the gates listed in §3.3, public listing, registration | Establishes the data model + admin tools without any judging code. Mergeable on its own. |
 | 2 | **Server-side judge** — `lib/contest-judge.ts`, sandboxed DuckDB worker, `/api/contests/[slug]/submit`, hidden-data audit log | Blocks all rated functionality; the trust root. |
 | 3 | **Runtime** — in-contest workspace UI, drift-corrected timer, incremental scoring, polling leaderboard, post-contest practice mode | The user-visible "it's a contest" experience. |
 | 4 | **Rating** — `lib/glicko2.ts` + tests, finalize job, `UserRating`/`ContestRatingHistory`, profile `ContestRatingCard`, tier color tokens | Turns it into a *rated* experience. |
