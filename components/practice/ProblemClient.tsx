@@ -37,6 +37,7 @@ interface ProblemClientProps {
     initialHistory: ProblemHistoryEntry[]
     isSolved: boolean
     isSignedIn: boolean
+    submissionDisabledReason?: string
     viewerUserId: string | null
     discussionEnabled: boolean
     discussionMode: DiscussionMode
@@ -78,6 +79,7 @@ export function ProblemClient({
     initialHistory,
     isSolved,
     isSignedIn,
+    submissionDisabledReason,
     viewerUserId,
     discussionEnabled,
     discussionMode,
@@ -304,6 +306,7 @@ export function ProblemClient({
                     query={query}
                     onQueryChange={setQuery}
                     onSubmit={handleSubmit}
+                    submissionDisabledReason={submissionDisabledReason}
                     onReset={resetDraft}
                     validateRowCap={computeValidateRowCap(expectedRows?.length)}
                     dialect={dialect}

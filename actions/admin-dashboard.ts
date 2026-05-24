@@ -23,6 +23,7 @@ export async function getAdminDashboardMetrics(): Promise<AdminMetric[]> {
         problemCount,
         articleCount,
         trackCount,
+        contestCount,
         submissionsLast7d,
         pendingReports,
         pendingArticles,
@@ -30,6 +31,7 @@ export async function getAdminDashboardMetrics(): Promise<AdminMetric[]> {
         prisma.sQLProblem.count(),
         prisma.article.count({ where: { status: "PUBLISHED" } }),
         prisma.track.count({ where: { status: "PUBLISHED" } }),
+        prisma.contest.count(),
         prisma.submission.count({
             where: { createdAt: { gte: sevenDaysAgo } },
         }),
@@ -41,6 +43,7 @@ export async function getAdminDashboardMetrics(): Promise<AdminMetric[]> {
         { label: "Problems", value: problemCount, href: "/admin/problems" },
         { label: "Articles", value: articleCount, href: "/admin/articles" },
         { label: "Tracks", value: trackCount, href: "/admin/tracks" },
+        { label: "Contests", value: contestCount, href: "/admin/contests" },
         {
             label: "Submissions (7d)",
             value: submissionsLast7d,

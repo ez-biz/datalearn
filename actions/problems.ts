@@ -1,6 +1,7 @@
 "use server"
 
 import { prisma } from "@/lib/prisma"
+import { excludeLockedProblems } from "@/lib/contest-locks"
 
 /**
  * Public problem listing — only PUBLISHED problems.
@@ -15,7 +16,7 @@ import { prisma } from "@/lib/prisma"
 export async function getProblems() {
     try {
         const problems = await prisma.sQLProblem.findMany({
-            where: { status: "PUBLISHED" },
+            where: excludeLockedProblems({ status: "PUBLISHED" }),
             orderBy: { number: "asc" },
             select: {
                 id: true,
@@ -98,6 +99,18 @@ export async function getProblem(slug: string) {
                     },
                     take: 4,
                 },
+                contestLock: {
+                    select: {
+                        unlocksAt: true,
+                        contest: {
+                            select: {
+                                slug: true,
+                                title: true,
+                                endsAt: true,
+                            },
+                        },
+                    },
+                },
             },
         })
         if (!problem || problem.status !== "PUBLISHED") {
@@ -136,7 +149,11 @@ export async function getPublicTags(): Promise<PublicTagSummary[]> {
                 kind: true,
                 _count: {
                     select: {
-                        problems: { where: { status: "PUBLISHED" } },
+                        problems: {
+                            where: excludeLockedProblems({
+                                status: "PUBLISHED",
+                            }),
+                        },
                     },
                 },
             },
@@ -199,7 +216,7 @@ export async function getProblemsByTag(slug: string): Promise<{
                 name: true,
                 kind: true,
                 problems: {
-                    where: { status: "PUBLISHED" },
+                    where: excludeLockedProblems({ status: "PUBLISHED" }),
                     orderBy: { number: "asc" },
                     select: {
                         id: true,

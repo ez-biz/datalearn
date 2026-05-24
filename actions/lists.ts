@@ -75,6 +75,10 @@ export type ListWithItems = {
             title: string
             difficulty: "EASY" | "MEDIUM" | "HARD"
             status: "DRAFT" | "BETA" | "PUBLISHED" | "ARCHIVED"
+            contestLock: {
+                unlocksAt: Date
+                contest: { title: string; slug: string }
+            } | null
         }
     }>
 }
@@ -104,6 +108,17 @@ export async function getList(listId: string): Promise<ListWithItems | null> {
                                 title: true,
                                 difficulty: true,
                                 status: true,
+                                contestLock: {
+                                    select: {
+                                        unlocksAt: true,
+                                        contest: {
+                                            select: {
+                                                title: true,
+                                                slug: true,
+                                            },
+                                        },
+                                    },
+                                },
                             },
                         },
                     },
@@ -275,10 +290,20 @@ export async function addToList(
         }
         const problem = await prisma.sQLProblem.findUnique({
             where: { slug: problemSlug },
-            select: { id: true, status: true },
+            select: {
+                id: true,
+                status: true,
+                contestLock: { select: { unlocksAt: true } },
+            },
         })
         if (!problem || problem.status !== "PUBLISHED") {
             return { ok: false, error: "Problem not found." }
+        }
+        if (problem.contestLock) {
+            return {
+                ok: false,
+                error: "This problem is locked for a contest right now.",
+            }
         }
 
         // Mint the next position inside the same DB call to avoid races.

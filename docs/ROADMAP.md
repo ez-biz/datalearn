@@ -312,6 +312,8 @@ Major platform expansions that take Data Learn from "SQL practice + learning hub
 
 ### V2 — Contest
 
+**Phase 1 foundation shipped:** `Contest`, `ContestProblem`, `ContestRegistration`, and `ContestProblemLock` are in place, with admin CRUD, public `/contests` browsing/detail pages, registration, time-aware lock filtering, and a guarded manual sweep endpoint. Follow-on phases add scheduled cleanup, the server-side hidden-test judge, contest workspace, leaderboard, rating finalization, custom contests, and social sharing. Source plan/spec: `docs/superpowers/specs/2026-05-24-contests-design.md`.
+
 **What:** Weekly + monthly timed contests with multiple problems, a leaderboard, and a **mathematically-backed rating system** that updates each user's rating after every contest. Rating shown on the profile page (the placeholder card already exists).
 
 **Why:** Contests turn the platform into a sport. They give users a reason to be present at a specific time, create cohort rivalries, and seed the Discuss > Contest category with post-mortems.
@@ -319,7 +321,7 @@ Major platform expansions that take Data Learn from "SQL practice + learning hub
 **Components:**
 - **Rating system: Glicko-2** (more responsive than ELO, used by chess.com and Codeforces; well-documented). Per-user state: `rating`, `ratingDeviation`, `volatility`, `lastContestAt`. Update happens server-side in a transactional batch when a contest closes.
 - **Contest model:** `Contest`, `ContestProblem` (M:N with offset/score), `ContestSubmission`, `ContestLeaderboard` (materialized).
-- **Problem locking:** problems used in a contest must not appear in the public `/practice` list while the contest is live; surface them only inside the contest UI. Existing status state machine extends with `CONTEST_LOCKED`.
+- **Problem locking:** problems used in an official contest do not appear in public browse/search surfaces while locked. Locking lives in `ContestProblemLock`, not the `ProblemStatus` enum, so existing `PUBLISHED`/`DRAFT` semantics stay intact.
 - **Live leaderboard:** server-rendered with progressive enhancement; refreshes on a tick, not real-time pushed (avoid websockets on v1).
 - **Anti-cheat baselines:** rate limits per user during contest, IP fingerprint logging, identical-solution detection (cosine similarity on tokenized SQL), public submissions only revealed *after* contest ends.
 - **Profile integration:** rating + ratingDeviation pill on the existing `Contests` placeholder card; contest history list with score + rank + delta per contest.

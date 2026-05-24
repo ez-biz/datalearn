@@ -43,6 +43,7 @@ interface SqlPlaygroundProps {
     query?: string
     onQueryChange?: (query: string) => void
     onSubmit?: (userResult: unknown[]) => Promise<ValidationResult>
+    submissionDisabledReason?: string
     onReset?: () => void
     validateRowCap?: number
     /** Currently selected engine. */
@@ -66,6 +67,7 @@ export function SqlPlayground({
     query: queryProp,
     onQueryChange,
     onSubmit,
+    submissionDisabledReason,
     onReset,
     validateRowCap,
     dialect = "DUCKDB",
@@ -124,6 +126,7 @@ export function SqlPlayground({
 
     const handleSubmit = async () => {
         if (!onSubmit || !problemSlug) return
+        if (submissionDisabledReason) return
         if (!dbReady || dbRecovering || loading || submitting) return
         setSubmitting(true)
         setValidation(null)
@@ -166,7 +169,7 @@ export function SqlPlayground({
             if (!mod) return
             if (e.key === "Enter") {
                 if (e.shiftKey) {
-                    if (onSubmit && problemSlug) {
+                    if (onSubmit && problemSlug && !submissionDisabledReason) {
                         e.preventDefault()
                         handleSubmit()
                     }
@@ -179,7 +182,15 @@ export function SqlPlayground({
         window.addEventListener("keydown", onKey)
         return () => window.removeEventListener("keydown", onKey)
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [onSubmit, problemSlug, loading, submitting, dbReady, dbRecovering])
+    }, [
+        onSubmit,
+        problemSlug,
+        loading,
+        submitting,
+        dbReady,
+        dbRecovering,
+        submissionDisabledReason,
+    ])
 
     if (dbError) {
         return (
@@ -195,7 +206,12 @@ export function SqlPlayground({
     const showSubmit = Boolean(onSubmit && problemSlug)
     const runDisabled = !dbReady || dbRecovering || loading || submitting
     const submitDisabled =
-        !dbReady || dbRecovering || submitting || loading || !hasRunOnce
+        Boolean(submissionDisabledReason) ||
+        !dbReady ||
+        dbRecovering ||
+        submitting ||
+        loading ||
+        !hasRunOnce
     const isMac =
         typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
     const modKey = isMac ? "⌘" : "Ctrl"
@@ -204,13 +220,15 @@ export function SqlPlayground({
         : dbRecovering
             ? "SQL engine is resetting…"
         : `Run (${modKey} ↵)`
-    const submitTitle = !dbReady
-        ? "Engine loading… (you can keep typing)"
-        : dbRecovering
-            ? "SQL engine is resetting…"
-        : !hasRunOnce
-            ? "Run your query at least once before submitting."
-            : `Submit (${modKey} ⇧ ↵)`
+    const submitTitle =
+        submissionDisabledReason ??
+        (!dbReady
+            ? "Engine loading… (you can keep typing)"
+            : dbRecovering
+                ? "SQL engine is resetting…"
+                : !hasRunOnce
+                    ? "Run your query at least once before submitting."
+                    : `Submit (${modKey} ⇧ ↵)`)
     const elapsedLabel =
         elapsedMs == null ? "—" : `${(elapsedMs / 1000).toFixed(2)}s`
     const resultStatus: StatusPillStatus | null =
@@ -233,7 +251,11 @@ export function SqlPlayground({
                     value={query}
                     onChange={(v) => setQuery(v || "")}
                     onRun={handleRun}
-                    onSubmit={showSubmit ? handleSubmit : undefined}
+                    onSubmit={
+                        showSubmit && !submissionDisabledReason
+                            ? handleSubmit
+                            : undefined
+                    }
                     running={loading}
                     runDisabled={runDisabled}
                     dialect={dialect}
