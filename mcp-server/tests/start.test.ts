@@ -65,6 +65,18 @@ describe("buildServer", () => {
                 "approve_article",
                 "reject_article",
                 "archive_article",
+                // ops + admin lifecycle (v0.7.0)
+                "delete_topic",
+                "delete_track",
+                "list_api_keys",
+                "create_api_key",
+                "revoke_api_key",
+                "list_users",
+                "update_user_role",
+                "list_moderators",
+                "grant_moderator",
+                "update_moderator_permissions",
+                "revoke_moderator",
             ].sort()
         )
     })
