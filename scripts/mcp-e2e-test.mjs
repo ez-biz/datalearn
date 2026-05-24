@@ -546,9 +546,14 @@ async function main() {
             id: newKeyPayload.id,
         })
         passes.push(logResult("revoke_api_key", revokeKeyResult))
-        // Happy path took care of revoke — null out the safety net so the
-        // finally block doesn't double-revoke.
-        testCreatedApiKeyId = null
+        // Only release the safety net when revoke_api_key actually
+        // succeeded. JSON-RPC tool errors come back as `result.error`
+        // (not thrown), so a logged-failure here would otherwise leak a
+        // 90-day full-admin key. The finally block's direct DB revoke is
+        // the backstop.
+        if (!revokeKeyResult.error) {
+            testCreatedApiKeyId = null
+        }
 
         // ── Lifecycle deletes (v0.7.0) — replaces direct Prisma cleanup ─
         // delete_track first: was PUBLISHED earlier, so expect archived path
