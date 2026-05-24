@@ -110,6 +110,9 @@ jobs:
       - name: Check MCP bundle isolation
         run: npm run check:mcp-bundle-isolation
 
+      - name: Test MCP e2e log redaction
+        run: npm run test:mcp-e2e-log-redaction
+
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         with:

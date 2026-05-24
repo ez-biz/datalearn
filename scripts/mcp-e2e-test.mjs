@@ -611,9 +611,7 @@ async function main() {
         // threw between them). Leaving this active would orphan a 90-day
         // full-admin key in the dev DB.
         if (testCreatedApiKeyId) {
-            console.log(
-                `[harness] revoking test-created API key ${testCreatedApiKeyId} (safety net)...`
-            )
+            console.log("[harness] revoking test-created API key (safety net)...")
             try {
                 await revokeKey(testCreatedApiKeyId)
             } catch (e) {
