@@ -228,6 +228,30 @@ export function registerArticleTools(
                 if (err instanceof ApiError && err.status === 404) {
                     return ok({ found: false })
                 }
+                // Layer-2 directive validation failures arrive as a 400 with
+                // `error: "directive-validation"` and an `errors: [...]` array
+                // that the client lifts into `ApiError.details`. Surface the
+                // per-directive lines so the caller can fix the article
+                // without a second round-trip.
+                if (
+                    err instanceof ApiError &&
+                    err.status === 400 &&
+                    err.message === "directive-validation" &&
+                    Array.isArray(err.details)
+                ) {
+                    const lines = (err.details as Array<{
+                        directive?: string
+                        index?: number
+                        message?: string
+                    }>).map(
+                        (e, i) =>
+                            `  - ${e.directive ?? "directive"}#${e.index ?? i}: ${e.message ?? "unknown error"}`
+                    )
+                    throw new McpError(
+                        ErrorCode.InvalidParams,
+                        `directive-validation: ${err.details.length} error(s)\n${lines.join("\n")}`
+                    )
+                }
                 throw toMcpError(err)
             }
         }

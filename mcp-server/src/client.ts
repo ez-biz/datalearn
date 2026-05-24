@@ -86,11 +86,17 @@ export class DataLearnClient {
             const errBody = parsed as {
                 error?: string
                 details?: unknown
+                errors?: unknown
             }
+            // Some admin routes return per-item validation in `errors` (e.g.
+            // POST /api/admin/articles/:slug/approve sends { error,
+            // errors: [...] } for Layer-2 directive failures). Surface those
+            // through ApiError.details so tool handlers can format them.
+            const details = errBody?.details ?? errBody?.errors
             throw new ApiError(
                 res.status,
                 errBody?.error ?? `HTTP ${res.status}`,
-                errBody?.details
+                details
             )
         }
         return parsed
