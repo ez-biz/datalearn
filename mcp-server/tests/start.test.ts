@@ -48,6 +48,7 @@ describe("buildServer", () => {
                 "create_problem",
                 "update_problem",
                 "set_problem_hidden_dataset",
+                "publish_contest",
                 // tracks
                 "list_tracks",
                 "get_track",
