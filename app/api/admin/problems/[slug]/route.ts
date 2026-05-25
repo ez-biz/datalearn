@@ -65,6 +65,13 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
     }
     const input = parsed.data
     const discussionMode = discussionModeParsed.data.discussionMode
+    const touchesHiddenValidationInputs =
+        input.solutions !== undefined ||
+        input.solutionSql !== undefined ||
+        input.expectedOutputs !== undefined ||
+        input.expectedOutput !== undefined ||
+        input.dialects !== undefined ||
+        input.ordered !== undefined
 
     try {
         const updated = await prisma.$transaction(async (tx) => {
@@ -100,6 +107,10 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                 ...(input.ordered !== undefined && { ordered: input.ordered }),
                 ...(input.dialects !== undefined && { dialects: input.dialects }),
                 ...(input.hints !== undefined && { hints: input.hints }),
+                ...(touchesHiddenValidationInputs && {
+                    hiddenDataValidatedAt: null,
+                    hiddenDataValidationFingerprint: null,
+                }),
             }
 
             // ── Solutions / expectedOutputs back-compat ─────────────
