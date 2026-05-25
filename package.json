@@ -36,6 +36,7 @@
     "test:contest-judge-validator": "node --import tsx --test scripts/test-contest-judge-validator.ts",
     "test:contest-judge-engines": "node --import tsx --test scripts/test-contest-judge-engines.ts",
     "test:contest-judge-queue": "node --import tsx --test scripts/test-contest-judge-queue.ts",
+    "test:contest-judge-escape": "npm run build:contest-worker && node --import tsx --test scripts/test-contest-judge-escape.ts",
     "test:contests": "node --import tsx --test scripts/test-contests-actions.ts",
     "test:topic-lane": "tsx scripts/test-topic-lane.ts",
     "seed:curriculum-topics": "tsx scripts/seed-curriculum-topics.ts",
