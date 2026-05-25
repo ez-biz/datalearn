@@ -13,6 +13,7 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that lets an 
 | `get_problem` | Fetch a single problem's full record by slug (use this to learn the `expectedOutput` JSON shape). |
 | `create_problem` | Create a new problem. **Always lands as DRAFT** — publish manually via the admin UI. |
 | `update_problem` | Patch an existing problem by slug. Can replace tags, rename with `newSlug`, and set `status` to `DRAFT`, `PUBLISHED`, or `ARCHIVED`. |
+| `set_problem_hidden_dataset` | Write and validate hidden contest test data for a problem by slug. Records a `WRITE_HIDDEN_TEST` audit row. |
 | `list_articles` | List Learn articles (minimal projection, optional `topicSlug` and `status` filters). |
 | `get_article` | Fetch a single article's full record by slug, including `content` markdown. |
 | `create_article` | Create a new Learn article. **Always lands as DRAFT** — publish via `update_article` or the admin UI. Supports v0.5.0 directive syntax. |
@@ -67,7 +68,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) a
 }
 ```
 
-Restart Claude Desktop. The full tool surface (40 tools as of v0.8.0) appears under the `datalearn` namespace.
+Restart Claude Desktop. The full tool surface (41 tools as of v0.8.0) appears under the `datalearn` namespace.
 
 ### Local development
 
@@ -201,6 +202,18 @@ Notes:
 - `status: "ARCHIVED"` hides a problem from learners while preserving submissions.
 - Missing problems return `{ "found": false }`.
 
+### `set_problem_hidden_dataset`
+
+`set_problem_hidden_dataset` writes hidden test data for a problem by `slug`. This is required before a problem can be used safely in a rated contest.
+
+Input:
+
+- `slug` — problem slug.
+- `hiddenSchemas` — map of `Dialect -> SQL DDL + seed string`.
+- `hiddenExpectedOutputs` — map of `Dialect -> expected row array`.
+
+The server runs the problem's canonical solution against each supplied hidden schema before persisting. Calls with mismatched expected rows fail with a validation error. Every successful call records a `WRITE_HIDDEN_TEST` row in `AdminAuditLog`.
+
 ### Schema format (`schemaInline.sql` or `create_schema`'s `sql`)
 
 The `sql` field is a single string containing both DDL and seed `INSERT` statements, separated by `;`. It runs in DuckDB-WASM in the learner's browser, so use DuckDB-compatible types:
@@ -319,6 +332,8 @@ The Next API runs Zod validation server-side; failures come back as `McpError(In
 **`get_problem`** — input `{ slug }`. Output is the full record including `expectedOutput` and `solutionSql`. Returns `{ found: false }` if no such slug exists; tools should treat that as a normal "not present" signal, not an error.
 
 **`update_problem`** — input `{ slug, ...fields }`, with `newSlug` for slug rename. Returns the same full shape as `get_problem`, or `{ found: false }` if the current slug does not exist.
+
+**`set_problem_hidden_dataset`** — input `{ slug, hiddenSchemas, hiddenExpectedOutputs }`. Validates canonical solutions against the hidden data before writing; returns hidden-data metadata, not hidden test bodies.
 
 ### Articles (v0.5.0+, review workflow v0.6.0+)
 
