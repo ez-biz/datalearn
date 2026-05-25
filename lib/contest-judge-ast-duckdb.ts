@@ -1,4 +1,5 @@
-import { DuckDBInstance } from "@duckdb/node-api"
+type DuckDBApi = typeof import("@duckdb/node-api")
+type DuckDBInstanceType = DuckDBApi["DuckDBInstance"]
 
 export type DuckDBAstNode = Record<string, unknown> | unknown[]
 
@@ -20,6 +21,7 @@ type DuckDBSerializedSql = {
 }
 
 export async function parseDuckDBSql(sql: string): Promise<DuckDBAstNode[]> {
+    const DuckDBInstance = await loadDuckDBInstance()
     const instance = await DuckDBInstance.create(":memory:")
     const connection = await instance.connect()
 
@@ -53,6 +55,15 @@ export async function parseDuckDBSql(sql: string): Promise<DuckDBAstNode[]> {
             // ignore cleanup failure
         }
     }
+}
+
+async function loadDuckDBInstance(): Promise<DuckDBInstanceType> {
+    const dynamicImport = new Function(
+        "specifier",
+        "return import(specifier)"
+    ) as (specifier: string) => Promise<DuckDBApi>
+    const module = await dynamicImport("@duckdb/node-api")
+    return module.DuckDBInstance
 }
 
 export function walkDuckDBAst(
