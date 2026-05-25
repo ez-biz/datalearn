@@ -38,6 +38,7 @@
     "test:contest-judge-queue": "node --import tsx --test scripts/test-contest-judge-queue.ts",
     "test:contest-judge-escape": "npm run build:contest-worker && node --import tsx --test scripts/test-contest-judge-escape.ts",
     "test:contests": "node --import tsx --test scripts/test-contests-actions.ts",
+    "test:admin-audit-log": "node --import tsx --test scripts/test-admin-audit-log.ts",
     "test:topic-lane": "tsx scripts/test-topic-lane.ts",
     "seed:curriculum-topics": "tsx scripts/seed-curriculum-topics.ts",
     "seed:curriculum-tags": "tsx scripts/seed-curriculum-tags.ts",
