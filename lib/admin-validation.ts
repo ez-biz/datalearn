@@ -82,6 +82,14 @@ const ExpectedOutputsRecord = z.partialRecord(
     Dialect,
     z.string().min(2).max(2_000_000)
 )
+const HiddenSchemasRecord = z.partialRecord(
+    Dialect,
+    z.string().min(1).max(50_000)
+)
+const HiddenExpectedOutputsRecord = z.partialRecord(
+    Dialect,
+    z.array(z.record(z.string(), z.unknown())).max(10_000)
+)
 
 type DialectValue = z.infer<typeof Dialect>
 type ProblemStatusValue = z.infer<typeof ProblemStatus>
@@ -332,6 +340,11 @@ export const ProblemUpdateInput = ProblemUpdateInputBase
             path: ["expectedOutputs"],
         }
     )
+
+export const HiddenDataPutInput = z.object({
+    hiddenSchemas: HiddenSchemasRecord,
+    hiddenExpectedOutputs: HiddenExpectedOutputsRecord,
+})
 
 /**
  * Reconcile legacy single-field and v0.4.2 per-dialect-map inputs into
