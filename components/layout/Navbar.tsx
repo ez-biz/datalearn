@@ -13,8 +13,7 @@ import { MobileNav } from "./MobileNav"
 import { UserMenu } from "./UserMenu"
 
 export async function Navbar() {
-    const { data: pages } = await getNavLinks()
-    const session = await auth()
+    const [{ data: pages }, session] = await Promise.all([getNavLinks(), auth()])
     const isAdmin = session?.user?.role === "ADMIN"
     const isContributor = session?.user?.role === "CONTRIBUTOR"
 

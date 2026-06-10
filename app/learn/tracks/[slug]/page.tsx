@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { cache } from "react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeft, Clock, ListChecks, Route } from "lucide-react"
@@ -19,9 +20,13 @@ type Props = {
 
 export const dynamic = "force-dynamic"
 
+// Dedup the track fetch across generateMetadata and the page render —
+// both run in the same request and would otherwise hit the DB twice.
+const getCachedTrack = cache(getTrackBySlug)
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { slug } = await params
-    const track = await getTrackBySlug(slug)
+    const track = await getCachedTrack(slug)
     if (!track) return { title: "Track not found" }
 
     return {
@@ -32,7 +37,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function TrackDetailPage({ params }: Props) {
     const { slug } = await params
-    const track = await getTrackBySlug(slug)
+    const track = await getCachedTrack(slug)
     if (!track) notFound()
 
     const progress = await getTrackProgress(track.id)

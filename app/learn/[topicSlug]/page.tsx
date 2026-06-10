@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { cache } from "react"
 import Link from "next/link"
 import { ChevronLeft, Clock, FileText } from "lucide-react"
 import { getTopic } from "@/actions/content"
@@ -13,9 +14,13 @@ type Props = {
     params: Promise<{ topicSlug: string }>
 }
 
+// Dedup the topic fetch across generateMetadata and the page render —
+// both run in the same request and would otherwise hit the DB twice.
+const getCachedTopic = cache(getTopic)
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { topicSlug } = await params
-    const { data: topic } = await getTopic(topicSlug)
+    const { data: topic } = await getCachedTopic(topicSlug)
     if (!topic) return { title: "Topic not found" }
     return {
         title: topic.name,
@@ -25,7 +30,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function TopicPage({ params }: Props) {
     const { topicSlug } = await params
-    const { data: topic } = await getTopic(topicSlug)
+    const { data: topic } = await getCachedTopic(topicSlug)
 
     if (!topic) {
         notFound()

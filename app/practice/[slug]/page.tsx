@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { cache } from "react"
 import Link from "next/link"
 import { ChevronLeft, LockKeyhole } from "lucide-react"
 import { getProblem, getSlugByNumber } from "@/actions/problems"
@@ -19,13 +20,17 @@ type Props = {
     params: Promise<{ slug: string }>
 }
 
+// Dedup the problem fetch across generateMetadata and the page render —
+// both run in the same request and would otherwise hit the DB twice.
+const getCachedProblem = cache(getProblem)
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { slug } = await params
     if (/^\d+$/.test(slug)) {
         // Numeric URL → defer to the redirect path; metadata is replaced after redirect.
         return {}
     }
-    const { data: problem } = await getProblem(slug)
+    const { data: problem } = await getCachedProblem(slug)
     if (!problem) return { title: "Problem not found" }
     return {
         title: problem.title,
@@ -71,7 +76,7 @@ export default async function ProblemPage({ params }: Props) {
         redirect(`/practice/${target}`)
     }
 
-    const { data: problem } = await getProblem(slug)
+    const { data: problem } = await getCachedProblem(slug)
 
     if (!problem) {
         notFound()
