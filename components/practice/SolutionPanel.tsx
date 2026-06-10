@@ -164,7 +164,7 @@ export function SolutionPanel({ slug, dialects, activeDialect }: SolutionPanelPr
                         </div>
                         <div className="mt-0.5 text-xs text-muted-foreground">
                             We hide solutions from anonymous viewers. Sign in
-                            (it's free) and your accepted submission unlocks it.
+                            (it&apos;s free) and your accepted submission unlocks it.
                         </div>
                         <Link
                             href={`/auth/signin?callbackUrl=${encodeURIComponent(`/practice/${slug}`)}`}
