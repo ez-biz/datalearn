@@ -39,6 +39,19 @@ async function seedUser(role: "ADMIN" | "CONTRIBUTOR" | "USER") {
     return id
 }
 
+async function seedAssets(ownerId: string, count: number, createdAt: Date) {
+    await prisma.asset.createMany({
+        data: Array.from({ length: count }, (_, i) => ({
+            ownerId,
+            blobKey: `test-uploads-rate/${ownerId}/${createdAt.getTime()}-${i}`,
+            contentType: "image/png",
+            bytes: 1,
+            status: "ACTIVE" as const,
+            createdAt,
+        })),
+    })
+}
+
 function makeAuthedFetch(userId: string) {
     return async (path: string, init?: RequestInit) =>
         fetch(`${BASE}${path}`, {
@@ -68,7 +81,13 @@ async function main() {
     const adminId = await seedUser("ADMIN")
     const contributorId = await seedUser("CONTRIBUTOR")
     const learnerId = await seedUser("USER")
-    const userIds = [adminId, contributorId, learnerId]
+    const rateId = `test-uploads-rate`
+    await prisma.user.upsert({
+        where: { id: rateId },
+        create: { id: rateId, email: `${rateId}@test.local`, role: "CONTRIBUTOR" },
+        update: { role: "CONTRIBUTOR" },
+    })
+    const userIds = [adminId, contributorId, learnerId, rateId]
 
     try {
         const contributorFetch = makeAuthedFetch(contributorId)
@@ -126,6 +145,47 @@ async function main() {
             png
         )
         assert.equal(learnerRes.status, 403)
+
+        // Rate limiting is DB-backed: counts Asset rows in the window, so it
+        // holds across serverless instances. 10/minute, 50/day.
+        const rateFetch = makeAuthedFetch(rateId)
+        const MINUTE_MS = 60_000
+        const DAY_MS = 24 * 60 * MINUTE_MS
+
+        await seedAssets(rateId, 10, new Date())
+        const minuteLimited = await postFile(rateFetch, "hi.png", "image/png", png)
+        assert.equal(minuteLimited.status, 429)
+        const minuteBody = (await minuteLimited.json()) as {
+            error: string
+            retryAfterMs: number
+        }
+        assert.equal(minuteBody.error, "rate-limited")
+        assert.ok(
+            minuteBody.retryAfterMs > 0 && minuteBody.retryAfterMs <= MINUTE_MS,
+            `minute retryAfterMs out of range: ${minuteBody.retryAfterMs}`
+        )
+
+        // Age the rows out of the minute window; uploads should resume.
+        await prisma.asset.updateMany({
+            where: { ownerId: rateId },
+            data: { createdAt: new Date(Date.now() - 2 * MINUTE_MS) },
+        })
+        const resumed = await postFile(rateFetch, "hi.png", "image/png", png)
+        await assertStatus(resumed, 200)
+
+        // Fill the daily window (11 rows so far) and verify the 50/day cap.
+        await seedAssets(rateId, 39, new Date(Date.now() - 2 * 60 * MINUTE_MS))
+        const dayLimited = await postFile(rateFetch, "hi.png", "image/png", png)
+        assert.equal(dayLimited.status, 429)
+        const dayBody = (await dayLimited.json()) as {
+            error: string
+            retryAfterMs: number
+        }
+        assert.equal(dayBody.error, "rate-limited")
+        assert.ok(
+            dayBody.retryAfterMs > 0 && dayBody.retryAfterMs <= DAY_MS,
+            `day retryAfterMs out of range: ${dayBody.retryAfterMs}`
+        )
     } finally {
         await cleanup(userIds)
     }

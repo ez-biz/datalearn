@@ -31,7 +31,7 @@ export const POST = withContributor(async (req, principal) => {
         return NextResponse.json({ error: "oversize" }, { status: 413 })
     }
 
-    const rate = checkUploadRate(principal.userId)
+    const rate = await checkUploadRate(principal.userId)
     if (!rate.ok) {
         return NextResponse.json(
             { error: "rate-limited", retryAfterMs: rate.retryAfterMs },
