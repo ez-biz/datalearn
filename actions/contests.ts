@@ -166,7 +166,8 @@ export async function getContestLeaderboard(
             },
         })
         return toStandingsRows(entries)
-    } catch {
+    } catch (error) {
+        console.error("[getContestLeaderboard]", error)
         return []
     }
 }

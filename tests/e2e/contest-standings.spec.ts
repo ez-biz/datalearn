@@ -24,7 +24,9 @@ test.beforeAll(async () => {
         name: "Rival",
     })
 
-    // A LIVE contest: started in the past, ends in the future.
+    // A LIVE contest: status is derived from the time window by
+    // deriveContestStatus (past start + future end => LIVE), regardless of the
+    // stored "SCHEDULED" status — so standings render.
     const startsAt = new Date(Date.now() - 60 * 60 * 1000)
     const endsAt = new Date(Date.now() + 60 * 60 * 1000)
     const contest = await prisma.contest.create({

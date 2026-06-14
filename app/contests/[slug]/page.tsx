@@ -5,6 +5,7 @@ import { ChevronLeft } from "lucide-react"
 import { getContestBySlug, getContestLeaderboard } from "@/actions/contests"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { hasStandings } from "@/lib/contest-status"
 import { ContestStandings } from "@/components/contests/ContestStandings"
 import { ContestStatusPill } from "@/components/contests/ContestStatusPill"
 import { RegisterButton } from "@/components/contests/RegisterButton"
@@ -30,8 +31,6 @@ export default async function ContestDetailPage({ params }: Props) {
 
     const session = await auth()
     const viewerUserId = session?.user?.id ?? null
-    const showStandings =
-        contest.status === "LIVE" || contest.status === "CLOSED"
 
     const [registration, standings] = await Promise.all([
         viewerUserId
@@ -45,7 +44,7 @@ export default async function ContestDetailPage({ params }: Props) {
                   select: { contestId: true },
               })
             : Promise.resolve(null),
-        showStandings
+        hasStandings(contest.status)
             ? getContestLeaderboard(contest.id)
             : Promise.resolve([]),
     ])
@@ -130,8 +129,7 @@ export default async function ContestDetailPage({ params }: Props) {
                         )}
                     </div>
 
-                    {(contest.status === "LIVE" ||
-                        contest.status === "CLOSED") && (
+                    {hasStandings(contest.status) && (
                         <ContestStandings
                             rows={standings}
                             viewerUserId={viewerUserId}
