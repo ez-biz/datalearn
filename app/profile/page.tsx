@@ -251,7 +251,7 @@ export default async function ProfilePage() {
                         <PlaceholderCard
                             icon={<Award className="h-4 w-4" />}
                             title="Contests"
-                            description="Once contests launch, your rating, history, and rank will appear here."
+                            description="Your contest rating, history, and rank will appear here as the rating system rolls out."
                         />
                         <PlaceholderCard
                             icon={<Database className="h-4 w-4" />}

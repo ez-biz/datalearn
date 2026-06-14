@@ -59,7 +59,14 @@ export async function POST(req: Request, ctx: Ctx) {
             ipHash: hashIp(req, contest.id),
             userAgent: req.headers.get("user-agent")?.slice(0, 1000) ?? "unknown",
         })
-        return NextResponse.json({ data: result })
+        // Return only the verdict + attempt — never the judge `message`, which
+        // can carry hidden-data hints (expected column names / row count).
+        return NextResponse.json({
+            data: {
+                verdict: result.verdict,
+                attemptNumber: result.attemptNumber,
+            },
+        })
     } catch (error: unknown) {
         if (error instanceof ContestNotLiveError) {
             return NextResponse.json(
