@@ -4,7 +4,6 @@ import {
     BookOpen,
     Database,
     Gauge,
-    Sparkles,
     Terminal,
     Zap,
 } from "lucide-react"
@@ -72,13 +71,9 @@ export default async function Home() {
                 <Container width="xl" className="py-20 sm:py-28">
                     <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-12 lg:gap-16 items-center">
                         <div>
-                            <Eyebrow variant="plain" className="mb-4">
+                            <Eyebrow variant="plain" className="mb-5">
                                 DATA LEARN
                             </Eyebrow>
-                            <Badge variant="primary" className="mb-5">
-                                <Sparkles className="h-3 w-3" />
-                                Beta · v0.3
-                            </Badge>
                             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.05]">
                                 Practice SQL the way{" "}
                                 <span className="text-primary">engineers do.</span>
