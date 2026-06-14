@@ -3,11 +3,15 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { deriveContestStatus } from "@/lib/contest-status"
+import { warmUpJudge } from "@/lib/contest-judge"
 import {
     ContestNotLiveError,
     NotRegisteredError,
     submitContestEntry,
 } from "@/lib/contest-submit"
+
+const WARM_DIALECTS = new Set(["DUCKDB", "POSTGRES"])
 
 const SubmitBody = z.object({
     problemId: z.string().min(20).max(40),
@@ -17,6 +21,50 @@ const SubmitBody = z.object({
 })
 
 type Ctx = { params: Promise<{ slug: string }> }
+
+/**
+ * Judge warm-up ping. The contest play client hits this on mount so the cold
+ * fork — worker bundle + native DuckDB / PGlite load + engine boot — is paid
+ * for while the contestant is still writing SQL, instead of by whoever submits
+ * first (>30s on a cold serverless instance). This lives in the same route file
+ * as the POST submit handler on purpose: Vercel routes both methods to the same
+ * function, so warming here warms the very instances that will judge. The work
+ * is debounced per dialect inside `warmUpJudge`, so repeated pings are cheap.
+ */
+export async function GET(req: Request, ctx: Ctx) {
+    const session = await auth()
+    if (!session?.user?.id) {
+        return NextResponse.json({ warmed: false }, { status: 401 })
+    }
+
+    const { slug } = await ctx.params
+    const contest = await prisma.contest.findUnique({
+        where: { slug },
+        select: { startsAt: true, endsAt: true, status: true },
+    })
+    if (!contest) {
+        return NextResponse.json({ warmed: false }, { status: 404 })
+    }
+
+    // Only worth a fork while the contest can actually take submissions.
+    if (
+        deriveContestStatus(contest.startsAt, contest.endsAt, contest.status) !==
+        "LIVE"
+    ) {
+        return NextResponse.json({ warmed: false })
+    }
+
+    const requested = new URL(req.url).searchParams.get("dialect")
+    const dialect =
+        requested && WARM_DIALECTS.has(requested)
+            ? (requested as "DUCKDB" | "POSTGRES")
+            : "DUCKDB"
+
+    // Await so the serverless instance stays alive while the worker forks. The
+    // client fires this fire-and-forget, so the contestant never blocks on it.
+    await warmUpJudge(dialect)
+    return NextResponse.json({ warmed: true })
+}
 
 export async function POST(req: Request, ctx: Ctx) {
     const session = await auth()
