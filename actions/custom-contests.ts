@@ -29,31 +29,8 @@ export async function createCustomContest(input: {
     }
     const userId = session.user.id
 
-    // Cap: one active custom contest per user. "Active" == derived status not CLOSED.
-    const existing = await prisma.contest.findMany({
-        where: { kind: "USER_CUSTOM", createdById: userId },
-        select: { startsAt: true, endsAt: true, status: true },
-    })
-    const now = new Date()
-    const activeCount = existing.filter(
-        (row) =>
-            deriveContestStatus(row.startsAt, row.endsAt, row.status, now) !==
-            "CLOSED"
-    ).length
-    if (!canCreateCustomContest(activeCount)) {
-        return { ok: false, error: "You already have an active custom contest." }
-    }
-
     const startsAt = new Date(input.startsAtIso)
     const endsAt = new Date(input.endsAtIso)
-
-    // All attached problems must be published.
-    const publishedCount = await prisma.sQLProblem.count({
-        where: { id: { in: input.problemIds }, status: "PUBLISHED" },
-    })
-    if (publishedCount !== input.problemIds.length) {
-        return { ok: false, error: "All problems must be published." }
-    }
 
     const validation = validateCustomContestInput({
         title: input.title,
@@ -66,35 +43,70 @@ export async function createCustomContest(input: {
         return { ok: false, error: validation.reason }
     }
 
+    // All attached problems must be published.
+    const publishedCount = await prisma.sQLProblem.count({
+        where: { id: { in: input.problemIds }, status: "PUBLISHED" },
+    })
+    if (publishedCount !== input.problemIds.length) {
+        return { ok: false, error: "All problems must be published." }
+    }
+
     const slug = "c-" + crypto.randomBytes(9).toString("base64url")
 
-    await prisma.contest.create({
-        data: {
-            slug,
-            title: input.title.trim(),
-            description: "User-created contest.",
-            kind: "USER_CUSTOM",
-            status: "SCHEDULED",
-            visibility: "PUBLIC",
-            startsAt,
-            endsAt,
-            durationMinutes: Math.round(
-                (endsAt.getTime() - startsAt.getTime()) / 60000
-            ),
-            rated: false,
-            maxParticipants: input.maxParticipants,
-            createdById: userId,
-            problems: {
-                create: input.problemIds.map((problemId, i) => ({
-                    problemId,
-                    position: i,
-                    points: 1,
-                })),
-            },
-        },
-    })
+    try {
+        return await prisma.$transaction(async (tx) => {
+            // Serialize this user's contest creation so the one-active cap is
+            // race-safe — a per-user transaction advisory lock means two
+            // parallel requests can't both pass the count check. (XACT-scoped
+            // locks work under PgBouncer / Neon transaction pooling.)
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId})::bigint)`
 
-    return { ok: true, slug }
+            const existing = await tx.contest.findMany({
+                where: { kind: "USER_CUSTOM", createdById: userId },
+                select: { startsAt: true, endsAt: true, status: true },
+            })
+            const activeCount = existing.filter(
+                (row) =>
+                    deriveContestStatus(row.startsAt, row.endsAt, row.status) !==
+                    "CLOSED"
+            ).length
+            if (!canCreateCustomContest(activeCount)) {
+                return {
+                    ok: false as const,
+                    error: "You already have an active custom contest.",
+                }
+            }
+
+            await tx.contest.create({
+                data: {
+                    slug,
+                    title: input.title.trim(),
+                    description: "User-created contest.",
+                    kind: "USER_CUSTOM",
+                    status: "SCHEDULED",
+                    visibility: "PUBLIC",
+                    startsAt,
+                    endsAt,
+                    durationMinutes: Math.round(
+                        (endsAt.getTime() - startsAt.getTime()) / 60000
+                    ),
+                    rated: false,
+                    maxParticipants: input.maxParticipants,
+                    createdById: userId,
+                    problems: {
+                        create: input.problemIds.map((problemId, i) => ({
+                            problemId,
+                            position: i,
+                            points: 1,
+                        })),
+                    },
+                },
+            })
+            return { ok: true as const, slug }
+        })
+    } catch {
+        return { ok: false, error: "Could not create contest." }
+    }
 }
 
 /**
@@ -197,6 +209,19 @@ export async function submitCustomContestEntry(input: {
     }
     if (contest.problems.length === 0) {
         return { ok: false, error: "Problem not in contest." }
+    }
+
+    // Rate limit: cap submissions per user per contest to curb floods (the
+    // judge work is cheap here, but the DB writes aren't free at scale).
+    const recentSubmissions = await prisma.contestSubmission.count({
+        where: {
+            contestId: contest.id,
+            userId,
+            submittedAt: { gte: new Date(Date.now() - 60_000) },
+        },
+    })
+    if (recentSubmissions >= 20) {
+        return { ok: false, error: "Too many submissions — slow down a moment." }
     }
 
     const problem = await prisma.sQLProblem.findUnique({
