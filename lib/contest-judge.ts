@@ -85,21 +85,28 @@ export function warmUpJudge(dialect: ContestDialect = "DUCKDB"): Promise<void> {
     const inFlight = (async () => {
         let warmed = false
         try {
-            const result = await runInChild({
-                dialect,
-                userSql: "SELECT 1",
-                hiddenSchemaSql: "SELECT 1;",
-                hiddenExpected: [],
-                ordered: false,
-                timeoutMs: warmTimeoutMs(),
-            })
+            // Run through the same queue as real submissions so the warm fork
+            // counts against CONTEST_JUDGE_CONCURRENCY instead of slipping in as
+            // an invisible extra child process.
+            const result = await enqueue(() =>
+                runInChild({
+                    dialect,
+                    userSql: "SELECT 1",
+                    hiddenSchemaSql: "SELECT 1;",
+                    hiddenExpected: [],
+                    ordered: false,
+                    timeoutMs: warmTimeoutMs(),
+                })
+            )
             // Only a clean run means the worker actually forked and the engine
             // initialized. On failure (missing artifact, or a cold load killed
             // by the warm timeout) leave `warmedAt` stale so the next trigger
             // retries instead of waiting out the full TTL.
             warmed = result.kind === "ok"
-        } catch {
-            warmed = false
+        } catch (error) {
+            // A full queue means the judge is already busy serving real
+            // submissions — i.e. already warm — so treat that as success.
+            warmed = error instanceof JudgeBusyError
         } finally {
             warmByDialect.set(dialect, {
                 inFlight: null,

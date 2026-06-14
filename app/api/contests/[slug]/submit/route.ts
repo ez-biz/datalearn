@@ -40,7 +40,13 @@ export async function GET(req: Request, ctx: Ctx) {
     const { slug } = await ctx.params
     const contest = await prisma.contest.findUnique({
         where: { slug },
-        select: { startsAt: true, endsAt: true, status: true },
+        select: {
+            id: true,
+            kind: true,
+            startsAt: true,
+            endsAt: true,
+            status: true,
+        },
     })
     if (!contest) {
         return NextResponse.json({ warmed: false }, { status: 404 })
@@ -54,6 +60,24 @@ export async function GET(req: Request, ctx: Ctx) {
         return NextResponse.json({ warmed: false })
     }
 
+    // Gate on registration (same rule as the submit path) so only competitors
+    // who can actually submit can trigger a warm fork. Custom contests are
+    // practice-judged in-browser and never warm the server judge.
+    if (contest.kind !== "USER_CUSTOM") {
+        const registration = await prisma.contestRegistration.findUnique({
+            where: {
+                contestId_userId: {
+                    contestId: contest.id,
+                    userId: session.user.id,
+                },
+            },
+            select: { contestId: true },
+        })
+        if (!registration) {
+            return NextResponse.json({ warmed: false }, { status: 403 })
+        }
+    }
+
     const requested = new URL(req.url).searchParams.get("dialect")
     const dialect =
         requested && WARM_DIALECTS.has(requested)
@@ -63,7 +87,7 @@ export async function GET(req: Request, ctx: Ctx) {
     // Await so the serverless instance stays alive while the worker forks. The
     // client fires this fire-and-forget, so the contestant never blocks on it.
     await warmUpJudge(dialect)
-    return NextResponse.json({ warmed: true })
+    return NextResponse.json({ warmed: true, dialect })
 }
 
 export async function POST(req: Request, ctx: Ctx) {

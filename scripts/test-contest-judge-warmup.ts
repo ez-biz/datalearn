@@ -1,5 +1,8 @@
 import { beforeEach, describe, it } from "node:test"
 import assert from "node:assert/strict"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
 import {
     _resetJudgeWarmStateForTests,
     submitToJudge,
@@ -82,18 +85,26 @@ describe("contest judge warm-up", () => {
         )
     })
 
-    it("never throws even when warm-up cannot complete", async () => {
-        const previous = process.env.CONTEST_JUDGE_WARM_TIMEOUT_MS
-        // Force the warm run to be killed mid-flight; warm-up must swallow it.
-        process.env.CONTEST_JUDGE_WARM_TIMEOUT_MS = "1"
+    it("swallows failures and stays retryable afterwards", async () => {
+        const originalCwd = process.cwd()
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "judge-warm-"))
         try {
+            // No dist/ here, so the worker artifact can't be resolved and the
+            // warm run fails deterministically. Warm-up must still not throw.
+            process.chdir(tmp)
             await assert.doesNotReject(() => warmUpJudge("DUCKDB"))
         } finally {
-            if (previous === undefined) {
-                delete process.env.CONTEST_JUDGE_WARM_TIMEOUT_MS
-            } else {
-                process.env.CONTEST_JUDGE_WARM_TIMEOUT_MS = previous
-            }
+            process.chdir(originalCwd)
+            fs.rmSync(tmp, { recursive: true, force: true })
         }
+
+        // A failed warm must leave the state retryable (warmedAt stays stale,
+        // inFlight cleared) — the next trigger should actually fork again rather
+        // than be debounced away as a no-op.
+        const retry = await timed(() => warmUpJudge("DUCKDB"))
+        assert.ok(
+            retry >= SKIP_BUDGET_MS,
+            `expected a real retry after a failed warm, took only ${retry.toFixed(0)}ms`
+        )
     })
 })

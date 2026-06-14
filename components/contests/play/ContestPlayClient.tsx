@@ -96,10 +96,12 @@ export function ContestPlayClient({
     // as the submit POST, so it warms the function that will judge.
     useEffect(() => {
         if (judge !== "OFFICIAL" || mode !== "PLAY") return
+        const controller = new AbortController()
         void fetch(
             `/api/contests/${contestSlug}/submit?warm=1&dialect=${problem.dialect}`,
-            { method: "GET" }
+            { method: "GET", signal: controller.signal }
         ).catch(() => {})
+        return () => controller.abort()
     }, [judge, mode, contestSlug, problem.dialect])
 
     const handleSqlChange = useCallback((value: string | undefined) => {
