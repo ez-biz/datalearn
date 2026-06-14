@@ -239,7 +239,7 @@ async function nextAttemptNumber(
     return (latest?.attemptNumber ?? 0) + 1
 }
 
-async function recordFirstSolveAndLeaderboard(args: {
+export async function recordFirstSolveAndLeaderboard(args: {
     tx: Prisma.TransactionClient
     contestId: string
     userId: string

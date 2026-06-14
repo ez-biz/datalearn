@@ -1,8 +1,7 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
-import { getContestBySlug } from "@/actions/contests"
+import { getCustomContestBySlug } from "@/actions/custom-contests"
 import { getProblem } from "@/actions/problems"
 import { gatingFromStatus } from "@/lib/contests/play"
 import { ContestPlayClient } from "@/components/contests/play/ContestPlayClient"
@@ -14,15 +13,15 @@ type Props = { params: Promise<{ slug: string; problemSlug: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { slug, problemSlug } = await params
-    const contest = await getContestBySlug(slug)
+    const contest = await getCustomContestBySlug(slug)
     return { title: contest ? `${contest.title} — ${problemSlug}` : "Contest" }
 }
 
-export default async function ContestPlayPage({ params }: Props) {
+export default async function CustomContestPlayPage({ params }: Props) {
     const { slug, problemSlug } = await params
 
     const [contest, problemResult, session] = await Promise.all([
-        getContestBySlug(slug),
+        getCustomContestBySlug(slug),
         getProblem(problemSlug),
         auth(),
     ])
@@ -38,29 +37,20 @@ export default async function ContestPlayPage({ params }: Props) {
     if (!attached) notFound()
 
     const viewerUserId = session?.user?.id ?? null
-    const registration = viewerUserId
-        ? await prisma.contestRegistration.findUnique({
-              where: {
-                  contestId_userId: {
-                      contestId: contest.id,
-                      userId: viewerUserId,
-                  },
-              },
-              select: { contestId: true },
-          })
-        : null
-
+    // Custom contests have no registration step — any signed-in user is treated
+    // as registered, so they drop straight into PLAY mode while LIVE.
     const mode = gatingFromStatus(
         contest.status,
         Boolean(viewerUserId),
-        Boolean(registration)
+        Boolean(viewerUserId)
     )
     const dialect = problem.dialects?.[0] ?? "DUCKDB"
 
     return (
         <Container width="2xl" className="py-8">
             <ContestPlayClient
-                contestHref={`/contests/${contest.slug}`}
+                judge="PRACTICE"
+                contestHref={`/contests/custom/${contest.slug}`}
                 contestSlug={contest.slug}
                 contestTitle={contest.title}
                 endsAt={contest.endsAt.toISOString()}

@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { CalendarDays, Trophy } from "lucide-react"
+import { CalendarDays, Plus, Trophy } from "lucide-react"
 import { listContests } from "@/actions/contests"
 import { ContestStatusPill } from "@/components/contests/ContestStatusPill"
 import { Badge } from "@/components/ui/Badge"
@@ -8,7 +8,8 @@ import { Card, CardContent } from "@/components/ui/Card"
 import { Container } from "@/components/ui/Container"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { Eyebrow } from "@/components/ui/Eyebrow"
-import { LocalTime } from "@/components/ui/LocalTime"
+import { LinkButton } from "@/components/ui/Button"
+import { formatIST } from "@/lib/time-ist"
 
 export const metadata: Metadata = {
     title: "Contests",
@@ -26,17 +27,27 @@ export default async function ContestsPage() {
 
     return (
         <Container width="2xl" className="py-10 sm:py-14">
-            <header className="mb-8">
-                <Eyebrow variant="bracket" className="mb-1">
-                    COMPETE
-                </Eyebrow>
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                    Contests
-                </h1>
-                <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                    Timed SQL rounds with curated problems, registration, and
-                    post-contest standings.
-                </p>
+            <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <Eyebrow variant="bracket" className="mb-1">
+                        COMPETE
+                    </Eyebrow>
+                    <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                        Contests
+                    </h1>
+                    <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+                        Timed SQL rounds with curated problems, registration,
+                        and post-contest standings.
+                    </p>
+                </div>
+                <LinkButton
+                    href="/contests/custom/new"
+                    variant="outline"
+                    className="shrink-0"
+                >
+                    <Plus className="h-4 w-4" />
+                    Create your own contest
+                </LinkButton>
             </header>
 
             {contests.length === 0 ? (
@@ -91,9 +102,7 @@ function ContestGroup({
                                     </Badge>
                                     <span className="inline-flex items-center gap-1 tabular-nums">
                                         <CalendarDays className="h-3.5 w-3.5" />
-                                        <LocalTime
-                                            value={contest.startsAt.toISOString()}
-                                        />
+                                        {formatIST(contest.startsAt)}
                                     </span>
                                     <span className="tabular-nums">
                                         {contest.problemCount} problems
