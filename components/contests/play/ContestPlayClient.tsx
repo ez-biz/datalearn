@@ -11,6 +11,7 @@ import { ResultTable } from "@/components/sql/ResultTable"
 import { Badge } from "@/components/ui/Badge"
 import { cn } from "@/lib/utils"
 import { verdictLabel, type PlayMode } from "@/lib/contests/play"
+import { submitCustomContestEntry } from "@/actions/custom-contests"
 import { ContestCountdown } from "./ContestCountdown"
 
 type PlayProblem = {
@@ -32,6 +33,12 @@ type Props = {
     points: number
     mode: PlayMode
     siblings: Sibling[]
+    /**
+     * How a submission is graded. OFFICIAL posts raw SQL to the server judge;
+     * PRACTICE (custom contests) runs the query in-browser and submits the
+     * resulting rows to the practice-judge server action.
+     */
+    judge?: "OFFICIAL" | "PRACTICE"
 }
 
 type LocalResult = {
@@ -49,6 +56,7 @@ export function ContestPlayClient({
     points,
     mode,
     siblings,
+    judge = "OFFICIAL",
 }: Props) {
     const [sql, setSql] = useState("")
     const [result, setResult] = useState<LocalResult | null>(null)
@@ -106,6 +114,43 @@ export function ContestPlayClient({
         setSubmitting(true)
         setSubmitError(null)
         setVerdict(null)
+
+        if (judge === "PRACTICE") {
+            // Run the query in-browser (same shape as runLocal), surface the
+            // rows in the result table, then practice-judge them server-side.
+            // No official judge endpoint, no idempotency key.
+            try {
+                const out = await runQuery(sql)
+                setResult({
+                    rows: out.rows,
+                    rowCount: out.rowCount,
+                    truncated: out.truncated,
+                    error: null,
+                })
+                const result = await submitCustomContestEntry({
+                    slug: contestSlug,
+                    problemId: problem.id,
+                    dialect: problem.dialect,
+                    userResult: out.rows,
+                })
+                if (!result.ok) {
+                    setSubmitError(result.error)
+                    return
+                }
+                setVerdict({
+                    ...verdictLabel(result.verdict, points),
+                    attempt: result.attemptNumber,
+                })
+            } catch (err) {
+                setSubmitError(
+                    err instanceof Error ? err.message : "Query failed"
+                )
+            } finally {
+                setSubmitting(false)
+            }
+            return
+        }
+
         if (!idempotencyKeyRef.current) {
             idempotencyKeyRef.current = crypto.randomUUID()
         }
@@ -138,7 +183,16 @@ export function ContestPlayClient({
         } finally {
             setSubmitting(false)
         }
-    }, [submitting, sql, contestSlug, problem.id, problem.dialect, points])
+    }, [
+        submitting,
+        sql,
+        judge,
+        runQuery,
+        contestSlug,
+        problem.id,
+        problem.dialect,
+        points,
+    ])
 
     if (mode === "SIGNED_OUT") {
         return <Gate>Sign in to compete in this contest.</Gate>
