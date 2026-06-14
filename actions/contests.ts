@@ -133,6 +133,16 @@ export async function registerForContest(args: {
     if (!session?.user?.id) {
         throw new Error("AUTH_REQUIRED")
     }
+    // Per-user rate limit to curb registration spam across many contests.
+    const recent = await prisma.contestRegistration.count({
+        where: {
+            userId: session.user.id,
+            registeredAt: { gte: new Date(Date.now() - 60_000) },
+        },
+    })
+    if (recent >= 30) {
+        throw new Error("RATE_LIMITED")
+    }
     const result = await registerContestParticipantUnchecked({
         contestId: args.contestId,
         userId: session.user.id,

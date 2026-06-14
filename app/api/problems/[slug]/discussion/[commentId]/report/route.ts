@@ -79,6 +79,22 @@ export const POST = withDiscussionAuth(async (req, principal, ctx: Ctx) => {
         )
     }
 
+    // Per-user rate limit so a single user can't flood the moderation queue by
+    // reporting many different comments (the unique constraint only stops
+    // duplicate reports of the *same* comment).
+    const recentReports = await prisma.discussionReport.count({
+        where: {
+            userId: principal.userId,
+            createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+        },
+    })
+    if (recentReports >= 10) {
+        return NextResponse.json(
+            { error: "Too many reports. Try again later." },
+            { status: 429 }
+        )
+    }
+
     try {
         const result = await prisma.$transaction(async (tx) => {
             const lockedComment = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
