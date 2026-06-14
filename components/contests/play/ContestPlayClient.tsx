@@ -285,7 +285,11 @@ export function ContestPlayClient({
                     <button
                         type="button"
                         onClick={submit}
-                        disabled={submitting || !sql.trim()}
+                        disabled={
+                            submitting ||
+                            !sql.trim() ||
+                            (judge === "PRACTICE" && !ready)
+                        }
                         className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-50"
                     >
                         {submitting ? "Submitting…" : "Submit to contest"}
