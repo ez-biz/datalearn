@@ -42,6 +42,8 @@
     "test:contests": "node --import tsx --test scripts/test-contests-actions.ts",
     "test:contest-leaderboard": "node --import tsx --test scripts/test-contest-leaderboard.ts",
     "test:contest-play": "node --import tsx --test scripts/test-contest-play.ts",
+    "test:time-ist": "node --import tsx --test scripts/test-time-ist.ts",
+    "test:custom-contests": "node --import tsx --test scripts/test-custom-contests.ts",
     "test:admin-audit-log": "node --import tsx --test scripts/test-admin-audit-log.ts",
     "test:topic-lane": "tsx scripts/test-topic-lane.ts",
     "seed:curriculum-topics": "tsx scripts/seed-curriculum-topics.ts",
