@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Field, Input, Textarea } from "@/components/ui/Input"
 import { slugify } from "@/lib/admin-validation"
+import { istLocalInputToUtc } from "@/lib/time-ist"
 
 type ContestKind = "WEEKLY" | "BIWEEKLY" | "SPECIAL"
 
@@ -71,8 +72,8 @@ export function ContestForm({
             const payload: Record<string, unknown> = {
                 title: title.trim(),
                 description: description.trim(),
-                startsAt: new Date(startsAt).toISOString(),
-                endsAt: new Date(endsAt).toISOString(),
+                startsAt: istLocalInputToUtc(startsAt).toISOString(),
+                endsAt: istLocalInputToUtc(endsAt).toISOString(),
                 rated,
                 maxParticipants: maxParticipants
                     ? Number(maxParticipants)
@@ -161,7 +162,7 @@ export function ContestForm({
                                 <option value="SPECIAL">Special</option>
                             </select>
                         </Field>
-                        <Field label="Starts at" htmlFor="contest-start" required>
+                        <Field label="Starts at (IST)" htmlFor="contest-start" required>
                             <Input
                                 id="contest-start"
                                 type="datetime-local"
@@ -172,7 +173,7 @@ export function ContestForm({
                                 required
                             />
                         </Field>
-                        <Field label="Ends at" htmlFor="contest-end" required>
+                        <Field label="Ends at (IST)" htmlFor="contest-end" required>
                             <Input
                                 id="contest-end"
                                 type="datetime-local"

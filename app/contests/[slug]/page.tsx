@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { hasStandings } from "@/lib/contest-status"
 import { ContestStandings } from "@/components/contests/ContestStandings"
-import { LocalTime } from "@/components/ui/LocalTime"
+import { formatIST } from "@/lib/time-ist"
 import { ContestStatusPill } from "@/components/contests/ContestStatusPill"
 import { RegisterButton } from "@/components/contests/RegisterButton"
 import { Badge, DifficultyBadge } from "@/components/ui/Badge"
@@ -154,9 +154,7 @@ export default async function ContestDetailPage({ params }: Props) {
                                     Starts
                                 </p>
                                 <p className="mt-1 text-sm font-medium tabular-nums">
-                                    <LocalTime
-                                        value={contest.startsAt.toISOString()}
-                                    />
+                                    {formatIST(contest.startsAt)}
                                 </p>
                             </div>
                             <div>
@@ -164,9 +162,7 @@ export default async function ContestDetailPage({ params }: Props) {
                                     Ends
                                 </p>
                                 <p className="mt-1 text-sm font-medium tabular-nums">
-                                    <LocalTime
-                                        value={contest.endsAt.toISOString()}
-                                    />
+                                    {formatIST(contest.endsAt)}
                                 </p>
                             </div>
                             <div className="grid grid-cols-2 gap-3 text-sm">
