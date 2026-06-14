@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
+import { cache } from "react"
 import Link from "next/link"
-import { ChevronLeft } from "lucide-react"
+import { ChevronLeft, LockKeyhole } from "lucide-react"
 import { getProblem, getSlugByNumber } from "@/actions/problems"
 import {
     getProblemHistory,
@@ -19,13 +20,17 @@ type Props = {
     params: Promise<{ slug: string }>
 }
 
+// Dedup the problem fetch across generateMetadata and the page render —
+// both run in the same request and would otherwise hit the DB twice.
+const getCachedProblem = cache(getProblem)
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { slug } = await params
     if (/^\d+$/.test(slug)) {
         // Numeric URL → defer to the redirect path; metadata is replaced after redirect.
         return {}
     }
-    const { data: problem } = await getProblem(slug)
+    const { data: problem } = await getCachedProblem(slug)
     if (!problem) return { title: "Problem not found" }
     return {
         title: problem.title,
@@ -71,7 +76,7 @@ export default async function ProblemPage({ params }: Props) {
         redirect(`/practice/${target}`)
     }
 
-    const { data: problem } = await getProblem(slug)
+    const { data: problem } = await getCachedProblem(slug)
 
     if (!problem) {
         notFound()
@@ -90,6 +95,7 @@ export default async function ProblemPage({ params }: Props) {
         ])
     const isSolved = solvedSlugs.includes(slug)
     const isSignedIn = Boolean(session?.user?.id)
+    const lock = problem.contestLock
     const { columns: expectedColumns, rows: expectedRows } =
         parseExpectedOutput(problem.expectedOutput)
 
@@ -104,14 +110,32 @@ export default async function ProblemPage({ params }: Props) {
                     All problems
                 </Link>
                 <div className="flex items-center gap-4">
-                    <AddToListButton
-                        problemSlug={problem.slug}
-                        problemId={problem.id}
-                        isSignedIn={isSignedIn}
-                    />
+                    {lock ? (
+                        <span className="text-xs text-muted-foreground">
+                            Locked for contest
+                        </span>
+                    ) : (
+                        <AddToListButton
+                            problemSlug={problem.slug}
+                            problemId={problem.id}
+                            isSignedIn={isSignedIn}
+                        />
+                    )}
                     <ReportDialog problemSlug={problem.slug} isSignedIn={isSignedIn} />
                 </div>
             </div>
+            {lock && (
+                <div className="border-b border-warning/30 bg-warning/5 px-4 sm:px-6 py-2.5 text-sm text-warning">
+                    <div className="mx-auto flex max-w-7xl items-center gap-2">
+                        <LockKeyhole className="h-4 w-4 shrink-0" />
+                        <span>
+                            Locked: in contest until{" "}
+                            {lock.unlocksAt.toLocaleString()}. Public practice
+                            submissions are blocked until then.
+                        </span>
+                    </div>
+                </div>
+            )}
             <ProblemClient
                 number={problem.number}
                 title={problem.title}
@@ -132,6 +156,11 @@ export default async function ProblemPage({ params }: Props) {
                 discussionMode={discussionState?.mode ?? "OPEN"}
                 initialTableInfos={parseSchema(problem.schema?.sql)}
                 relatedArticles={problem.relatedArticles ?? []}
+                submissionDisabledReason={
+                    lock
+                        ? `Public practice submissions are blocked until ${lock.unlocksAt.toLocaleString()}.`
+                        : undefined
+                }
             />
         </div>
     )

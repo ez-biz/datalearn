@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { cache } from "react"
 import Link from "next/link"
 import { ArrowLeft, ArrowRight, ChevronLeft, Clock } from "lucide-react"
 import { getArticle, getArticleNeighbors } from "@/actions/content"
@@ -15,9 +16,13 @@ type Props = {
     params: Promise<{ topicSlug: string; articleSlug: string }>
 }
 
+// Dedup the article fetch across generateMetadata and the page render —
+// both run in the same request and would otherwise hit the DB twice.
+const getCachedArticle = cache(getArticle)
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { articleSlug } = await params
-    const { data: article } = await getArticle(articleSlug)
+    const { data: article } = await getCachedArticle(articleSlug)
     if (!article) return { title: "Article not found" }
     return {
         title: article.title,
@@ -27,10 +32,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ArticlePage({ params }: Props) {
     const { topicSlug, articleSlug } = await params
-    const { data: article } = await getArticle(articleSlug)
+    const [{ data: article }, neighbors] = await Promise.all([
+        getCachedArticle(articleSlug),
+        getArticleNeighbors(articleSlug),
+    ])
     if (!article) notFound()
 
-    const neighbors = await getArticleNeighbors(articleSlug)
     const toc = extractToc(article.content)
 
     return (

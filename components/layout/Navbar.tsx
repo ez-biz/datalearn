@@ -3,6 +3,7 @@ import { CalendarCheck2, PenSquare, Shield } from "lucide-react"
 import { getExistingDailyStatusForCurrentUser } from "@/actions/daily"
 import { getNavLinks } from "@/actions/nav"
 import { auth } from "@/lib/auth"
+import { excludeLockedProblems } from "@/lib/contest-locks"
 import { prisma } from "@/lib/prisma"
 import { SignInDialogButton } from "@/components/auth/SignInDialog"
 import { Logo } from "@/components/ui/Logo"
@@ -12,8 +13,7 @@ import { MobileNav } from "./MobileNav"
 import { UserMenu } from "./UserMenu"
 
 export async function Navbar() {
-    const { data: pages } = await getNavLinks()
-    const session = await auth()
+    const [{ data: pages }, session] = await Promise.all([getNavLinks(), auth()])
     const isAdmin = session?.user?.role === "ADMIN"
     const isContributor = session?.user?.role === "CONTRIBUTOR"
 
@@ -26,7 +26,9 @@ export async function Navbar() {
                 select: { problemId: true },
                 distinct: ["problemId"],
             }),
-            prisma.sQLProblem.count({ where: { status: "PUBLISHED" } }),
+            prisma.sQLProblem.count({
+                where: excludeLockedProblems({ status: "PUBLISHED" }),
+            }),
             getExistingDailyStatusForCurrentUser(),
         ])
         menuStats = {
@@ -39,6 +41,7 @@ export async function Navbar() {
     const navItems = [
         { href: "/learn", label: "Learn" },
         { href: "/practice", label: "Practice" },
+        { href: "/contests", label: "Contests" },
         ...(pages?.map((p: { slug: string; title: string }) => ({
             href: `/${p.slug}`,
             label: p.title,

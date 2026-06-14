@@ -38,9 +38,10 @@ export async function getProblemSolution(slug: string): Promise<SolutionResult> 
                     dialects: true,
                     solutions: true,
                     solutionSql: true,
+                    contestLock: { select: { problemId: true } },
                 },
             })
-            if (!row) return null
+            if (!row || row.contestLock) return null
             return {
                 id: row.id,
                 dialects: row.dialects as Dialect[],

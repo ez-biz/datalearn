@@ -1,6 +1,6 @@
 # 🚀 Antigravity Data Learning Platform — Long-Term Roadmap
 
-> **Last updated:** 2026-05-24
+> **Last updated:** 2026-05-26
 > **Status:** Live — <https://www.learndatanow.com>
 > **Version:** 0.7.0 (next release)
 
@@ -312,6 +312,16 @@ Major platform expansions that take Data Learn from "SQL practice + learning hub
 
 ### V2 — Contest
 
+**Status:** Phase 1 foundation shipped 2026-05-24 (PR #145). Phase 2 server-side judge shipped 2026-05-26 (PR #150): sandboxed DuckDB + PGlite worker, AST-based SQL validation, transactional submit pipeline with DB-backed idempotency, hidden-data admin routes with audit log, and MCP tools for hidden datasets + publish readiness. Escape-attempt regression corpus is now the security gate. Standings table shipped 2026-06-14 (PR #157). **Phase 3 — contest play UI** (in progress 2026-06-14): a dedicated `/contests/[slug]/[problemSlug]` page so registered learners can actually submit to the judge during a live contest, with a verdict panel, a live countdown, and timezone-correct times. Source: `docs/superpowers/specs/2026-06-14-contest-play-design.md`. Phases 4-7 follow. Source plan/spec: `docs/superpowers/specs/2026-05-24-contests-design.md`.
+
+**Deferred follow-ups (after Phase 3 play UI):**
+- **Live-refreshing standings:** standings are currently fresh-on-load only; add tick-based refresh during a live contest (no websockets).
+- **Per-problem ICPC grid:** richer standings with a column per problem showing solve time / wrong-attempt count, on top of the current summary table.
+- **Mobile standings layout:** the standings table needs a stacked/card treatment below `sm` (it can overflow on phones today).
+- **Closed-contest submission review:** let a participant review their own submissions + verdicts after a contest ends.
+- **Rating / Glicko-2:** see the rating component below — the `ratingBefore/After/Delta` columns exist but are unpopulated.
+- **Contest email notifications:** "your contest starts in 1 hour" (see Dependencies).
+
 **What:** Weekly + monthly timed contests with multiple problems, a leaderboard, and a **mathematically-backed rating system** that updates each user's rating after every contest. Rating shown on the profile page (the placeholder card already exists).
 
 **Why:** Contests turn the platform into a sport. They give users a reason to be present at a specific time, create cohort rivalries, and seed the Discuss > Contest category with post-mortems.
@@ -319,7 +329,7 @@ Major platform expansions that take Data Learn from "SQL practice + learning hub
 **Components:**
 - **Rating system: Glicko-2** (more responsive than ELO, used by chess.com and Codeforces; well-documented). Per-user state: `rating`, `ratingDeviation`, `volatility`, `lastContestAt`. Update happens server-side in a transactional batch when a contest closes.
 - **Contest model:** `Contest`, `ContestProblem` (M:N with offset/score), `ContestSubmission`, `ContestLeaderboard` (materialized).
-- **Problem locking:** problems used in a contest must not appear in the public `/practice` list while the contest is live; surface them only inside the contest UI. Existing status state machine extends with `CONTEST_LOCKED`.
+- **Problem locking:** problems used in an official contest do not appear in public browse/search surfaces while locked. Locking lives in `ContestProblemLock`, not the `ProblemStatus` enum, so existing `PUBLISHED`/`DRAFT` semantics stay intact.
 - **Live leaderboard:** server-rendered with progressive enhancement; refreshes on a tick, not real-time pushed (avoid websockets on v1).
 - **Anti-cheat baselines:** rate limits per user during contest, IP fingerprint logging, identical-solution detection (cosine similarity on tokenized SQL), public submissions only revealed *after* contest ends.
 - **Profile integration:** rating + ratingDeviation pill on the existing `Contests` placeholder card; contest history list with score + rank + delta per contest.

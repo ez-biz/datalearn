@@ -184,15 +184,19 @@ test.describe("Tracks learner pages", () => {
 
         await page.goto(`/learn/tracks/${publishedTrackSlug}`)
 
-        await expect(page.getByText("1 / 3 complete")).toBeVisible()
+        // `.first()` throughout: the App-Router hydration/streaming pass can
+        // briefly render a second copy of these elements, so an un-scoped
+        // locator strict-mode-violates on the transient duplicate. The settled
+        // DOM renders each once.
+        await expect(page.getByText("1 / 3 complete").first()).toBeVisible()
         await expect(
-            page.getByTestId(`track-item-${firstProblemSlug}`),
+            page.getByTestId(`track-item-${firstProblemSlug}`).first(),
         ).toContainText("Solved")
         await expect(
-            page.getByRole("link", { name: /continue/i }),
+            page.getByRole("link", { name: /continue/i }).first(),
         ).toHaveAttribute("href", `/practice/${secondProblemSlug}`)
         await expect(
-            page.getByTestId(`track-item-${thirdProblemSlug}`),
+            page.getByTestId(`track-item-${thirdProblemSlug}`).first(),
         ).toContainText("Queued")
 
         await context.close()

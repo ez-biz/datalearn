@@ -48,11 +48,18 @@ export async function validateSubmission(input: unknown): Promise<ValidationResu
             expectedOutput: true,
             expectedOutputs: true,
             ordered: true,
+            contestLock: { select: { unlocksAt: true } },
         },
     })
 
     if (!problem) {
         return { ok: false, reason: "Problem not found." }
+    }
+    if (problem.contestLock) {
+        return {
+            ok: false,
+            reason: "This problem is locked for an active contest. Try it again after the contest ends.",
+        }
     }
 
     // Pick the per-dialect expectedOutput when available; fall back to
@@ -201,7 +208,13 @@ export type UserStats = {
         id: string
         status: "ACCEPTED" | "WRONG_ANSWER"
         createdAt: Date
-        problem: { number: number; slug: string; title: string; difficulty: string }
+        problem: {
+            number: number
+            slug: string
+            title: string
+            difficulty: string
+            contestLock: { unlocksAt: Date } | null
+        }
     }>
 }
 
@@ -225,7 +238,15 @@ export async function getUserStats(): Promise<UserStats | null> {
                     id: true,
                     status: true,
                     createdAt: true,
-                    problem: { select: { number: true, slug: true, title: true, difficulty: true } },
+                    problem: {
+                        select: {
+                            number: true,
+                            slug: true,
+                            title: true,
+                            difficulty: true,
+                            contestLock: { select: { unlocksAt: true } },
+                        },
+                    },
                 },
                 orderBy: { createdAt: "desc" },
                 take: 10,

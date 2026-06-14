@@ -33,6 +33,12 @@ model User {
   moderationActions           DiscussionModerationLog[] @relation("DiscussionModerationActor")
   assets                      Asset[]
   assetQuota                  UserAssetQuota?
+  contestsCreated             Contest[]
+  contestRegistrations        ContestRegistration[]
+  contestSubmissions          ContestSubmission[]
+  contestProblemSolves        ContestProblemSolve[]
+  contestLeaderboardRows      ContestLeaderboardEntry[]
+  adminAuditLogs              AdminAuditLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -167,57 +173,65 @@ model SqlSchema {
 }
 
 model SQLProblem {
-  id                 String                  @id @default(cuid())
+  id                              String                  @id @default(cuid())
   /// Stable monotonic id for display (`#247.` LeetCode-style). Minted at
   /// create-time as MAX(number)+1 in a transaction; never recycled even
   /// after archive. Backfill on existing rows ordered by createdAt ASC.
-  number             Int                     @unique
-  title              String
-  slug               String                  @unique
-  difficulty         Difficulty
-  status             ProblemStatus           @default(PUBLISHED)
-  description        String                  @db.Text
-  schemaDescription  String                  @db.Text
-  schemaId           String
-  schema             SqlSchema               @relation(fields: [schemaId], references: [id])
+  number                          Int                     @unique
+  title                           String
+  slug                            String                  @unique
+  difficulty                      Difficulty
+  status                          ProblemStatus           @default(PUBLISHED)
+  description                     String                  @db.Text
+  schemaDescription               String                  @db.Text
+  schemaId                        String
+  schema                          SqlSchema               @relation(fields: [schemaId], references: [id])
   /// Legacy single-dialect output. Kept during the v0.5.0 transition;
   /// the source of truth is `expectedOutputs[<dialect>]`. Will be
   /// dropped in v0.5.1 once all live problems are populated and the
   /// fallback path in validateSubmission is removed.
-  expectedOutput     String                  @db.Text
+  expectedOutput                  String                  @db.Text
   /// Legacy single-dialect canonical solution. Same lifecycle as
   /// `expectedOutput` above — written for back-compat, read with
   /// fallback when `solutions[<dialect>]` is missing.
-  solutionSql        String?                 @db.Text
+  solutionSql                     String?                 @db.Text
   /// Per-dialect canonical solutions. Shape: `{ "DUCKDB": "SELECT…",
   /// "POSTGRES": "SELECT…" }`. Required keys = each entry of
   /// `dialects[]` for any PUBLISHED problem (enforced at the API
   /// layer). Each value is the canonical SQL for that engine.
-  solutions          Json                    @default("{}")
+  solutions                       Json                    @default("{}")
   /// Per-dialect expected output rows. Shape: `{ "DUCKDB":
   /// "[{...rows...}]", "POSTGRES": "[{...rows...}]" }`. Same key
   /// constraint as `solutions`. Each value is a JSON-stringified
   /// array of row objects.
-  expectedOutputs    Json                    @default("{}")
-  ordered            Boolean                 @default(false)
+  expectedOutputs                 Json                    @default("{}")
+  hiddenSchemas                   Json?
+  hiddenExpectedOutputs           Json?
+  hiddenDataValidatedAt           DateTime?
+  hiddenDataValidationFingerprint String?
+  ordered                         Boolean                 @default(false)
   /// Allowed engines for solving this problem. Most problems are
   /// portable (`[DUCKDB, POSTGRES]`); narrow only when the canonical
   /// solution uses dialect-specific syntax (e.g. JSONB, STRING_AGG,
   /// LIST_AGG). Learners pick which engine to use in the workspace
   /// when more than one is allowed.
-  dialects           Dialect[]               @default([DUCKDB, POSTGRES])
-  hints              String[]                @default([])
-  tags               Tag[]                   @relation("ProblemTags")
-  submissions        Submission[]
-  reports            ProblemReport[]
-  relatedArticles    Article[]               @relation("ArticleProblems")
-  listItems          ProblemListItem[]
-  trackItems         TrackItem[]
-  dailyProblems      DailyProblem[]
-  discussionComments DiscussionComment[]
-  discussionState    ProblemDiscussionState?
-  createdAt          DateTime                @default(now())
-  updatedAt          DateTime                @updatedAt
+  dialects                        Dialect[]               @default([DUCKDB, POSTGRES])
+  hints                           String[]                @default([])
+  tags                            Tag[]                   @relation("ProblemTags")
+  submissions                     Submission[]
+  reports                         ProblemReport[]
+  relatedArticles                 Article[]               @relation("ArticleProblems")
+  listItems                       ProblemListItem[]
+  trackItems                      TrackItem[]
+  dailyProblems                   DailyProblem[]
+  contestProblems                 ContestProblem[]
+  contestLock                     ContestProblemLock?
+  contestSubmissions              ContestSubmission[]
+  contestProblemSolves            ContestProblemSolve[]
+  discussionComments              DiscussionComment[]
+  discussionState                 ProblemDiscussionState?
+  createdAt                       DateTime                @default(now())
+  updatedAt                       DateTime                @updatedAt
 
   @@index([status])
 }
@@ -310,8 +324,10 @@ model Submission {
   reason    String?          @db.Text
   createdAt DateTime         @default(now())
 
-  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  problem SQLProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem           SQLProblem           @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  contestSubmission ContestSubmission?
+  contestSolve      ContestProblemSolve?
 
   @@index([userId, problemId, createdAt])
   @@index([userId, createdAt])
@@ -321,6 +337,169 @@ model Submission {
 enum SubmissionStatus {
   ACCEPTED
   WRONG_ANSWER
+}
+
+enum ContestVerdict {
+  ACCEPTED
+  WRONG_ANSWER
+  TIME_LIMIT
+  MEMORY_LIMIT
+  RUNTIME_ERROR
+  COMPILE_ERROR
+  REJECTED
+  INTERNAL_ERROR
+}
+
+enum ContestKind {
+  WEEKLY
+  BIWEEKLY
+  SPECIAL
+  USER_CUSTOM
+}
+
+enum ContestStatus {
+  SCHEDULED
+  LIVE
+  CLOSED
+  FINALIZED
+  CANCELLED
+}
+
+model Contest {
+  id              String                    @id @default(cuid())
+  slug            String                    @unique
+  title           String
+  description     String                    @db.Text
+  kind            ContestKind
+  status          ContestStatus             @default(SCHEDULED)
+  startsAt        DateTime
+  endsAt          DateTime
+  durationMinutes Int
+  rated           Boolean                   @default(true)
+  createdById     String
+  createdBy       User                      @relation(fields: [createdById], references: [id])
+  visibility      String                    @default("PUBLIC")
+  inviteTokenHash String?
+  maxParticipants Int?
+  problems        ContestProblem[]
+  registrations   ContestRegistration[]
+  locks           ContestProblemLock[]
+  submissions     ContestSubmission[]
+  solves          ContestProblemSolve[]
+  leaderboard     ContestLeaderboardEntry[]
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@index([status, startsAt])
+  @@index([kind, startsAt])
+}
+
+model ContestProblem {
+  contestId String
+  problemId String
+  position  Int
+  points    Int
+  contest   Contest    @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  problem   SQLProblem @relation(fields: [problemId], references: [id])
+
+  @@id([contestId, problemId])
+  @@unique([contestId, position])
+}
+
+model ContestRegistration {
+  contestId    String
+  userId       String
+  registeredAt DateTime @default(now())
+  ratedAtStart Boolean  @default(true)
+  contest      Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@id([contestId, userId])
+}
+
+model ContestProblemLock {
+  problemId String     @id
+  contestId String
+  lockedAt  DateTime   @default(now())
+  unlocksAt DateTime
+  problem   SQLProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  contest   Contest    @relation(fields: [contestId], references: [id], onDelete: Cascade)
+
+  @@index([unlocksAt])
+}
+
+model ContestSubmission {
+  id             String         @id @default(cuid())
+  contestId      String
+  userId         String
+  problemId      String
+  submissionId   String         @unique
+  idempotencyKey String
+  sqlHash        String
+  simhash        String
+  attemptNumber  Int
+  verdict        ContestVerdict
+  acceptedAt     DateTime?
+  submittedAt    DateTime       @default(now())
+  ipHash         String
+  userAgent      String         @db.Text
+  contest        Contest        @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id])
+  problem        SQLProblem     @relation(fields: [problemId], references: [id])
+  submission     Submission     @relation(fields: [submissionId], references: [id])
+
+  @@unique([contestId, userId, idempotencyKey])
+  @@unique([contestId, userId, problemId, attemptNumber])
+  @@index([contestId, userId])
+  @@index([contestId, problemId, verdict])
+}
+
+model ContestProblemSolve {
+  contestId                 String
+  userId                    String
+  problemId                 String
+  submissionId              String     @unique
+  acceptedAt                DateTime
+  wrongAttemptsBeforeAccept Int
+  contest                   Contest    @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user                      User       @relation(fields: [userId], references: [id])
+  problem                   SQLProblem @relation(fields: [problemId], references: [id])
+  submission                Submission @relation(fields: [submissionId], references: [id])
+
+  @@id([contestId, userId, problemId])
+  @@index([contestId, problemId, acceptedAt])
+}
+
+model ContestLeaderboardEntry {
+  contestId      String
+  userId         String
+  rank           Int      @default(0)
+  points         Int      @default(0)
+  penaltySeconds Int      @default(0)
+  solvedCount    Int      @default(0)
+  ratingBefore   Int?
+  ratingAfter    Int?
+  ratingDelta    Int?
+  updatedAt      DateTime @updatedAt
+  contest        Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@id([contestId, userId])
+  @@index([contestId, points, penaltySeconds])
+}
+
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  action     String
+  targetType String
+  targetId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  actor      User     @relation(fields: [actorId], references: [id])
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId, createdAt])
 }
 
 model Page {

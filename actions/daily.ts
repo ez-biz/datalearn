@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import type { Prisma } from "@prisma/client"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { excludeLockedProblems } from "@/lib/contest-locks"
 import {
     addUtcDays,
     normalizeDailyDate,
@@ -80,7 +81,7 @@ export async function getOrCreateDailyProblem(
             if (existingInTransaction) return existingInTransaction
 
             const problems = await tx.sQLProblem.findMany({
-                where: { status: "PUBLISHED" },
+                where: excludeLockedProblems({ status: "PUBLISHED" }),
                 orderBy: { number: "asc" },
                 select: {
                     id: true,
@@ -222,10 +223,17 @@ export async function setManualDailyProblem(input: {
 
     const problem = await prisma.sQLProblem.findUnique({
         where: { id: input.problemId },
-        select: { id: true, status: true },
+        select: {
+            id: true,
+            status: true,
+            contestLock: { select: { problemId: true } },
+        },
     })
     if (!problem || problem.status !== "PUBLISHED") {
         return { ok: false, error: "Problem not found." }
+    }
+    if (problem.contestLock) {
+        return { ok: false, error: "Problem is locked for a contest." }
     }
 
     try {

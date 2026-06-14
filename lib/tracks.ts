@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { excludeLockedProblems } from "@/lib/contest-locks"
 
 export type TrackProgress = {
     completedCount: number
@@ -14,7 +15,7 @@ export async function getTrackProgressForUser(
     const items = await prisma.trackItem.findMany({
         where: {
             trackId,
-            problem: { status: "PUBLISHED" },
+            problem: excludeLockedProblems({ status: "PUBLISHED" }),
         },
         orderBy: { position: "asc" },
         select: { id: true, problemId: true },

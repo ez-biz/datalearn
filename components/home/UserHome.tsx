@@ -202,6 +202,48 @@ function ContinueCard({
         )
     }
     const wasAccepted = problem.status === "ACCEPTED"
+    const locked = Boolean(problem.problem.contestLock)
+    const content = (
+        <>
+            <div className="flex-1 min-w-0">
+                <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                    <span className="text-muted-foreground tabular-nums mr-1">
+                        {problem.problem.number}.
+                    </span>
+                    {problem.problem.title}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-2 tabular-nums">
+                    <span
+                        className={cn(
+                            "inline-flex items-center gap-1",
+                            wasAccepted
+                                ? "text-easy-fg"
+                                : "text-muted-foreground"
+                        )}
+                    >
+                        {wasAccepted ? (
+                            <CheckCircle2 className="h-3 w-3" />
+                        ) : (
+                            <XCircle className="h-3 w-3" />
+                        )}
+                        {wasAccepted ? "Accepted" : "Wrong answer"}
+                    </span>
+                    <span aria-hidden>·</span>
+                    <span>{formatRelative(problem.createdAt)}</span>
+                    {locked && (
+                        <>
+                            <span aria-hidden>·</span>
+                            <span className="text-warning">Locked</span>
+                        </>
+                    )}
+                </p>
+            </div>
+            <DifficultyBadge difficulty={problem.problem.difficulty} />
+            {!locked && (
+                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-[color,translate] duration-150" />
+            )}
+        </>
+    )
     return (
         <Card>
             <CardContent className="p-6">
@@ -209,40 +251,18 @@ function ContinueCard({
                     icon={<Clock className="h-3.5 w-3.5" />}
                     label={solved ? "Recently solved" : "Continue where you left off"}
                 />
-                <Link
-                    href={`/practice/${problem.problem.slug}`}
-                    className="group mt-4 -mx-2 flex items-center gap-3 rounded-md px-2 py-2 hover:bg-surface-muted transition-colors"
-                >
-                    <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
-                            <span className="text-muted-foreground tabular-nums mr-1">
-                                {problem.problem.number}.
-                            </span>
-                            {problem.problem.title}
-                        </h3>
-                        <p className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-2 tabular-nums">
-                            <span
-                                className={cn(
-                                    "inline-flex items-center gap-1",
-                                    wasAccepted
-                                        ? "text-easy-fg"
-                                        : "text-muted-foreground"
-                                )}
-                            >
-                                {wasAccepted ? (
-                                    <CheckCircle2 className="h-3 w-3" />
-                                ) : (
-                                    <XCircle className="h-3 w-3" />
-                                )}
-                                {wasAccepted ? "Accepted" : "Wrong answer"}
-                            </span>
-                            <span aria-hidden>·</span>
-                            <span>{formatRelative(problem.createdAt)}</span>
-                        </p>
+                {locked ? (
+                    <div className="group mt-4 -mx-2 flex items-center gap-3 rounded-md px-2 py-2 opacity-80">
+                        {content}
                     </div>
-                    <DifficultyBadge difficulty={problem.problem.difficulty} />
-                    <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-[color,translate] duration-150" />
-                </Link>
+                ) : (
+                    <Link
+                        href={`/practice/${problem.problem.slug}`}
+                        className="group mt-4 -mx-2 flex items-center gap-3 rounded-md px-2 py-2 hover:bg-surface-muted transition-colors"
+                    >
+                        {content}
+                    </Link>
+                )}
             </CardContent>
         </Card>
     )
@@ -414,32 +434,49 @@ function RecentActivityCard({
                 <ul className="mt-3 divide-y divide-border">
                     {items.map((s) => {
                         const ok = s.status === "ACCEPTED"
+                        const locked = Boolean(s.problem.contestLock)
+                        const content = (
+                            <>
+                                <span
+                                    className={cn(
+                                        "h-1.5 w-1.5 rounded-full shrink-0",
+                                        ok ? "bg-easy" : "bg-hard"
+                                    )}
+                                    aria-hidden
+                                />
+                                <span className="flex-1 min-w-0 text-sm font-medium truncate group-hover:text-primary transition-colors">
+                                    <span className="text-muted-foreground tabular-nums mr-1 font-normal">
+                                        {s.problem.number}.
+                                    </span>
+                                    {s.problem.title}
+                                    {locked && (
+                                        <span className="ml-2 text-[11px] font-normal text-warning">
+                                            Locked
+                                        </span>
+                                    )}
+                                </span>
+                                <DifficultyBadge
+                                    difficulty={s.problem.difficulty}
+                                />
+                                <span className="text-xs text-muted-foreground tabular-nums shrink-0 hidden sm:inline">
+                                    {formatRelative(s.createdAt)}
+                                </span>
+                            </>
+                        )
                         return (
                             <li key={s.id}>
-                                <Link
-                                    href={`/practice/${s.problem.slug}`}
-                                    className="group flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-md hover:bg-surface-muted transition-colors"
-                                >
-                                    <span
-                                        className={cn(
-                                            "h-1.5 w-1.5 rounded-full shrink-0",
-                                            ok ? "bg-easy" : "bg-hard"
-                                        )}
-                                        aria-hidden
-                                    />
-                                    <span className="flex-1 min-w-0 text-sm font-medium truncate group-hover:text-primary transition-colors">
-                                        <span className="text-muted-foreground tabular-nums mr-1 font-normal">
-                                            {s.problem.number}.
-                                        </span>
-                                        {s.problem.title}
-                                    </span>
-                                    <DifficultyBadge
-                                        difficulty={s.problem.difficulty}
-                                    />
-                                    <span className="text-xs text-muted-foreground tabular-nums shrink-0 hidden sm:inline">
-                                        {formatRelative(s.createdAt)}
-                                    </span>
-                                </Link>
+                                {locked ? (
+                                    <div className="group flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-md opacity-80">
+                                        {content}
+                                    </div>
+                                ) : (
+                                    <Link
+                                        href={`/practice/${s.problem.slug}`}
+                                        className="group flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-md hover:bg-surface-muted transition-colors"
+                                    >
+                                        {content}
+                                    </Link>
+                                )}
                             </li>
                         )
                     })}

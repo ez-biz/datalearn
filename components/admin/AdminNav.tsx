@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import {
     BookOpen,
     CalendarCheck2,
+    Trophy,
     Database,
     Flag,
     FileCode,
@@ -43,6 +44,7 @@ const items: {
     { href: "/admin/schemas", label: "Schemas", icon: FileCode, adminOnly: true },
     { href: "/admin/topics", label: "Topics", icon: FolderOpen, adminOnly: true },
     { href: "/admin/tracks", label: "Tracks", icon: Route, adminOnly: true },
+    { href: "/admin/contests", label: "Contests", icon: Trophy, adminOnly: true },
     {
         href: "/admin/articles",
         label: "Articles",

@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { excludeLockedProblems } from "@/lib/contest-locks"
 import {
     getTrackProgressForUser,
     type TrackProgress,
@@ -53,7 +54,13 @@ export async function getPublishedTracks(): Promise<PublicTrack[]> {
             updatedAt: true,
             _count: {
                 select: {
-                    items: { where: { problem: { status: "PUBLISHED" } } },
+                    items: {
+                        where: {
+                            problem: excludeLockedProblems({
+                                status: "PUBLISHED",
+                            }),
+                        },
+                    },
                 },
             },
         },
@@ -92,7 +99,9 @@ export async function getTrackBySlug(
             createdAt: true,
             updatedAt: true,
             items: {
-                where: { problem: { status: "PUBLISHED" } },
+                where: {
+                    problem: excludeLockedProblems({ status: "PUBLISHED" }),
+                },
                 orderBy: { position: "asc" },
                 select: {
                     id: true,

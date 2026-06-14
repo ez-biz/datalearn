@@ -299,6 +299,7 @@ export function ListDetail({
                                             difficulty:
                                                 problem.difficulty as "EASY" | "MEDIUM" | "HARD",
                                             status: "PUBLISHED",
+                                            contestLock: null,
                                         },
                                     },
                                 ])
@@ -472,21 +473,41 @@ export function ListDetail({
                                             #{String(item.problem.number).padStart(3, "0")}
                                         </span>
                                         <div className="min-w-0">
-                                            <Link
-                                                href={`/practice/${item.problem.slug}`}
-                                                className={cn(
-                                                    "font-medium truncate block hover:text-primary transition-colors",
-                                                    solved &&
-                                                        "text-muted-foreground"
-                                                )}
-                                            >
-                                                {item.problem.title}
-                                            </Link>
+                                            {item.problem.contestLock ? (
+                                                <span
+                                                    className={cn(
+                                                        "font-medium truncate block",
+                                                        solved
+                                                            ? "text-muted-foreground"
+                                                            : "text-foreground"
+                                                    )}
+                                                >
+                                                    {item.problem.title}
+                                                </span>
+                                            ) : (
+                                                <Link
+                                                    href={`/practice/${item.problem.slug}`}
+                                                    className={cn(
+                                                        "font-medium truncate block hover:text-primary transition-colors",
+                                                        solved &&
+                                                            "text-muted-foreground"
+                                                    )}
+                                                >
+                                                    {item.problem.title}
+                                                </Link>
+                                            )}
                                             <p className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
                                                 Added{" "}
                                                 {formatRelative(item.addedAt)}
                                                 {" · "}
-                                                {solved ? (
+                                                {item.problem.contestLock ? (
+                                                    <span className="text-warning">
+                                                        Locked until{" "}
+                                                        {new Date(
+                                                            item.problem.contestLock.unlocksAt
+                                                        ).toLocaleString()}
+                                                    </span>
+                                                ) : solved ? (
                                                     <span className="text-easy-fg">
                                                         Solved{" "}
                                                         {formatRelative(
