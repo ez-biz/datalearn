@@ -41,6 +41,7 @@
     "test:contest-submit": "npm run build:contest-worker && node --import tsx --test scripts/test-contest-submit.ts",
     "test:contests": "node --import tsx --test scripts/test-contests-actions.ts",
     "test:contest-leaderboard": "node --import tsx --test scripts/test-contest-leaderboard.ts",
+    "test:contest-play": "node --import tsx --test scripts/test-contest-play.ts",
     "test:admin-audit-log": "node --import tsx --test scripts/test-admin-audit-log.ts",
     "test:topic-lane": "tsx scripts/test-topic-lane.ts",
     "seed:curriculum-topics": "tsx scripts/seed-curriculum-topics.ts",
