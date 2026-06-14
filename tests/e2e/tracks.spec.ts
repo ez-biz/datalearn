@@ -184,7 +184,11 @@ test.describe("Tracks learner pages", () => {
 
         await page.goto(`/learn/tracks/${publishedTrackSlug}`)
 
-        await expect(page.getByText("1 / 3 complete")).toBeVisible()
+        // `.first()` guards against a transient duplicate match during
+        // App-Router hydration/streaming — the settled DOM renders the
+        // progress bar once, but an un-scoped getByText can strict-mode-
+        // violate on the brief second copy.
+        await expect(page.getByText("1 / 3 complete").first()).toBeVisible()
         await expect(
             page.getByTestId(`track-item-${firstProblemSlug}`),
         ).toContainText("Solved")

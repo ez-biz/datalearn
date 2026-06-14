@@ -227,5 +227,8 @@ test("signed-in home shows daily solved state after accepted submission", async 
     await expect(
         page.getByRole("heading", { name: "Daily problem" })
     ).toBeVisible()
-    await expect(page.getByText("Solved today")).toBeVisible()
+    // `.first()` guards against a transient duplicate match during App-Router
+    // hydration/streaming — the settled DOM renders the daily card once, but
+    // an un-scoped getByText can strict-mode-violate on the brief second copy.
+    await expect(page.getByText("Solved today").first()).toBeVisible()
 })

@@ -16,6 +16,15 @@ const BASE_URL =
     process.env.E2E_BASE_URL ??
     `http://localhost:${process.env.E2E_PORT ?? "3100"}`
 
+/** Format a Date as the `YYYY-MM-DDTHH:mm` value a datetime-local input expects. */
+function toDateTimeLocal(d: Date): string {
+    const pad = (n: number) => String(n).padStart(2, "0")
+    return (
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+        `T${pad(d.getHours())}:${pad(d.getMinutes())}`
+    )
+}
+
 let admin: SeededUser
 let learner: SeededUser
 let schemaId: string
@@ -84,21 +93,49 @@ test("admin creates a contest, attaches a problem, learner sees and registers", 
     await adminPage
         .getByLabel("Description")
         .fill("A contest created through the admin UI.")
-    await adminPage.getByLabel("Starts at").fill("2026-06-01T10:00")
-    await adminPage.getByLabel("Ends at").fill("2026-06-01T11:30")
+    // The contest must be SCHEDULED (start in the future) when we attach
+    // problems and the learner registers — the attach API rejects any
+    // non-SCHEDULED contest, and the practice-lockout / registration
+    // assertions below also assume the contest hasn't ended. Compute the
+    // window relative to now so the test never rots into a past date.
+    const startsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    const endsAt = new Date(startsAt.getTime() + 90 * 60 * 1000)
+    await adminPage.getByLabel("Starts at").fill(toDateTimeLocal(startsAt))
+    await adminPage.getByLabel("Ends at").fill(toDateTimeLocal(endsAt))
     await adminPage.getByRole("button", { name: /create contest/i }).click()
     await expect(adminPage).toHaveURL(/\/admin\/contests\/[^/]+$/)
 
     await adminPage.getByLabel("Problem").selectOption(problemId)
     await adminPage.getByLabel("Pos").fill("1")
     await adminPage.getByLabel("Pts").fill("3")
+    // The attach POST persists the ContestProblem server-side (201); the
+    // picker then calls router.refresh() to reflect it, but that refresh can
+    // lag past the assertion window on a cold prod render. Wait for the POST
+    // to complete, then reload to render the persisted state deterministically.
+    const attachResponse = adminPage.waitForResponse(
+        (res) =>
+            res.url().includes("/problems") &&
+            res.request().method() === "POST"
+    )
     await adminPage.getByRole("button", { name: /attach/i }).click()
-    await expect(adminPage.getByText("E2E Contest Locked Problem")).toBeVisible()
+    await attachResponse
+    await adminPage.reload()
+    // Scope to the attached-problems list item, not a bare getByText: the bare
+    // text also matches the (now-filtered) <option> in the picker.
+    await expect(
+        adminPage
+            .getByRole("listitem")
+            .filter({ hasText: "E2E Contest Locked Problem" })
+    ).toBeVisible()
 
     await adminPage.goto("/practice")
     await expect(adminPage.getByText("E2E Contest Locked Problem")).toHaveCount(0)
     await adminPage.goto(`/practice/${problemSlug}`)
-    await expect(adminPage.getByText(/Locked: in contest until/i)).toBeVisible()
+    // `.first()` guards against a transient duplicate match during App-Router
+    // hydration; the lock banner renders once in the settled DOM.
+    await expect(
+        adminPage.getByText(/Locked: in contest until/i).first()
+    ).toBeVisible()
     await adminContext.close()
 
     const learnerContext = await browser.newContext({
@@ -110,8 +147,8 @@ test("admin creates a contest, attaches a problem, learner sees and registers", 
     })
     const learnerPage = await learnerContext.newPage()
     await learnerPage.goto("/contests")
-    await expect(learnerPage.getByText(contestTitle)).toBeVisible()
-    await learnerPage.getByText(contestTitle).click()
+    await expect(learnerPage.getByText(contestTitle).first()).toBeVisible()
+    await learnerPage.getByText(contestTitle).first().click()
     await learnerPage.getByRole("button", { name: /^register$/i }).click()
     await expect(
         learnerPage.getByRole("button", { name: /registered/i })
