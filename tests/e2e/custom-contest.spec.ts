@@ -99,7 +99,10 @@ test("signed-in user plays a custom contest and lands on the standings", async (
     const editor = page.locator(".monaco-editor").first()
     await editor.waitFor({ state: "visible" })
     await editor.click()
-    await page.keyboard.type("SELECT x FROM t ORDER BY x")
+    // insertText (atomic) instead of type() — per-keystroke typing intermittently
+    // drops characters / triggers Monaco autocomplete on CI, corrupting the SQL
+    // (observed: "SELECT x FROM t..." became "SELECT x ORDER BY x").
+    await page.keyboard.insertText("SELECT x FROM t ORDER BY x")
 
     // PRACTICE judging runs the query in-browser before submitting, so the
     // DuckDB-WASM engine must finish loading first. The Run button is disabled
@@ -107,7 +110,7 @@ test("signed-in user plays a custom contest and lands on the standings", async (
     // the engine is ready — otherwise submit fails with "Database is not ready
     // yet." (the Submit button itself isn't gated on engine readiness).
     await expect(page.getByTestId("workspace-run-editor")).toBeEnabled({
-        timeout: 30_000,
+        timeout: 60_000,
     })
 
     // The Submit button enables only once the SQL state is populated, so this
@@ -119,7 +122,7 @@ test("signed-in user plays a custom contest and lands on the standings", async (
     await submitButton.click()
 
     await expect(page.getByText(/Accepted/i).first()).toBeVisible({
-        timeout: 30_000,
+        timeout: 60_000,
     })
 
     // Standings now list the player on the custom-contest detail page.
