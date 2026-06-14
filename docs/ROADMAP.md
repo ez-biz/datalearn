@@ -312,7 +312,15 @@ Major platform expansions that take Data Learn from "SQL practice + learning hub
 
 ### V2 — Contest
 
-**Status:** Phase 1 foundation shipped 2026-05-24 (PR #145). Phase 2 server-side judge shipped 2026-05-26 (PR #150): sandboxed DuckDB + PGlite worker, AST-based SQL validation, transactional submit pipeline with DB-backed idempotency, hidden-data admin routes with audit log, and MCP tools for hidden datasets + publish readiness. Escape-attempt regression corpus is now the security gate. Phases 3-7 follow. Source plan/spec: `docs/superpowers/specs/2026-05-24-contests-design.md`.
+**Status:** Phase 1 foundation shipped 2026-05-24 (PR #145). Phase 2 server-side judge shipped 2026-05-26 (PR #150): sandboxed DuckDB + PGlite worker, AST-based SQL validation, transactional submit pipeline with DB-backed idempotency, hidden-data admin routes with audit log, and MCP tools for hidden datasets + publish readiness. Escape-attempt regression corpus is now the security gate. Standings table shipped 2026-06-14 (PR #157). **Phase 3 — contest play UI** (in progress 2026-06-14): a dedicated `/contests/[slug]/[problemSlug]` page so registered learners can actually submit to the judge during a live contest, with a verdict panel, a live countdown, and timezone-correct times. Source: `docs/superpowers/specs/2026-06-14-contest-play-design.md`. Phases 4-7 follow. Source plan/spec: `docs/superpowers/specs/2026-05-24-contests-design.md`.
+
+**Deferred follow-ups (after Phase 3 play UI):**
+- **Live-refreshing standings:** standings are currently fresh-on-load only; add tick-based refresh during a live contest (no websockets).
+- **Per-problem ICPC grid:** richer standings with a column per problem showing solve time / wrong-attempt count, on top of the current summary table.
+- **Mobile standings layout:** the standings table needs a stacked/card treatment below `sm` (it can overflow on phones today).
+- **Closed-contest submission review:** let a participant review their own submissions + verdicts after a contest ends.
+- **Rating / Glicko-2:** see the rating component below — the `ratingBefore/After/Delta` columns exist but are unpopulated.
+- **Contest email notifications:** "your contest starts in 1 hour" (see Dependencies).
 
 **What:** Weekly + monthly timed contests with multiple problems, a leaderboard, and a **mathematically-backed rating system** that updates each user's rating after every contest. Rating shown on the profile page (the placeholder card already exists).
 
