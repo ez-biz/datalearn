@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/Card"
 import { Container } from "@/components/ui/Container"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { Eyebrow } from "@/components/ui/Eyebrow"
+import { LocalTime } from "@/components/ui/LocalTime"
 
 export const metadata: Metadata = {
     title: "Contests",
@@ -90,7 +91,9 @@ function ContestGroup({
                                     </Badge>
                                     <span className="inline-flex items-center gap-1 tabular-nums">
                                         <CalendarDays className="h-3.5 w-3.5" />
-                                        {contest.startsAt.toLocaleString()}
+                                        <LocalTime
+                                            value={contest.startsAt.toISOString()}
+                                        />
                                     </span>
                                     <span className="tabular-nums">
                                         {contest.problemCount} problems

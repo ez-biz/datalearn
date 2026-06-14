@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { hasStandings } from "@/lib/contest-status"
 import { ContestStandings } from "@/components/contests/ContestStandings"
+import { LocalTime } from "@/components/ui/LocalTime"
 import { ContestStatusPill } from "@/components/contests/ContestStatusPill"
 import { RegisterButton } from "@/components/contests/RegisterButton"
 import { Badge, DifficultyBadge } from "@/components/ui/Badge"
@@ -107,7 +108,14 @@ export default async function ContestDetailPage({ params }: Props) {
                                             </span>
                                             <div className="min-w-0 flex-1">
                                                 <Link
-                                                    href={`/practice/${item.problem.slug}`}
+                                                    href={
+                                                        contest.status ===
+                                                            "LIVE" ||
+                                                        contest.status ===
+                                                            "CLOSED"
+                                                            ? `/contests/${contest.slug}/${item.problem.slug}`
+                                                            : `/practice/${item.problem.slug}`
+                                                    }
                                                     className="truncate font-medium hover:text-primary"
                                                 >
                                                     #{item.problem.number}.{" "}
@@ -146,7 +154,9 @@ export default async function ContestDetailPage({ params }: Props) {
                                     Starts
                                 </p>
                                 <p className="mt-1 text-sm font-medium tabular-nums">
-                                    {contest.startsAt.toLocaleString()}
+                                    <LocalTime
+                                        value={contest.startsAt.toISOString()}
+                                    />
                                 </p>
                             </div>
                             <div>
@@ -154,7 +164,9 @@ export default async function ContestDetailPage({ params }: Props) {
                                     Ends
                                 </p>
                                 <p className="mt-1 text-sm font-medium tabular-nums">
-                                    {contest.endsAt.toLocaleString()}
+                                    <LocalTime
+                                        value={contest.endsAt.toISOString()}
+                                    />
                                 </p>
                             </div>
                             <div className="grid grid-cols-2 gap-3 text-sm">
