@@ -96,7 +96,9 @@ test("registered player submits a correct solution and sees Accepted", async ({
     const editor = page.locator(".monaco-editor").first()
     await editor.waitFor({ state: "visible" })
     await editor.click()
-    await page.keyboard.type("SELECT x FROM t ORDER BY x")
+    // insertText (atomic) instead of type() — per-keystroke typing intermittently
+    // drops characters / triggers Monaco autocomplete on CI, corrupting the SQL.
+    await page.keyboard.insertText("SELECT x FROM t ORDER BY x")
 
     // The Submit button enables only once the SQL state is populated, so this
     // also confirms the keystrokes reached React state.
@@ -106,8 +108,10 @@ test("registered player submits a correct solution and sees Accepted", async ({
     await expect(submitButton).toBeEnabled()
     await submitButton.click()
 
+    // The server-side judge spins up a DuckDB worker on its first run, which is
+    // slow on a cold CI runner (well past 30s) — give the verdict 60s.
     await expect(page.getByText(/Accepted/i).first()).toBeVisible({
-        timeout: 30_000,
+        timeout: 60_000,
     })
 
     // Leaderboard now lists the player on the contest page.
