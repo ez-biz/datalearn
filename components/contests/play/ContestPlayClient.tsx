@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import type { ContestVerdict } from "@prisma/client"
@@ -58,9 +58,21 @@ export function ContestPlayClient({
         attempt: number
     } | null>(null)
 
+    // Idempotency key for the current SQL. Held stable so a retry after a
+    // network error reuses the key (no extra judged attempt); editing the SQL
+    // invalidates it so the next submission is a fresh attempt.
+    const idempotencyKeyRef = useRef<string | null>(null)
+
     const { ready, runQuery } = useProblemDB(problem.schemaSql, problem.dialect, {
         problemSlug: problem.slug,
     })
+
+    const handleSqlChange = useCallback((value: string | undefined) => {
+        setSql(value ?? "")
+        idempotencyKeyRef.current = null
+    }, [])
+
+    const handleExpire = useCallback(() => setExpired(true), [])
 
     const runLocal = useCallback(async () => {
         if (!ready || running || !sql.trim()) return
@@ -89,6 +101,10 @@ export function ContestPlayClient({
         if (submitting || !sql.trim()) return
         setSubmitting(true)
         setSubmitError(null)
+        setVerdict(null)
+        if (!idempotencyKeyRef.current) {
+            idempotencyKeyRef.current = crypto.randomUUID()
+        }
         try {
             const res = await fetch(`/api/contests/${contestSlug}/submit`, {
                 method: "POST",
@@ -97,7 +113,7 @@ export function ContestPlayClient({
                     problemId: problem.id,
                     sql,
                     dialect: problem.dialect,
-                    idempotencyKey: crypto.randomUUID(),
+                    idempotencyKey: idempotencyKeyRef.current,
                 }),
             })
             const json = await res.json().catch(() => ({}))
@@ -155,10 +171,7 @@ export function ContestPlayClient({
                 </Link>
                 <div className="flex items-center gap-3 text-sm">
                     <Badge variant="outline">{points} pts</Badge>
-                    <ContestCountdown
-                        endsAt={endsAt}
-                        onExpire={() => setExpired(true)}
-                    />
+                    <ContestCountdown endsAt={endsAt} onExpire={handleExpire} />
                 </div>
             </div>
 
@@ -168,7 +181,7 @@ export function ContestPlayClient({
 
             <SqlEditor
                 value={sql}
-                onChange={(v) => setSql(v ?? "")}
+                onChange={handleSqlChange}
                 onRun={runLocal}
                 onSubmit={canSubmit ? submit : undefined}
                 running={running || submitting}

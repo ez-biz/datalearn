@@ -47,7 +47,9 @@ test.beforeAll(async () => {
     })
     problemSlug = problem.slug
 
-    // LIVE contest: started in the past, ends in the future.
+    // LIVE contest: status is derived from the time window by
+    // deriveContestStatus (past start + future end => LIVE), regardless of the
+    // stored "SCHEDULED" status — so the play page is in PLAY mode.
     const contest = await prisma.contest.create({
         data: {
             slug: SLUG,
