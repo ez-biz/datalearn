@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { deriveContestStatus } from "@/lib/contest-status"
 import { registerContestParticipantUnchecked } from "@/lib/contest-registration"
+import { toStandingsRows, type LeaderboardRow } from "@/lib/contests/leaderboard"
 
 const OFFICIAL_KINDS: Array<"WEEKLY" | "BIWEEKLY" | "SPECIAL"> = [
     "WEEKLY",
@@ -138,4 +139,35 @@ export async function registerForContest(args: {
     })
     revalidatePath("/contests")
     return result
+}
+
+/**
+ * Standings for a contest, ordered by ICPC tie-break (points desc, penalty asc,
+ * then userId for stable ties). Returns [] on error so the page never breaks.
+ * Never selects user email.
+ */
+export async function getContestLeaderboard(
+    contestId: string
+): Promise<LeaderboardRow[]> {
+    try {
+        const entries = await prisma.contestLeaderboardEntry.findMany({
+            where: { contestId },
+            orderBy: [
+                { points: "desc" },
+                { penaltySeconds: "asc" },
+                { userId: "asc" },
+            ],
+            select: {
+                userId: true,
+                points: true,
+                penaltySeconds: true,
+                solvedCount: true,
+                user: { select: { id: true, name: true } },
+            },
+        })
+        return toStandingsRows(entries)
+    } catch (error) {
+        console.error("[getContestLeaderboard]", error)
+        return []
+    }
 }

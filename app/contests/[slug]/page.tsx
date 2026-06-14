@@ -2,9 +2,11 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ChevronLeft } from "lucide-react"
-import { getContestBySlug } from "@/actions/contests"
+import { getContestBySlug, getContestLeaderboard } from "@/actions/contests"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { hasStandings } from "@/lib/contest-status"
+import { ContestStandings } from "@/components/contests/ContestStandings"
 import { ContestStatusPill } from "@/components/contests/ContestStatusPill"
 import { RegisterButton } from "@/components/contests/RegisterButton"
 import { Badge, DifficultyBadge } from "@/components/ui/Badge"
@@ -28,17 +30,24 @@ export default async function ContestDetailPage({ params }: Props) {
     if (!contest) notFound()
 
     const session = await auth()
-    const registration = session?.user?.id
-        ? await prisma.contestRegistration.findUnique({
-              where: {
-                  contestId_userId: {
-                      contestId: contest.id,
-                      userId: session.user.id,
+    const viewerUserId = session?.user?.id ?? null
+
+    const [registration, standings] = await Promise.all([
+        viewerUserId
+            ? prisma.contestRegistration.findUnique({
+                  where: {
+                      contestId_userId: {
+                          contestId: contest.id,
+                          userId: viewerUserId,
+                      },
                   },
-              },
-              select: { contestId: true },
-          })
-        : null
+                  select: { contestId: true },
+              })
+            : Promise.resolve(null),
+        hasStandings(contest.status)
+            ? getContestLeaderboard(contest.id)
+            : Promise.resolve([]),
+    ])
 
     return (
         <Container width="2xl" className="py-10 sm:py-14">
@@ -119,6 +128,14 @@ export default async function ContestDetailPage({ params }: Props) {
                             </Card>
                         )}
                     </div>
+
+                    {hasStandings(contest.status) && (
+                        <ContestStandings
+                            rows={standings}
+                            viewerUserId={viewerUserId}
+                            status={contest.status}
+                        />
+                    )}
                 </section>
 
                 <aside>
