@@ -26,6 +26,13 @@ type PlayProblem = {
 type Sibling = { letter: string; slug: string }
 
 type Props = {
+    /**
+     * The contest's DETAIL page URL (e.g. `/contests/<slug>` for official,
+     * `/contests/custom/<slug>` for custom). The back-link and the
+     * NOT_REGISTERED gate point here, and sibling play URLs are
+     * `${contestHref}/${problemSlug}`.
+     */
+    contestHref: string
     contestSlug: string
     contestTitle: string
     endsAt: string
@@ -49,6 +56,7 @@ type LocalResult = {
 }
 
 export function ContestPlayClient({
+    contestHref,
     contestSlug,
     contestTitle,
     endsAt,
@@ -205,7 +213,7 @@ export function ContestPlayClient({
             <Gate>
                 Register on the{" "}
                 <Link
-                    href={`/contests/${contestSlug}`}
+                    href={contestHref}
                     className="text-primary hover:underline"
                 >
                     contest page
@@ -221,7 +229,7 @@ export function ContestPlayClient({
         <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <Link
-                    href={`/contests/${contestSlug}`}
+                    href={contestHref}
                     className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                 >
                     <ArrowLeft className="h-3.5 w-3.5" />
@@ -241,7 +249,7 @@ export function ContestPlayClient({
                     {siblings.map((sibling) => (
                         <Link
                             key={sibling.slug}
-                            href={`/contests/${contestSlug}/${sibling.slug}`}
+                            href={`${contestHref}/${sibling.slug}`}
                             aria-current={
                                 sibling.slug === problem.slug ? "page" : undefined
                             }
