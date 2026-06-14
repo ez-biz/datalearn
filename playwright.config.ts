@@ -8,9 +8,10 @@ export default defineConfig({
     fullyParallel: false, // tests share a DB; serialize for now
     // The contest play pages init DuckDB/PGlite-WASM in-browser (and the
     // official judge spins up a server-side worker); on a cold CI runner the
-    // first such test can exceed Playwright's 30s default. Give every test
-    // 60s of headroom so WASM/judge cold-starts don't flake the suite.
-    timeout: 60_000,
+    // first such test can take ~30-60s just for the verdict. Give every test
+    // 120s of headroom so WASM/judge cold-starts don't flake the suite (the
+    // verdict assertions themselves use 60s — see contest-play / custom specs).
+    timeout: 120_000,
     retries: 0,
     workers: 1,
     // CI: github inline annotations + html for the uploaded artifact so
