@@ -73,6 +73,10 @@ export default async function ContestPlayPage({ params }: Props) {
                 }}
                 points={attached.points}
                 mode={mode}
+                siblings={contest.problems.map((item, index) => ({
+                    letter: String.fromCharCode(65 + index),
+                    slug: item.problem.slug,
+                }))}
             />
         </Container>
     )

@@ -22,6 +22,8 @@ type PlayProblem = {
     dialect: Dialect
 }
 
+type Sibling = { letter: string; slug: string }
+
 type Props = {
     contestSlug: string
     contestTitle: string
@@ -29,6 +31,7 @@ type Props = {
     problem: PlayProblem
     points: number
     mode: PlayMode
+    siblings: Sibling[]
 }
 
 type LocalResult = {
@@ -45,6 +48,7 @@ export function ContestPlayClient({
     problem,
     points,
     mode,
+    siblings,
 }: Props) {
     const [sql, setSql] = useState("")
     const [result, setResult] = useState<LocalResult | null>(null)
@@ -174,6 +178,31 @@ export function ContestPlayClient({
                     <ContestCountdown endsAt={endsAt} onExpire={handleExpire} />
                 </div>
             </div>
+
+            {siblings.length > 1 && (
+                <nav
+                    aria-label="Contest problems"
+                    className="flex flex-wrap gap-1"
+                >
+                    {siblings.map((sibling) => (
+                        <Link
+                            key={sibling.slug}
+                            href={`/contests/${contestSlug}/${sibling.slug}`}
+                            aria-current={
+                                sibling.slug === problem.slug ? "page" : undefined
+                            }
+                            className={cn(
+                                "inline-flex h-7 w-7 items-center justify-center rounded-md text-xs font-medium tabular-nums transition-colors",
+                                sibling.slug === problem.slug
+                                    ? "bg-primary text-primary-foreground"
+                                    : "border border-border text-muted-foreground hover:bg-surface-muted"
+                            )}
+                        >
+                            {sibling.letter}
+                        </Link>
+                    ))}
+                </nav>
+            )}
 
             <h1 className="text-xl font-semibold tracking-tight">
                 #{problem.number}. {problem.title}
