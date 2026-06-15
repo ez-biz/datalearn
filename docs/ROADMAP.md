@@ -1,8 +1,8 @@
 # 🚀 Antigravity Data Learning Platform — Long-Term Roadmap
 
-> **Last updated:** 2026-05-26
+> **Last updated:** 2026-06-15
 > **Status:** Live — <https://www.learndatanow.com>
-> **Version:** 0.7.0 (next release)
+> **Version:** 0.8.0 (current)
 
 ## Recently shipped
 
@@ -608,6 +608,38 @@ The session itself reuses **V4's live-interview platform** (collaborative whiteb
 - User-reported attribution form on each problem ("Were you asked this in an interview? Which company?") with the ≥ 3-reports-before-public guard. Worth doing once editorial has seeded the canonical company list and we have organic submissions.
 - Top-level inline "Companies" dropdown filter on `/practice` itself (composable with difficulty/search/status). Only worth building if telemetry shows the tag-index page splits learner attention significantly.
 - Brand-alias redirects (`/practice/tags/facebook` → `/practice/tags/meta`). Defer until search traffic justifies a 301 map.
+
+### V19 — Share a solved problem to social media (with result)
+
+**What:** After a learner gets an Accepted verdict, a **Share result** action generates a branded card — problem (`#NNN. Title`), difficulty, the "Accepted" verdict, and (once V20 lands) runtime/memory percentile — and shares it to LinkedIn / X / Reddit / WhatsApp or copies a link. The shared URL unfurls richly via an OG image. Never embeds the learner's SQL — verdict + metadata only.
+
+**Why:** The solve is the moment of pride, and capturing it into a shareable artifact is the cheapest growth lever the platform has. Every "I just solved #142 on Data Learn" post is a free impression to a high-intent audience (peers prepping for the same interviews). This is the problem-result slice of V10's social-share bundle, pulled forward because it rides on the most emotionally charged moment in the product.
+
+**Components:**
+- **OG image generation** via `@vercel/og` — a `/api/og/result` route that renders the card from params (number, title, difficulty, verdict, optional rank/runtime). **HMAC-sign the params** so a fake "Accepted" card can't be forged.
+- **Share surface:** a Share button in the workspace solved/solution panel with platform targets (LinkedIn, X, Reddit, WhatsApp, copy link) using standard share intents + the Web Share API on mobile.
+- **Result permalink + privacy:** unfurl points at the public problem page (or a lightweight share page); the card carries no solution SQL, and a profile "private" toggle suppresses sharing.
+
+**Dependencies:** Folds into V10 (OG images + social share buttons). Synergizes with V3 Badges (share earned badges) and V2 Contest (share contest results). No hard blockers.
+
+**Scope estimate:** Small-medium. The OG route + share button is the core; HMAC-signing the verdict params is the only fiddly bit.
+
+### V20 — Per-problem performance leaderboard (fastest runtime + least memory)
+
+**What:** A LeetCode-style per-problem leaderboard ranking accepted submissions by **execution time** and **memory used**, with a percentile badge ("Faster than 87% · Less memory than 74%"). A Leaderboard tab on the workspace shows the top submissions for that problem (per dialect) and the learner's own standing.
+
+**Why:** A binary Accepted/Wrong verdict doesn't reward writing a *better* query. A runtime/memory ranking gives advanced learners a reason to revisit solved problems and optimize — the loop that keeps strong users engaged long after they can already pass.
+
+**Components:**
+- **Fair measurement requires server-side execution.** Client-side timing/memory is device-dependent and trivially gamed, so the numbers must come from the controlled judge — **generalize the V2 contest server-side sandbox** (sandboxed DuckDB + PGlite worker) to ordinary practice submissions, recording `runtimeMs` + peak memory.
+- **Schema:** best accepted submission per `(userId, problemId, dialect)` — `{ runtimeMs, memoryBytes, submissionId, achievedAt }`, indexed for top-N + percentile queries.
+- **Ranking:** precompute the per-`(problem, dialect)` distribution on a cron or incrementally on submit; surface "Faster than X% / Less memory than Y%".
+- **Surface:** a Leaderboard tab in the workspace + a percentile pill on the accepted-verdict panel.
+- **Anti-gaming:** exclude submissions flagged as solution-tier AI-hinted (V14), rate-limit, and dedupe identical queries.
+
+**Dependencies:** **Server-side judge is the prerequisite** — reuse/generalize the V2 contest sandbox; today's practice execution is client-side and not comparable across users. Benefits from V14 (hint flagging); feeds V3 (optimization badges) and V11 (per-problem performance analytics).
+
+**Scope estimate:** Large — generalizing the server-side judge to every practice submission is the heavy part; the leaderboard UI on top is medium.
 
 ---
 
