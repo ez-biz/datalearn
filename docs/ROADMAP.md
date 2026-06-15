@@ -641,6 +641,60 @@ The session itself reuses **V4's live-interview platform** (collaborative whiteb
 
 **Scope estimate:** Large — generalizing the server-side judge to every practice submission is the heavy part; the leaderboard UI on top is medium.
 
+### V21 — Readiness Score (per topic + per company)
+
+> Sourced from the datadriven.io teardown — see [`research/datadriven-io.md`](./research/datadriven-io.md) IDEA 2.
+
+**What:** A quantified "are you interview-ready?" signal, computed per topic tag and per company tag (V18). Surfaced as a profile panel ("You're 72% ready for Stripe SQL") and used to drive recommendations. Blends, over time, with AI mock-interview verdicts (folds into V4).
+
+**Why:** A binary solved/unsolved count doesn't answer the question users actually have — *am I ready for the interview?* A readiness metric turns the practice surface into an interview product, gives users a reason to return (close the gap), and feeds onboarding (V17) and adaptive recommendations (V9). It's also the cheapest high-value item on this list: the raw data already exists.
+
+**Components:**
+- **Scoring function** over existing data: solve rate × difficulty mix × recency decay per `Tag`, no new write path. Company readiness reuses `Tag.kind = COMPANY` (V18).
+- **Profile panel** — fills an existing placeholder card; per-topic bars + a per-company readiness view.
+- **Recency decay** so stale solves don't read as "ready"; a spaced-repetition review queue (V9-adjacent) resurfaces decayed topics.
+- Later: blend in mock-interview rubric scores once V4's AI interview ships.
+
+**Dependencies:** None blocking — computed from `Submission` + `Tag` + `difficulty`. Complements V11 (analytics) and V17 (onboarding bucketing).
+
+**Scope estimate:** Medium — mostly a scoring function + a profile panel over data we already store.
+
+### V22 — Programmatic interview-prep landing pages (company / role / round)
+
+> Sourced from the datadriven.io teardown — see [`research/datadriven-io.md`](./research/datadriven-io.md) IDEA 4. Highest-leverage growth borrow.
+
+**What:** Programmatically generated high-intent landing pages: per-company (`/<company>-sql-interview-questions`), per-role (Junior→Staff, Analytics/ML DE), per-round, and "Top-N / FAANG questions" hubs. Each page bundles a curated weighted problem set, difficulty mix, reported questions (V23), company-specific constraints, and an OG image (V10).
+
+**Why:** This is the distribution moat competitors compound over time — organic search is where high-intent interview-prep traffic originates, and starting late is expensive. We already have the substrate: company tags (V18), a stable-numbered catalog, and tracks (V9). Role paths ship as packaged tracks.
+
+**Components:**
+- **Page templates** for company / role / round, generated from tag + catalog data; `generateMetadata` for SEO (extends the V18 pattern).
+- **Curated weighted problem sets** per page, weighting derived from the interview-report corpus (V23).
+- **Content-depth gate** — pages need real prose (process, comp, constraints) or Google reads them as thin/templated; MCP can author the prose at volume, but a quality bar is mandatory.
+- OG images via `@vercel/og` (shared with V10 / V19).
+
+**Dependencies:** V18 (company tags) and V9 (tracks as role paths) exist. Best paired with V23 (reports) for the "real reported questions" credibility marker. Enhances V10.
+
+**Scope estimate:** Medium — templating + content generation. The risk is editorial depth, not engineering.
+
+### V23 — Crowdsourced interview reports
+
+> Sourced from the datadriven.io teardown — see [`research/datadriven-io.md`](./research/datadriven-io.md) IDEA 5. This is V18's deferred attribution form, generalized.
+
+**What:** A structured submission where users report a real interview: company, role, round, questions asked, difficulty, outcome. One corpus with three payoffs — it (a) seeds the Discuss > Interview category (V1), (b) populates the company/role SEO pages (V22), and (c) derives company-weighted problem frequency ("most-asked at Stripe").
+
+**Why:** Authentic "what they actually asked" data is the credibility layer that makes interview prep concrete instead of generic, and it's the fuel for both the SEO engine (V22) and the community (V1). It's a compounding, defensible asset.
+
+**Components:**
+- Schema: `InterviewReport { userId, companyTagId, role, round, questions[], difficulty, outcome, createdAt }` with the existing ≥N-reports-before-public guard (mirrors V18's planned attribution gate).
+- Submission surface (a post-interview prompt) + moderation reuse from discussions (V0.4.4).
+- Derivation jobs: per-company question frequency → weighted problem sets for V22.
+- **Cold-start strategy** — needs seeding (editorial + an early-contributor incentive, e.g. a badge V3); the corpus is worthless until it has volume.
+
+**Dependencies:** V18 (company tags). Feeds V22 (SEO) and V1 (Discuss). Moderation primitives exist.
+
+**Scope estimate:** Medium — schema + form + derivation. The hard part is cold-start, not code.
+
 ---
 
 ### Considered, not pursuing (yet)
