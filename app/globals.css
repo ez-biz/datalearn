@@ -329,6 +329,14 @@
   p {
     text-wrap: pretty;
   }
+  /* Long-form article reading polish: softer body color + a gentle weight bump for a
+     calmer read (line-height comes from prose's 1.75 base). Scoped to the article
+     surface via `article-body`. See docs/design-system/article-reader-spec.md. */
+  .article-body {
+    --tw-prose-body: hsl(var(--foreground) / 0.80);
+    --tw-prose-invert-body: hsl(var(--foreground) / 0.84);
+    font-weight: 450;
+  }
   code, pre, kbd {
     font-family: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
     font-variant-ligatures: none;

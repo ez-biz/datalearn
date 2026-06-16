@@ -105,7 +105,7 @@ export default async function ArticlePage({ params }: Props) {
                         content={article.content}
                         size="base"
                         withHeadingIds
-                        className="prose-headings:scroll-mt-24"
+                        className="article-body prose-headings:scroll-mt-24"
                     />
 
                     <RelatedProblemsPanel problems={article.relatedProblems} />

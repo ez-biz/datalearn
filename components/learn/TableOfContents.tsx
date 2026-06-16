@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 
 export function TableOfContents({ entries }: { entries: TocEntry[] }) {
     const [activeSlug, setActiveSlug] = useState<string | null>(null)
+    const [progress, setProgress] = useState(0)
 
     useEffect(() => {
         if (entries.length === 0) return
@@ -28,16 +29,57 @@ export function TableOfContents({ entries }: { entries: TocEntry[] }) {
         return () => observer.disconnect()
     }, [entries])
 
+    // Reading progress through the article body. rAF-throttled; the fill width is
+    // driven directly by scroll (no CSS transition) so it tracks the scrollbar 1:1.
+    useEffect(() => {
+        if (entries.length === 0) return
+        const article = document.querySelector("article")
+        if (!article) return
+        let raf = 0
+        const compute = () => {
+            raf = 0
+            const rect = article.getBoundingClientRect()
+            const distance = article.offsetHeight - window.innerHeight
+            const p = distance <= 0 ? 100 : (-rect.top / distance) * 100
+            setProgress(Math.min(100, Math.max(0, Math.round(p))))
+        }
+        const onScroll = () => {
+            if (!raf) raf = requestAnimationFrame(compute)
+        }
+        compute()
+        window.addEventListener("scroll", onScroll, { passive: true })
+        window.addEventListener("resize", onScroll)
+        return () => {
+            window.removeEventListener("scroll", onScroll)
+            window.removeEventListener("resize", onScroll)
+            if (raf) cancelAnimationFrame(raf)
+        }
+    }, [entries])
+
     if (entries.length === 0) return null
 
     return (
         <aside
             aria-label="Table of contents"
-            className="hidden lg:block sticky top-24 self-start ml-8 w-56 shrink-0"
+            className="hidden lg:block sticky top-24 self-start ml-8 w-56 shrink-0 max-h-[calc(100vh-8rem)] overflow-y-auto"
         >
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-                On this page
-            </p>
+            <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    On this page
+                </p>
+                <span
+                    className="text-xs tabular-nums text-muted-foreground"
+                    aria-hidden
+                >
+                    {progress}%
+                </span>
+            </div>
+            <div className="mb-4 h-0.5 rounded-full bg-border" aria-hidden>
+                <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${progress}%` }}
+                />
+            </div>
             <ul className="space-y-1.5 text-sm">
                 {entries.map((e) => (
                     <li
