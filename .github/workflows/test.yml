@@ -52,7 +52,7 @@ jobs:
       API_KEY_HASH_SECRET: ci-test-key-secret-${{ github.run_id }}-do-not-reuse
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Palette guard
         run: ./scripts/check-no-palette-colors.sh
