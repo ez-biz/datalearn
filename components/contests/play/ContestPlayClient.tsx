@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import type { ContestVerdict } from "@prisma/client"
@@ -86,6 +86,23 @@ export function ContestPlayClient({
     const { ready, runQuery } = useProblemDB(problem.schemaSql, problem.dialect, {
         problemSlug: problem.slug,
     })
+
+    // Warm the server judge as soon as a registered participant opens the
+    // problem. The official judge forks a fresh worker per submission and the
+    // first fork on a cold serverless instance is slow (native engine load);
+    // pinging it now — while the contestant writes SQL — moves that cost off the
+    // first real submission. Fire-and-forget: PRACTICE-judged custom contests
+    // grade in-browser and need no server warm-up. The ping hits the same route
+    // as the submit POST, so it warms the function that will judge.
+    useEffect(() => {
+        if (judge !== "OFFICIAL" || mode !== "PLAY") return
+        const controller = new AbortController()
+        void fetch(
+            `/api/contests/${contestSlug}/submit?warm=1&dialect=${problem.dialect}`,
+            { method: "GET", signal: controller.signal }
+        ).catch(() => {})
+        return () => controller.abort()
+    }, [judge, mode, contestSlug, problem.dialect])
 
     const handleSqlChange = useCallback((value: string | undefined) => {
         setSql(value ?? "")
