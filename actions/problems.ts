@@ -65,6 +65,44 @@ export async function getSlugByNumber(number: number): Promise<string | null> {
     }
 }
 
+export type AdjacentProblem = { number: number; slug: string; title: string }
+
+/**
+ * Previous/next published problem by stable `number` — powers the in-workspace
+ * problem switcher so a learner can move to the adjacent problem without going
+ * back to the list. Walks only PUBLISHED, non-contest-locked problems (same
+ * visibility as `getProblems`), so navigation stays inside the catalog the
+ * learner can actually open. Either side is null at the catalog's ends.
+ */
+export async function getAdjacentProblems(number: number): Promise<{
+    prev: AdjacentProblem | null
+    next: AdjacentProblem | null
+}> {
+    try {
+        const [prev, next] = await Promise.all([
+            prisma.sQLProblem.findFirst({
+                where: excludeLockedProblems({
+                    status: "PUBLISHED",
+                    number: { lt: number },
+                }),
+                orderBy: { number: "desc" },
+                select: { number: true, slug: true, title: true },
+            }),
+            prisma.sQLProblem.findFirst({
+                where: excludeLockedProblems({
+                    status: "PUBLISHED",
+                    number: { gt: number },
+                }),
+                orderBy: { number: "asc" },
+                select: { number: true, slug: true, title: true },
+            }),
+        ])
+        return { prev, next }
+    } catch {
+        return { prev: null, next: null }
+    }
+}
+
 export async function getProblem(slug: string) {
     try {
         const problem = await prisma.sQLProblem.findUnique({
