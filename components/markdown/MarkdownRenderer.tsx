@@ -74,7 +74,7 @@ export function MarkdownRenderer({
     return (
         <div
             className={cn(
-                "prose prose-neutral dark:prose-invert max-w-none break-words prose-headings:font-semibold prose-headings:tracking-tight prose-a:break-all prose-a:text-primary hover:prose-a:text-primary-hover prose-p:leading-relaxed prose-code:font-mono prose-code:text-[0.85em] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:bg-surface-muted prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-pre:bg-transparent prose-pre:p-0 prose-table:text-[12px] prose-th:bg-surface-muted prose-th:px-2 prose-td:px-2 prose-td:py-1",
+                "prose prose-neutral dark:prose-invert max-w-none break-words prose-headings:font-semibold prose-headings:tracking-tight prose-a:break-all prose-a:text-primary hover:prose-a:text-primary-hover prose-code:font-mono prose-code:text-[0.85em] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:bg-surface-muted prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-pre:bg-transparent prose-pre:p-0 prose-table:text-[12px] prose-th:bg-surface-muted prose-th:px-2 prose-td:px-2 prose-td:py-1",
                 size === "sm" && "prose-sm",
                 className
             )}
