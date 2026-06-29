@@ -24,7 +24,7 @@
     "@types/node": "^25",
     "tsup": "^8.0.0",
     "typescript": "^6",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.9"
   },
   "overrides": {
     "fast-uri": "^3.1.2",
