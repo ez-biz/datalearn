@@ -30,6 +30,7 @@
     "test:tag-discovery": "node --import tsx --test scripts/test-tag-discovery.ts",
     "test:companies-tagging": "node --import tsx --test scripts/test-companies-tagging.ts",
     "test:curriculum-progress": "node --import tsx --test scripts/test-curriculum-progress.ts",
+    "test:curriculum-admin-validation": "node --import tsx --test scripts/test-curriculum-admin-validation.ts",
     "test:tracks": "node --import tsx --test scripts/test-tracks.ts",
     "test:contest-status": "node --import tsx --test scripts/test-contest-status.ts",
     "test:contest-admin-validation": "node --import tsx --test scripts/test-contest-admin-validation.ts",
