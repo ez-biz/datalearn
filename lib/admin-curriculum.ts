@@ -52,7 +52,7 @@ export function isUniqueViolationOn(error: unknown, field: string): boolean {
 const STALE_WRITE = {
     ok: false as const,
     status: 409,
-    error: "The module list changed during the write — reload and retry.",
+    error: "The curriculum changed during the write — reload and retry.",
 }
 
 /**
@@ -70,7 +70,7 @@ const STALE_WRITE = {
 export function mapWriteFailure(
     error: unknown,
     verb: string,
-): CurriculumMutationResult {
+): { ok: false; status: number; error: string } {
     if (isPrismaCode(error, "P2025") || isPrismaCode(error, "P2002")) {
         return STALE_WRITE
     }
@@ -360,14 +360,7 @@ export async function addLessonToModule(
 
         return { ok: true, data: created }
     } catch (error) {
-        // mapWriteFailure's return type is CurriculumMutationResult<void>, whose
-        // ok:true arm has no `data` — not assignable to this function's data-
-        // bearing result type. It only ever actually returns the ok:false arm,
-        // which is shape-identical across every T; narrow to it explicitly
-        // rather than widen mapWriteFailure's signature (a Task 5 helper).
-        const failure = mapWriteFailure(error, "add lesson to module")
-        if (!failure.ok) return failure
-        return { ok: false, status: 500, error: "Failed to add lesson to module." }
+        return mapWriteFailure(error, "add lesson to module")
     }
 }
 
@@ -518,12 +511,7 @@ export async function addCheckpoint(
 
         return { ok: true, data: created }
     } catch (error) {
-        // See the matching comment in addLessonToModule: mapWriteFailure's
-        // declared return type doesn't carry `data`, so narrow to its ok:false
-        // arm (the only one it ever actually returns) instead of widening it.
-        const failure = mapWriteFailure(error, "add checkpoint")
-        if (!failure.ok) return failure
-        return { ok: false, status: 500, error: "Failed to add checkpoint." }
+        return mapWriteFailure(error, "add checkpoint")
     }
 }
 

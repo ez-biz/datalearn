@@ -164,6 +164,24 @@ async function checkpointIdsInOrder(articleSlug: string): Promise<string[]> {
     return rows.map((r) => r.problemId)
 }
 
+async function lessonPositions(moduleSlug: string): Promise<number[]> {
+    const rows = await prisma.moduleLesson.findMany({
+        where: { module: { trackId, slug: moduleSlug } },
+        orderBy: { position: "asc" },
+        select: { position: true },
+    })
+    return rows.map((r) => r.position)
+}
+
+async function checkpointPositions(articleSlug: string): Promise<number[]> {
+    const rows = await prisma.lessonCheckpoint.findMany({
+        where: { article: { slug: `${PREFIX}${articleSlug}` } },
+        orderBy: { position: "asc" },
+        select: { position: true },
+    })
+    return rows.map((r) => r.position)
+}
+
 describe("createModule", () => {
     it("appends when no position is given", async () => {
         await createModule(TRACK_SLUG, { name: "Foundations", description: "d" })
@@ -462,6 +480,7 @@ describe("removeLessonFromModule", () => {
         const r = await removeLessonFromModule(TRACK_SLUG, "m", `${PREFIX}r-b`)
         assert.equal(r.ok, true)
         assert.deepEqual(await lessonIdsInOrder("m"), [a1, a3])
+        assert.deepEqual(await lessonPositions("m"), [0, 1])
     })
 })
 
@@ -518,6 +537,21 @@ describe("addCheckpoint", () => {
         })
         assert.equal(r.ok, false)
         assert.equal(!r.ok && r.status, 409)
+        assert.match(!r.ok ? r.error : "", /another lesson/)
+    })
+
+    it("409s when the problem already checks this lesson", async () => {
+        await makeArticle("cp-l4")
+        await makeProblem("cp-self")
+        await addCheckpoint(`${PREFIX}cp-l4`, {
+            problemSlug: `${PREFIX}cp-self`,
+        })
+        const r = await addCheckpoint(`${PREFIX}cp-l4`, {
+            problemSlug: `${PREFIX}cp-self`,
+        })
+        assert.equal(r.ok, false)
+        assert.equal(!r.ok && r.status, 409)
+        assert.match(!r.ok ? r.error : "", /this lesson/)
     })
 
     it("404s for an unknown problem", async () => {
@@ -548,6 +582,7 @@ describe("removeCheckpoint / reorderCheckpoints", () => {
         const r = await removeCheckpoint(`${PREFIX}rm-lesson`, `${PREFIX}rm-two`)
         assert.equal(r.ok, true)
         assert.deepEqual(await checkpointIdsInOrder("rm-lesson"), [p1, p3])
+        assert.deepEqual(await checkpointPositions("rm-lesson"), [0, 1])
     })
 
     it("reorders", async () => {
