@@ -33,6 +33,8 @@
     "test:curriculum-admin-validation": "node --import tsx --test scripts/test-curriculum-admin-validation.ts",
     "test:curriculum-admin": "node --import tsx --test scripts/test-curriculum-admin.ts",
     "test:curriculum-actions": "node --import tsx --test scripts/test-curriculum-actions.ts",
+    "test:checkpoint-backfill": "node --import tsx --test scripts/test-checkpoint-backfill.ts",
+    "backfill:checkpoints": "tsx scripts/backfill-checkpoints.ts",
     "test:tracks": "node --import tsx --test scripts/test-tracks.ts",
     "test:contest-status": "node --import tsx --test scripts/test-contest-status.ts",
     "test:contest-admin-validation": "node --import tsx --test scripts/test-contest-admin-validation.ts",
