@@ -23,13 +23,20 @@ Building the screens first would mean wiring them to fixtures and rebuilding the
 
 The redesign is drawn for a library roughly 7× larger than what exists.
 
-| | Production | Local | Design mocks |
+> **Corrected 2026-08-01 after Task 1.** The first version of this table reported
+> production as 59 problems, no `Track` table, and 19 of 28 migrations. That was
+> measured against `.env.local`, which points at `ep-cool-flower` — a stale Neon
+> *branch*, not production. Real production is `ep-autumn-math`, reached via
+> `.env.production.local`. The migration count was also off by one because
+> `migration_lock.toml` was counted as a migration. Corrected figures below.
+
+| | Production (`ep-autumn-math`) | Local | Design mocks |
 | --- | --- | --- | --- |
-| Problems | 59 | 23 | 412 |
+| Problems | 67 | 23 | 412 |
 | Articles (→ lessons) | 3 | 4 | 42 |
 | Topics | 1 | 10 | 8+ |
-| Tracks | *table absent* | 0 | 12 |
-| Migrations applied | 19 of 28 | 28 | — |
+| Tracks | 3 | 0 | 12 |
+| Migrations applied | 27 of 27 | 27 | — |
 
 A pixel-perfect rebuild against today's content renders as an empty shell. Authoring content is therefore **on the critical path of this sub-project**, not adjacent to it.
 
@@ -57,19 +64,20 @@ Seven sub-projects. Each gets its own spec → plan → implementation cycle. **
 
 ---
 
-## Deploy prerequisite — task zero
+## Deploy prerequisite — RESOLVED, no backlog exists
 
-Production sits at **19 of 28 migrations** with no `Track` table, despite `vercel-build` running `prisma migrate deploy` on every build. The tracks feature has existed in code since May and has never been live.
+**This section originally claimed production was 19 of 28 migrations behind with no `Track` table, and made clearing that backlog task zero. Task 1 investigated and the premise was false.**
 
-SP1 adds four more migrations on top of that backlog. **Diagnosing and clearing it is the first task, before any schema work.** Otherwise the spine is unshippable and we discover that at the end rather than the start.
+Production (`ep-autumn-math`, via `.env.production.local`) is at **27 of 27 migrations**, has the `Track` table populated, and `/api/health` is green on a deployment matching `origin/production` HEAD. `prisma migrate deploy` in `vercel-build` has been working correctly all along.
 
-Likely causes to check, in order:
+The error was environmental, not operational: `.env.local` points at `ep-cool-flower`, a **separate stale Neon branch**, and that is what was measured. A memory note from June already recorded this distinction and was not applied.
 
-1. `production` branch is behind `main` — the migrations exist on `main` but were never released.
-2. `prisma migrate deploy` is failing non-fatally during `vercel-build`, or a build step before it is short-circuiting.
-3. A failed/partial migration row in `_prisma_migrations` is blocking subsequent ones.
+Two rules follow, and they bind every later task:
 
-Done criterion: production reports 28 of 28 applied and `/api/health` is green.
+- **Never treat `.env.local` as production.** Production is `.env.production.local` / `ep-autumn-math`. `.env` is local Postgres.
+- **`ls prisma/migrations | wc -l` overcounts by one** — `migration_lock.toml` is not a migration.
+
+Full evidence: [`2026-08-01-curriculum-spine-task1-findings.md`](../plans/2026-08-01-curriculum-spine-task1-findings.md).
 
 ---
 
@@ -201,7 +209,7 @@ Transition, following the legacy-window pattern the repo already uses for `expec
 
 Slug-addressed throughout, matching every existing admin resource. All routes wrapped in `withAdmin`.
 
-```
+```text
 /api/admin/tracks/[slug]/modules                                     GET · POST
 /api/admin/tracks/[slug]/modules/reorder                             POST { moduleSlugs[] }
 /api/admin/tracks/[slug]/modules/[moduleSlug]                        GET · PATCH · DELETE

@@ -20,14 +20,24 @@
 - **Locked-contest problems must be excluded from learner-facing problem queries** via `excludeLockedProblems` from `lib/contest-locks.ts`, as `lib/tracks.ts` already does.
 - **Lock copy is "Locked until 02"** — not "Not started".
 - **Branch is `feat/curriculum-spine`.** PRs must pass `--base main` to `gh pr create`. No direct push to `main`, no `--no-verify`.
-- **Local dev DB:** `postgresql://anchitgupta@localhost:5432/datalearn` (user `anchitgupta`, not `postgres`). `.env` points here; `.env.local` points at production.
+- **Know which database you are talking to.** `.env` → local Postgres `postgresql://anchitgupta@localhost:5432/datalearn` (user `anchitgupta`, not `postgres`) — this is the one every test uses. `.env.production.local` → **real production**, `ep-autumn-math`. `.env.local` → `ep-cool-flower`, a **stale Neon branch that is NOT production** and must never be cited as such. Establishing this cost Task 1; do not re-derive it.
+- **`ls prisma/migrations | wc -l` overcounts by one** — `migration_lock.toml` is not a migration.
 - **Restart the dev server after any `prisma/schema.prisma` change** — the running process holds the old generated client.
 
 ---
 
 ## Task 1: Clear the production migration backlog
 
-Production sits at 19 of 28 migrations and has no `Track` table, despite `vercel-build` running `prisma migrate deploy`. This task adds no schema — it makes the rest of the plan shippable. **Do it first.**
+> **RESOLVED 2026-08-01 — this task is complete and its premise was false.** There
+> is no backlog. Production (`ep-autumn-math`, via `.env.production.local`) is at
+> 27 of 27 migrations with the `Track` table populated and `/api/health` green.
+> The original figure was measured against `.env.local`, which points at
+> `ep-cool-flower` — a stale Neon *branch*, not production — and overcounted by
+> one because `migration_lock.toml` was treated as a migration. Evidence:
+> [`2026-08-01-curriculum-spine-task1-findings.md`](./2026-08-01-curriculum-spine-task1-findings.md).
+> Steps below are retained as the record of what was investigated.
+
+This task adds no schema — it was there to make the rest of the plan shippable.
 
 **Files:**
 
