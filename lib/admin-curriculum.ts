@@ -26,8 +26,11 @@ function isPrismaCode(error: unknown, code: string): boolean {
  * against this project's Postgres instance), quoted per-identifier, e.g.
  * `["\"trackId\"", "slug"]`. Check both shapes so this keeps working
  * whichever engine mode is active.
+ *
+ * Exported for direct testing: the two error shapes below were established
+ * empirically and a regression here would silently mislabel every conflict.
  */
-function isUniqueViolationOn(error: unknown, field: string): boolean {
+export function isUniqueViolationOn(error: unknown, field: string): boolean {
     if (!isPrismaCode(error, "P2002")) return false
     const meta = (error as { meta?: Record<string, unknown> }).meta
     const target = meta?.target

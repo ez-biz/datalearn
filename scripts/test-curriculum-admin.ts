@@ -13,6 +13,7 @@ import pg from "pg"
 import {
     createModule,
     deleteModule,
+    isUniqueViolationOn,
     reorderModules,
     updateModule,
 } from "../lib/admin-curriculum"
@@ -191,37 +192,66 @@ describe("reorderModules", () => {
         const track = await prisma.track.findUnique({ where: { slug: TRACK_SLUG } })
         assert.equal(track?.status, "DRAFT")
     })
-})
 
-describe("stale-write handling", () => {
-    it("reports a 409 rather than throwing when a module vanishes before reorder", async () => {
+    it("returns a well-formed result, never an unhandled throw, when a module vanishes mid-reorder", async () => {
         await createModule(TRACK_SLUG, { name: "A", description: "d" })
         await createModule(TRACK_SLUG, { name: "B", description: "d" })
-        // Delete B out from under the reorder by going straight to the DB,
-        // simulating a concurrent commit between the read and the write.
         const b = await prisma.module.findFirst({ where: { trackId, slug: "b" } })
         const reorderPromise = reorderModules(TRACK_SLUG, ["b", "a"])
         await prisma.module.delete({ where: { id: b!.id } })
         const r = await reorderPromise
-        // reorderModules does two sequential reads (findTrackId, then
-        // findMany) before its permutation check, while this delete is a
-        // single round trip fired right after the call — so on this stack
-        // the delete deterministically lands before the permutation check
-        // runs, and it correctly rejects with 400 (payload no longer
-        // matches current modules) rather than reaching the transaction.
-        // A slower delete (landing between the check and the transaction
-        // commit) would instead hit the P2025 catch added for Finding 2/3
-        // and report 409. Either way, what must NEVER happen is an
-        // unhandled throw.
+        // The delete usually wins (400 from the permutation check) but may lose
+        // (409 from the transaction catch). Both are correct; a throw is not.
         assert.equal(typeof r.ok, "boolean")
-        if (!r.ok) assert.ok([400, 409].includes(r.status), `expected 400 or 409, got ${r.status}`)
+        if (!r.ok) assert.ok(r.status === 400 || r.status === 409)
+    })
+})
+
+describe("isUniqueViolationOn", () => {
+    // The shape @prisma/adapter-pg actually produces — verified against the
+    // local database. `meta.target` is undefined and trackId arrives quoted.
+    const driverShape = {
+        code: "P2002",
+        meta: {
+            driverAdapterError: {
+                cause: { constraint: { fields: ['"trackId"', "slug"] } },
+            },
+        },
+    }
+
+    it("reads the driver-adapter shape that this project actually produces", () => {
+        assert.equal(isUniqueViolationOn(driverShape, "slug"), true)
     })
 
-    it("distinguishes a slug conflict from other unique violations", async () => {
-        await createModule(TRACK_SLUG, { name: "Joins", description: "d" })
-        const r = await createModule(TRACK_SLUG, { name: "Joins", description: "d" })
-        assert.equal(r.ok, false)
-        assert.equal(!r.ok && r.status, 409)
-        assert.match(!r.ok ? r.error : "", /slug already exists/)
+    it("strips the quoting the driver applies to some field names", () => {
+        assert.equal(isUniqueViolationOn(driverShape, "trackId"), true)
+    })
+
+    it("does not match a field absent from the constraint", () => {
+        assert.equal(isUniqueViolationOn(driverShape, "position"), false)
+    })
+
+    it("still reads a plain meta.target array, for driver-agnostic safety", () => {
+        const e = { code: "P2002", meta: { target: ["trackId", "position"] } }
+        assert.equal(isUniqueViolationOn(e, "position"), true)
+        assert.equal(isUniqueViolationOn(e, "slug"), false)
+    })
+
+    it("still reads a string meta.target", () => {
+        const e = { code: "P2002", meta: { target: "trackId_position" } }
+        assert.equal(isUniqueViolationOn(e, "position"), true)
+    })
+
+    it("returns false when meta is absent entirely", () => {
+        assert.equal(isUniqueViolationOn({ code: "P2002" }, "slug"), false)
+    })
+
+    it("returns false for any error that is not P2002", () => {
+        const e = { code: "P2025", meta: { target: ["slug"] } }
+        assert.equal(isUniqueViolationOn(e, "slug"), false)
+    })
+
+    it("returns false for a non-Prisma error", () => {
+        assert.equal(isUniqueViolationOn(new Error("boom"), "slug"), false)
     })
 })
