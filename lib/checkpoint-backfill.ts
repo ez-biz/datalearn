@@ -23,6 +23,16 @@ export type BackfillPlan = {
 }
 
 /**
+ * Non-finite times (e.g. an invalid Date) sort last rather than producing
+ * NaN from a raw subtraction, which is unspecified sort behaviour and would
+ * break the "deterministic across runs" guarantee.
+ */
+function timeOf(date: Date): number {
+    const t = date.getTime()
+    return Number.isFinite(t) ? t : Number.POSITIVE_INFINITY
+}
+
+/**
  * Tiebreak: earliest Article.createdAt wins; ties break on articleId
  * ascending so the plan is deterministic across runs.
  */
@@ -39,8 +49,7 @@ export function planCheckpointBackfill(pairs: BackfillPair[]): BackfillPlan {
 
     for (const [problemId, candidates] of byProblem) {
         const sorted = [...candidates].sort((a, b) => {
-            const byDate =
-                a.articleCreatedAt.getTime() - b.articleCreatedAt.getTime()
+            const byDate = timeOf(a.articleCreatedAt) - timeOf(b.articleCreatedAt)
             if (byDate !== 0) return byDate
             return a.articleId < b.articleId ? -1 : a.articleId > b.articleId ? 1 : 0
         })
@@ -55,12 +64,16 @@ export function planCheckpointBackfill(pairs: BackfillPair[]): BackfillPlan {
         }
     }
 
-    // Position within each article, in the winners' stable input order.
+    // Position within each article, 0-based and contiguous. Within one
+    // article the winners are ordered by problemId ascending — an opaque
+    // cuid order, NOT the original relatedProblems sequence, which the
+    // implicit m2m does not record. If a meaningful order is ever needed,
+    // it has to come from somewhere else; re-sort the checkpoints after
+    // backfilling rather than trusting this one.
     const nextPosition = new Map<string, number>()
     const create = winners
         .sort((a, b) => {
-            const byDate =
-                a.articleCreatedAt.getTime() - b.articleCreatedAt.getTime()
+            const byDate = timeOf(a.articleCreatedAt) - timeOf(b.articleCreatedAt)
             if (byDate !== 0) return byDate
             if (a.articleId !== b.articleId)
                 return a.articleId < b.articleId ? -1 : 1

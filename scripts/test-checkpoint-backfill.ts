@@ -73,4 +73,31 @@ describe("planCheckpointBackfill", () => {
         const plan = planCheckpointBackfill([])
         assert.deepEqual(plan, { create: [], skipped: [] })
     })
+
+    it("numbers positions per article, not globally", () => {
+        const plan = planCheckpointBackfill([
+            { articleId: "a1", articleCreatedAt: d("2026-01-01"), problemId: "p1" },
+            { articleId: "a2", articleCreatedAt: d("2026-01-02"), problemId: "p2" },
+        ])
+        // Each article's first checkpoint is position 0. A single global
+        // counter would make the second one 1.
+        assert.deepEqual(
+            plan.create.map((c) => ({ articleId: c.articleId, position: c.position })),
+            [
+                { articleId: "a1", position: 0 },
+                { articleId: "a2", position: 0 },
+            ],
+        )
+    })
+
+    it("orders an invalid date last rather than scrambling the plan", () => {
+        const plan = planCheckpointBackfill([
+            { articleId: "bad", articleCreatedAt: new Date("nonsense"), problemId: "p1" },
+            { articleId: "good", articleCreatedAt: d("2026-01-01"), problemId: "p1" },
+        ])
+        assert.equal(plan.create.length, 1)
+        assert.equal(plan.create[0].articleId, "good")
+        assert.equal(plan.skipped.length, 1)
+        assert.equal(plan.skipped[0].droppedArticleId, "bad")
+    })
 })
