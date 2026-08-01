@@ -9,7 +9,8 @@ import assert from "node:assert/strict"
 import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
 import pg from "pg"
-import { getTrackCurriculum } from "../actions/curriculum"
+import { getTrackCurriculum, recordLessonProgress } from "../actions/curriculum"
+import { recordLessonProgressForUser } from "../lib/curriculum-write"
 
 const PREFIX = "curricread-"
 const TRACK_SLUG = `${PREFIX}track`
@@ -19,6 +20,8 @@ let prisma: PrismaClient
 let userId: string
 let lessonAId: string
 let problemAId: string
+let writeLessonId: string
+let writeLessonSlug: string
 
 async function cleanup() {
     await prisma.submission.deleteMany({ where: { user: { email: { startsWith: PREFIX } } } })
@@ -119,6 +122,13 @@ before(async () => {
     await prisma.moduleLesson.create({
         data: { moduleId: m2.id, articleId: lb.id, position: 0 },
     })
+
+    // Dedicated lesson for recordLessonProgress(ForUser) writes — kept out
+    // of any module so its writes cannot perturb the getTrackCurriculum
+    // rollup assertions above.
+    const lw = await article("lesson-write")
+    writeLessonId = lw.id
+    writeLessonSlug = `${PREFIX}lesson-write`
 })
 
 after(async () => {
@@ -169,5 +179,79 @@ describe("getTrackCurriculum", () => {
         assert.equal(c!.modules[0].lessons[0].checkpoints[0].solved, false)
         // Module 1 is not complete for an anonymous viewer, so module 2 locks.
         assert.equal(c!.modules[1].unlocked, false)
+    })
+})
+
+describe("recordLessonProgressForUser", () => {
+    it("a first write of 40 stores 40 with completed:false", async () => {
+        const result = await recordLessonProgressForUser(userId, writeLessonSlug, 40)
+        assert.equal(result.ok, true)
+        assert.equal(result.percent, 40)
+        assert.equal(result.completed, false)
+    })
+
+    it("a following write of 20 leaves the stored value at 40 (monotonic)", async () => {
+        await recordLessonProgressForUser(userId, writeLessonSlug, 20)
+        const row = await prisma.lessonProgress.findUnique({
+            where: { userId_articleId: { userId, articleId: writeLessonId } },
+            select: { percent: true },
+        })
+        assert.equal(row?.percent, 40)
+    })
+
+    it("a write of 100 sets completed:true and populates completedAt", async () => {
+        const result = await recordLessonProgressForUser(userId, writeLessonSlug, 100)
+        assert.equal(result.percent, 100)
+        assert.equal(result.completed, true)
+        const row = await prisma.lessonProgress.findUnique({
+            where: { userId_articleId: { userId, articleId: writeLessonId } },
+            select: { completedAt: true },
+        })
+        assert.notEqual(row?.completedAt, null)
+    })
+
+    it("a subsequent write of 30 leaves completedAt unchanged and percent still 100", async () => {
+        const before = await prisma.lessonProgress.findUnique({
+            where: { userId_articleId: { userId, articleId: writeLessonId } },
+            select: { completedAt: true },
+        })
+        const result = await recordLessonProgressForUser(userId, writeLessonSlug, 30)
+        assert.equal(result.percent, 100)
+        assert.equal(result.completed, true)
+        const after = await prisma.lessonProgress.findUnique({
+            where: { userId_articleId: { userId, articleId: writeLessonId } },
+            select: { completedAt: true, percent: true },
+        })
+        assert.equal(after?.percent, 100)
+        assert.equal(after?.completedAt?.getTime(), before?.completedAt?.getTime())
+    })
+
+    it("an unknown article slug returns {ok:false} and writes no row", async () => {
+        const countBefore = await prisma.lessonProgress.count({
+            where: { userId, article: { slug: `${PREFIX}no-such-lesson` } },
+        })
+        const result = await recordLessonProgressForUser(userId, `${PREFIX}no-such-lesson`, 50)
+        assert.equal(result.ok, false)
+        assert.equal(result.percent, 0)
+        assert.equal(result.completed, false)
+        const countAfter = await prisma.lessonProgress.count({
+            where: { userId, article: { slug: `${PREFIX}no-such-lesson` } },
+        })
+        assert.equal(countAfter, countBefore)
+        assert.equal(countAfter, 0)
+    })
+})
+
+describe("recordLessonProgress (session wrapper)", () => {
+    it("with no session returns {ok:false, percent:0, completed:false} and writes no row", async () => {
+        const countBefore = await prisma.lessonProgress.count({
+            where: { articleId: writeLessonId },
+        })
+        const result = await recordLessonProgress(writeLessonSlug, 50)
+        assert.deepEqual(result, { ok: false, percent: 0, completed: false })
+        const countAfter = await prisma.lessonProgress.count({
+            where: { articleId: writeLessonId },
+        })
+        assert.equal(countAfter, countBefore)
     })
 })
