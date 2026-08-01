@@ -14,6 +14,7 @@ import {
     createModule,
     deleteModule,
     isUniqueViolationOn,
+    mapWriteFailure,
     reorderModules,
     updateModule,
 } from "../lib/admin-curriculum"
@@ -208,6 +209,10 @@ describe("reorderModules", () => {
 })
 
 describe("isUniqueViolationOn", () => {
+    // Hand-built rather than a real PrismaClientKnownRequestError: if the
+    // driver's error shape changes these mocks will not drift with it. The
+    // end-to-end net is "409s on a duplicate slug within the track" above,
+    // which provokes a real P2002 through @prisma/adapter-pg.
     // The shape @prisma/adapter-pg actually produces — verified against the
     // local database. `meta.target` is undefined and trackId arrives quoted.
     const driverShape = {
@@ -253,5 +258,31 @@ describe("isUniqueViolationOn", () => {
 
     it("returns false for a non-Prisma error", () => {
         assert.equal(isUniqueViolationOn(new Error("boom"), "slug"), false)
+    })
+})
+
+describe("mapWriteFailure", () => {
+    it("maps a vanished record to a retryable 409", () => {
+        const r = mapWriteFailure({ code: "P2025" }, "reorder modules")
+        assert.equal(r.ok, false)
+        assert.equal(!r.ok && r.status, 409)
+    })
+
+    it("maps a unique collision to the same retryable 409", () => {
+        const r = mapWriteFailure({ code: "P2002" }, "delete module")
+        assert.equal(r.ok, false)
+        assert.equal(!r.ok && r.status, 409)
+    })
+
+    it("keeps a genuine error loud as a 500 carrying the verb", () => {
+        const r = mapWriteFailure(new Error("connection reset"), "delete module")
+        assert.equal(r.ok, false)
+        assert.equal(!r.ok && r.status, 500)
+        assert.match(!r.ok ? r.error : "", /delete module/)
+    })
+
+    it("does not treat an unrelated Prisma code as retryable", () => {
+        const r = mapWriteFailure({ code: "P2003" }, "reorder modules")
+        assert.equal(!r.ok && r.status, 500)
     })
 })

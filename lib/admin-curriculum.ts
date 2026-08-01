@@ -55,6 +55,29 @@ const STALE_WRITE = {
     error: "The module list changed during the write — reload and retry.",
 }
 
+/**
+ * Map a write-time Prisma failure to a caller-facing result.
+ *
+ * P2025 (record vanished) and P2002 (position collided) both mean a
+ * concurrent curriculum edit invalidated a list we read before the write —
+ * the caller should reload and retry, not treat it as a server fault.
+ * Anything else is a genuine error and stays loud.
+ *
+ * Exported for direct testing: the race that produces these codes cannot be
+ * driven deterministically from a test, so the mapping is verified in
+ * isolation instead.
+ */
+export function mapWriteFailure(
+    error: unknown,
+    verb: string,
+): CurriculumMutationResult {
+    if (isPrismaCode(error, "P2025") || isPrismaCode(error, "P2002")) {
+        return STALE_WRITE
+    }
+    console.error(`${verb} failed:`, error)
+    return { ok: false, status: 500, error: `Failed to ${verb}.` }
+}
+
 function setsEqual(left: Set<string>, right: Set<string>): boolean {
     if (left.size !== right.size) return false
     for (const value of left) {
@@ -215,11 +238,7 @@ export async function deleteModule(
             )
         })
     } catch (error) {
-        if (isPrismaCode(error, "P2025") || isPrismaCode(error, "P2002")) {
-            return STALE_WRITE
-        }
-        console.error("Delete module failed:", error)
-        return { ok: false, status: 500, error: "Failed to delete module." }
+        return mapWriteFailure(error, "delete module")
     }
 
     return { ok: true }
@@ -259,11 +278,7 @@ export async function reorderModules(
             ),
         )
     } catch (error) {
-        if (isPrismaCode(error, "P2025") || isPrismaCode(error, "P2002")) {
-            return STALE_WRITE
-        }
-        console.error("Reorder modules failed:", error)
-        return { ok: false, status: 500, error: "Failed to reorder modules." }
+        return mapWriteFailure(error, "reorder modules")
     }
 
     return { ok: true }
