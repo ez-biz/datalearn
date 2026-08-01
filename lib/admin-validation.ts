@@ -643,6 +643,11 @@ export const ModuleCreateInput = z.object({
 /**
  * Strict on purpose: a caller that sends `position` gets a 400 rather than
  * having it silently stripped, so the "reorder only" rule is discoverable.
+ * WARNING: `.strict()` is carried by this schema object itself, not by its
+ * fields. `ModuleUpdateInput.partial()` keeps the guarantee, but building a
+ * new schema by spreading `{ ...ModuleUpdateInput.shape }` silently drops the
+ * catchall and re-admits `position`. If you need a variant, derive it with
+ * `.partial()` / `.extend()` on this schema — never by spreading its shape.
  */
 export const ModuleUpdateInput = z
     .object({
