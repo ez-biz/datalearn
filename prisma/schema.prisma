@@ -39,6 +39,7 @@ model User {
   contestProblemSolves        ContestProblemSolve[]
   contestLeaderboardRows      ContestLeaderboardEntry[]
   adminAuditLogs              AdminAuditLog[]
+  lessonProgress              LessonProgress[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -106,26 +107,29 @@ enum TopicLane {
 }
 
 model Article {
-  id              String           @id @default(cuid())
+  id              String             @id @default(cuid())
   title           String
-  slug            String           @unique
-  content         String           @db.Text
-  status          ArticleStatus    @default(DRAFT)
-  hasVisualBlocks Boolean          @default(false)
-  summary         String?          @db.Text
+  slug            String             @unique
+  content         String             @db.Text
+  status          ArticleStatus      @default(DRAFT)
+  hasVisualBlocks Boolean            @default(false)
+  summary         String?            @db.Text
   readingMinutes  Int?
-  reviewNotes     String?          @db.Text
+  reviewNotes     String?            @db.Text
   reviewedAt      DateTime?
   reviewedBy      String?
   topicId         String
-  topic           Topic            @relation(fields: [topicId], references: [id])
+  topic           Topic              @relation(fields: [topicId], references: [id])
   authorId        String
-  author          User             @relation(fields: [authorId], references: [id], onDelete: Restrict)
-  tags            Tag[]            @relation("ArticleTags")
-  relatedProblems SQLProblem[]     @relation("ArticleProblems")
+  author          User               @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  tags            Tag[]              @relation("ArticleTags")
+  relatedProblems SQLProblem[]       @relation("ArticleProblems")
   versions        ArticleVersion[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  moduleLessons   ModuleLesson[]
+  checkpoints     LessonCheckpoint[]
+  lessonProgress  LessonProgress[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   @@index([status])
   @@index([hasVisualBlocks])
@@ -223,6 +227,7 @@ model SQLProblem {
   relatedArticles                 Article[]               @relation("ArticleProblems")
   listItems                       ProblemListItem[]
   trackItems                      TrackItem[]
+  lessonCheckpoint                LessonCheckpoint?
   dailyProblems                   DailyProblem[]
   contestProblems                 ContestProblem[]
   contestLock                     ContestProblemLock?
@@ -269,6 +274,7 @@ model Track {
   estimatedMinutes Int             @default(60)
   coverImageUrl    String?
   items            TrackItem[]
+  modules          Module[]
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
@@ -286,6 +292,78 @@ model TrackItem {
   @@unique([trackId, problemId])
   @@unique([trackId, position])
   @@index([trackId])
+}
+
+/// A named, ordered stage of a Track. Modules group lessons; lessons
+/// carry checkpoint problems. `slug` is unique per track and does NOT
+/// contain the display number — the "04-" prefix in breadcrumbs is
+/// derived from `position` at render time so reordering never breaks
+/// a URL.
+model Module {
+  id          String         @id @default(cuid())
+  trackId     String
+  track       Track          @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  slug        String
+  name        String
+  description String         @db.Text
+  /// 0-indexed. Mutable ONLY inside reorderModules' transaction.
+  position    Int
+  lessons     ModuleLesson[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([trackId, slug])
+  @@unique([trackId, position])
+  @@index([trackId])
+}
+
+/// An Article placed in a Module, in order. An Article MAY appear in more
+/// than one Module — reuse across tracks is intentional, and read progress
+/// is keyed on the article so it counts everywhere the lesson appears.
+model ModuleLesson {
+  moduleId  String
+  module    Module  @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  articleId String
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  /// 0-indexed. Mutable ONLY inside reorderModuleLessons' transaction.
+  position  Int
+
+  @@id([moduleId, articleId])
+  @@unique([moduleId, position])
+  @@index([articleId])
+}
+
+/// A problem that checks a lesson. `@@unique([problemId])` enforces the
+/// product rule from the design handoff: a problem belongs to exactly one
+/// lesson. Relaxing to many-to-many later means dropping this constraint,
+/// not migrating SQLProblem.
+model LessonCheckpoint {
+  articleId String
+  article   Article    @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  problemId String
+  problem   SQLProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  /// 0-indexed. Mutable ONLY inside reorderCheckpoints' transaction.
+  position  Int
+
+  @@id([articleId, problemId])
+  @@unique([problemId])
+  @@unique([articleId, position])
+}
+
+/// Per-user lesson read state. `percent` is monotonic — writes take
+/// max(existing, incoming) and never decrease. `completedAt` is set once,
+/// when percent first reaches 100, and is never unset.
+model LessonProgress {
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articleId   String
+  article     Article   @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  percent     Int       @default(0)
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@id([userId, articleId])
+  @@index([userId, completedAt])
 }
 
 enum TrackDifficulty {
