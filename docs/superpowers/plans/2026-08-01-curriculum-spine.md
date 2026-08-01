@@ -571,12 +571,15 @@ export function isModuleUnlocked(
  * Monotonic progress write. Reading backwards up a lesson must not undo
  * progress, so the stored value only ever advances.
  */
+function boundPercent(value: number): number {
+    return Math.min(100, Math.max(0, Math.round(value)))
+}
+
 export function clampProgressPercent(
     existing: number,
     incoming: number,
 ): number {
-    const bounded = Math.min(100, Math.max(0, Math.round(incoming)))
-    return Math.max(existing, bounded)
+    return Math.max(boundPercent(existing), boundPercent(incoming))
 }
 ```
 
