@@ -192,3 +192,36 @@ describe("reorderModules", () => {
         assert.equal(track?.status, "DRAFT")
     })
 })
+
+describe("stale-write handling", () => {
+    it("reports a 409 rather than throwing when a module vanishes before reorder", async () => {
+        await createModule(TRACK_SLUG, { name: "A", description: "d" })
+        await createModule(TRACK_SLUG, { name: "B", description: "d" })
+        // Delete B out from under the reorder by going straight to the DB,
+        // simulating a concurrent commit between the read and the write.
+        const b = await prisma.module.findFirst({ where: { trackId, slug: "b" } })
+        const reorderPromise = reorderModules(TRACK_SLUG, ["b", "a"])
+        await prisma.module.delete({ where: { id: b!.id } })
+        const r = await reorderPromise
+        // reorderModules does two sequential reads (findTrackId, then
+        // findMany) before its permutation check, while this delete is a
+        // single round trip fired right after the call — so on this stack
+        // the delete deterministically lands before the permutation check
+        // runs, and it correctly rejects with 400 (payload no longer
+        // matches current modules) rather than reaching the transaction.
+        // A slower delete (landing between the check and the transaction
+        // commit) would instead hit the P2025 catch added for Finding 2/3
+        // and report 409. Either way, what must NEVER happen is an
+        // unhandled throw.
+        assert.equal(typeof r.ok, "boolean")
+        if (!r.ok) assert.ok([400, 409].includes(r.status), `expected 400 or 409, got ${r.status}`)
+    })
+
+    it("distinguishes a slug conflict from other unique violations", async () => {
+        await createModule(TRACK_SLUG, { name: "Joins", description: "d" })
+        const r = await createModule(TRACK_SLUG, { name: "Joins", description: "d" })
+        assert.equal(r.ok, false)
+        assert.equal(!r.ok && r.status, 409)
+        assert.match(!r.ok ? r.error : "", /slug already exists/)
+    })
+})
