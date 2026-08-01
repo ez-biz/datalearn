@@ -1143,6 +1143,25 @@ async function findTrackId(trackSlug: string): Promise<string | null> {
     return track?.id ?? null
 }
 
+/**
+ * Renumber `keys` to positions 0..n-1 via `update`.
+ *
+ * Two passes: park everything at a negative position first, then assign the
+ * real ones. A single forward pass would transiently collide with the unique
+ * (parent, position) constraint. Callers must run this inside a transaction.
+ *
+ * The `update` callback exists because the three position-bearing models have
+ * different composite-key shapes — Module keys on `id`, ModuleLesson on
+ * `moduleId_articleId`, LessonCheckpoint on `articleId_problemId`.
+ */
+async function renumber(
+    keys: string[],
+    update: (key: string, position: number) => Promise<unknown>,
+): Promise<void> {
+    for (let i = 0; i < keys.length; i++) await update(keys[i], -i - 1)
+    for (let i = 0; i < keys.length; i++) await update(keys[i], i)
+}
+
 export async function createModule(
     trackSlug: string,
     input: {
@@ -1259,20 +1278,9 @@ export async function deleteModule(
 
     await prisma.$transaction(async (tx) => {
         await tx.module.delete({ where: { id: target.id } })
-        // Park everything negative first so no intermediate write collides
-        // with the unique (trackId, position) constraint.
-        for (let i = 0; i < remaining.length; i++) {
-            await tx.module.update({
-                where: { id: remaining[i] },
-                data: { position: -i - 1 },
-            })
-        }
-        for (let i = 0; i < remaining.length; i++) {
-            await tx.module.update({
-                where: { id: remaining[i] },
-                data: { position: i },
-            })
-        }
+        await renumber(remaining, (id, position) =>
+            tx.module.update({ where: { id }, data: { position } }),
+        )
     })
 
     return { ok: true }
@@ -1305,20 +1313,11 @@ export async function reorderModules(
     const idBySlug = new Map(modules.map((m) => [m.slug, m.id]))
     const orderedIds = moduleSlugs.map((s) => idBySlug.get(s)!)
 
-    await prisma.$transaction(async (tx) => {
-        for (let i = 0; i < orderedIds.length; i++) {
-            await tx.module.update({
-                where: { id: orderedIds[i] },
-                data: { position: -i - 1 },
-            })
-        }
-        for (let i = 0; i < orderedIds.length; i++) {
-            await tx.module.update({
-                where: { id: orderedIds[i] },
-                data: { position: i },
-            })
-        }
-    })
+    await prisma.$transaction(async (tx) =>
+        renumber(orderedIds, (id, position) =>
+            tx.module.update({ where: { id }, data: { position } }),
+        ),
+    )
 
     return { ok: true }
 }
@@ -1750,22 +1749,12 @@ export async function removeLessonFromModule(
         await tx.moduleLesson.delete({
             where: { moduleId_articleId: { moduleId, articleId } },
         })
-        for (let i = 0; i < remaining.length; i++) {
-            await tx.moduleLesson.update({
-                where: {
-                    moduleId_articleId: { moduleId, articleId: remaining[i] },
-                },
-                data: { position: -i - 1 },
-            })
-        }
-        for (let i = 0; i < remaining.length; i++) {
-            await tx.moduleLesson.update({
-                where: {
-                    moduleId_articleId: { moduleId, articleId: remaining[i] },
-                },
-                data: { position: i },
-            })
-        }
+        await renumber(remaining, (id, position) =>
+            tx.moduleLesson.update({
+                where: { moduleId_articleId: { moduleId, articleId: id } },
+                data: { position },
+            }),
+        )
     })
 
     return { ok: true }
@@ -1800,24 +1789,14 @@ export async function reorderModuleLessons(
     const idBySlug = new Map(lessons.map((l) => [l.article.slug, l.articleId]))
     const ordered = articleSlugs.map((s) => idBySlug.get(s)!)
 
-    await prisma.$transaction(async (tx) => {
-        for (let i = 0; i < ordered.length; i++) {
-            await tx.moduleLesson.update({
-                where: {
-                    moduleId_articleId: { moduleId, articleId: ordered[i] },
-                },
-                data: { position: -i - 1 },
-            })
-        }
-        for (let i = 0; i < ordered.length; i++) {
-            await tx.moduleLesson.update({
-                where: {
-                    moduleId_articleId: { moduleId, articleId: ordered[i] },
-                },
-                data: { position: i },
-            })
-        }
-    })
+    await prisma.$transaction(async (tx) =>
+        renumber(ordered, (id, position) =>
+            tx.moduleLesson.update({
+                where: { moduleId_articleId: { moduleId, articleId: id } },
+                data: { position },
+            }),
+        ),
+    )
 
     return { ok: true }
 }
@@ -1907,22 +1886,12 @@ export async function removeCheckpoint(
                 articleId_problemId: { articleId, problemId: target.problemId },
             },
         })
-        for (let i = 0; i < remaining.length; i++) {
-            await tx.lessonCheckpoint.update({
-                where: {
-                    articleId_problemId: { articleId, problemId: remaining[i] },
-                },
-                data: { position: -i - 1 },
-            })
-        }
-        for (let i = 0; i < remaining.length; i++) {
-            await tx.lessonCheckpoint.update({
-                where: {
-                    articleId_problemId: { articleId, problemId: remaining[i] },
-                },
-                data: { position: i },
-            })
-        }
+        await renumber(remaining, (id, position) =>
+            tx.lessonCheckpoint.update({
+                where: { articleId_problemId: { articleId, problemId: id } },
+                data: { position },
+            }),
+        )
     })
 
     return { ok: true }
@@ -1957,24 +1926,14 @@ export async function reorderCheckpoints(
     )
     const ordered = problemSlugs.map((s) => idBySlug.get(s)!)
 
-    await prisma.$transaction(async (tx) => {
-        for (let i = 0; i < ordered.length; i++) {
-            await tx.lessonCheckpoint.update({
-                where: {
-                    articleId_problemId: { articleId, problemId: ordered[i] },
-                },
-                data: { position: -i - 1 },
-            })
-        }
-        for (let i = 0; i < ordered.length; i++) {
-            await tx.lessonCheckpoint.update({
-                where: {
-                    articleId_problemId: { articleId, problemId: ordered[i] },
-                },
-                data: { position: i },
-            })
-        }
-    })
+    await prisma.$transaction(async (tx) =>
+        renumber(ordered, (id, position) =>
+            tx.lessonCheckpoint.update({
+                where: { articleId_problemId: { articleId, problemId: id } },
+                data: { position },
+            }),
+        ),
+    )
 
     return { ok: true }
 }
