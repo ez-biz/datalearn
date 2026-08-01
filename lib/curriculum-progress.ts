@@ -95,6 +95,13 @@ export function isModuleUnlocked(
 }
 
 /**
+ * Clamp a value to 0..100 range and round fractional input.
+ */
+function boundPercent(value: number): number {
+    return Math.min(100, Math.max(0, Math.round(value)))
+}
+
+/**
  * Monotonic progress write. Reading backwards up a lesson must not undo
  * progress, so the stored value only ever advances.
  */
@@ -102,6 +109,5 @@ export function clampProgressPercent(
     existing: number,
     incoming: number,
 ): number {
-    const bounded = Math.min(100, Math.max(0, Math.round(incoming)))
-    return Math.max(existing, bounded)
+    return Math.max(boundPercent(existing), boundPercent(incoming))
 }

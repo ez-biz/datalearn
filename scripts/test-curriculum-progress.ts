@@ -131,4 +131,16 @@ describe("clampProgressPercent", () => {
     it("rounds fractional input", () => {
         assert.equal(clampProgressPercent(0, 62.4), 62)
     })
+
+    it("clamps an out-of-range existing value down to 100", () => {
+        assert.equal(clampProgressPercent(150, 90), 100)
+    })
+
+    it("raises a negative existing value to 0", () => {
+        assert.equal(clampProgressPercent(-20, 0), 0)
+    })
+
+    it("rounds a fractional existing value", () => {
+        assert.equal(clampProgressPercent(62.7, 10), 63)
+    })
 })
