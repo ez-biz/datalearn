@@ -22,6 +22,7 @@
 - **Branch is `feat/curriculum-spine`.** PRs must pass `--base main` to `gh pr create`. No direct push to `main`, no `--no-verify`.
 - **Know which database you are talking to.** `.env` → local Postgres `postgresql://anchitgupta@localhost:5432/datalearn` (user `anchitgupta`, not `postgres`) — this is the one every test uses. `.env.production.local` → **real production**, `ep-autumn-math`. `.env.local` → `ep-cool-flower`, a **stale Neon branch that is NOT production** and must never be cited as such. Establishing this cost Task 1; do not re-derive it.
 - **`ls prisma/migrations | wc -l` overcounts by one** — `migration_lock.toml` is not a migration.
+- **`npm run dev` does NOT use `.env`.** Next.js loads `.env.local` at higher precedence, so a plain `npm run dev` talks to `ep-cool-flower` (the stale Neon branch). A real shell variable outranks every `.env` file, so start the server as `DATABASE_URL='postgresql://anchitgupta@localhost:5432/datalearn' npm run dev` whenever you need it bound to local Postgres. Do NOT move `.env.local` aside — verified working technique, established in Task 7.
 - **Restart the dev server after any `prisma/schema.prisma` change** — the running process holds the old generated client.
 
 ---
