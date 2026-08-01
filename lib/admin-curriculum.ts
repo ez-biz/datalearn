@@ -283,3 +283,332 @@ export async function reorderModules(
 
     return { ok: true }
 }
+
+async function findModuleId(
+    trackSlug: string,
+    moduleSlug: string,
+): Promise<{ ok: true; id: string } | { ok: false; status: number; error: string }> {
+    const trackId = await findTrackId(trackSlug)
+    if (!trackId) return { ok: false, status: 404, error: "Track not found." }
+    const mod = await prisma.module.findUnique({
+        where: { trackId_slug: { trackId, slug: moduleSlug } },
+        select: { id: true },
+    })
+    if (!mod) return { ok: false, status: 404, error: "Module not found." }
+    return { ok: true, id: mod.id }
+}
+
+async function findArticleId(articleSlug: string): Promise<string | null> {
+    const article = await prisma.article.findUnique({
+        where: { slug: articleSlug },
+        select: { id: true },
+    })
+    return article?.id ?? null
+}
+
+export async function addLessonToModule(
+    trackSlug: string,
+    moduleSlug: string,
+    input: { articleSlug: string; position?: number },
+): Promise<CurriculumMutationResult<{ articleId: string; position: number }>> {
+    const found = await findModuleId(trackSlug, moduleSlug)
+    if (!found.ok) return found
+    const moduleId = found.id
+
+    const articleId = await findArticleId(input.articleSlug)
+    if (!articleId) return { ok: false, status: 404, error: "Article not found." }
+
+    const existing = await prisma.moduleLesson.findUnique({
+        where: { moduleId_articleId: { moduleId, articleId } },
+        select: { articleId: true },
+    })
+    if (existing) {
+        return {
+            ok: false,
+            status: 409,
+            error: "That lesson is already in this module.",
+        }
+    }
+
+    try {
+        const created = await prisma.$transaction(async (tx) => {
+            const current = await tx.moduleLesson.findMany({
+                where: { moduleId },
+                orderBy: { position: "asc" },
+                select: { articleId: true, position: true },
+            })
+            const position = Math.min(
+                input.position ?? current.length,
+                current.length,
+            )
+            const toShift = current
+                .filter((l) => l.position >= position)
+                .sort((a, b) => b.position - a.position)
+            for (const l of toShift) {
+                await tx.moduleLesson.update({
+                    where: {
+                        moduleId_articleId: { moduleId, articleId: l.articleId },
+                    },
+                    data: { position: l.position + 1 },
+                })
+            }
+            return tx.moduleLesson.create({
+                data: { moduleId, articleId, position },
+                select: { articleId: true, position: true },
+            })
+        })
+
+        return { ok: true, data: created }
+    } catch (error) {
+        // mapWriteFailure's return type is CurriculumMutationResult<void>, whose
+        // ok:true arm has no `data` — not assignable to this function's data-
+        // bearing result type. It only ever actually returns the ok:false arm,
+        // which is shape-identical across every T; narrow to it explicitly
+        // rather than widen mapWriteFailure's signature (a Task 5 helper).
+        const failure = mapWriteFailure(error, "add lesson to module")
+        if (!failure.ok) return failure
+        return { ok: false, status: 500, error: "Failed to add lesson to module." }
+    }
+}
+
+export async function removeLessonFromModule(
+    trackSlug: string,
+    moduleSlug: string,
+    articleSlug: string,
+): Promise<CurriculumMutationResult> {
+    const found = await findModuleId(trackSlug, moduleSlug)
+    if (!found.ok) return found
+    const moduleId = found.id
+
+    const articleId = await findArticleId(articleSlug)
+    if (!articleId) return { ok: false, status: 404, error: "Article not found." }
+
+    const lessons = await prisma.moduleLesson.findMany({
+        where: { moduleId },
+        orderBy: { position: "asc" },
+        select: { articleId: true },
+    })
+    if (!lessons.some((l) => l.articleId === articleId)) {
+        return { ok: false, status: 404, error: "Lesson not in this module." }
+    }
+    const remaining = lessons
+        .map((l) => l.articleId)
+        .filter((id) => id !== articleId)
+
+    try {
+        await prisma.$transaction(async (tx) => {
+            await tx.moduleLesson.delete({
+                where: { moduleId_articleId: { moduleId, articleId } },
+            })
+            await renumber(remaining, (id, position) =>
+                tx.moduleLesson.update({
+                    where: { moduleId_articleId: { moduleId, articleId: id } },
+                    data: { position },
+                }),
+            )
+        })
+    } catch (error) {
+        return mapWriteFailure(error, "remove lesson from module")
+    }
+
+    return { ok: true }
+}
+
+export async function reorderModuleLessons(
+    trackSlug: string,
+    moduleSlug: string,
+    articleSlugs: string[],
+): Promise<CurriculumMutationResult> {
+    const found = await findModuleId(trackSlug, moduleSlug)
+    if (!found.ok) return found
+    const moduleId = found.id
+
+    const lessons = await prisma.moduleLesson.findMany({
+        where: { moduleId },
+        select: { articleId: true, article: { select: { slug: true } } },
+    })
+    const currentSlugs = new Set(lessons.map((l) => l.article.slug))
+    const requested = new Set(articleSlugs)
+    if (
+        articleSlugs.length !== requested.size ||
+        !setsEqual(currentSlugs, requested)
+    ) {
+        return {
+            ok: false,
+            status: 400,
+            error: "Reorder payload must include every current lesson exactly once.",
+        }
+    }
+
+    const idBySlug = new Map(lessons.map((l) => [l.article.slug, l.articleId]))
+    const ordered = articleSlugs.map((s) => idBySlug.get(s)!)
+
+    try {
+        await prisma.$transaction(async (tx) =>
+            renumber(ordered, (id, position) =>
+                tx.moduleLesson.update({
+                    where: { moduleId_articleId: { moduleId, articleId: id } },
+                    data: { position },
+                }),
+            ),
+        )
+    } catch (error) {
+        return mapWriteFailure(error, "reorder module lessons")
+    }
+
+    return { ok: true }
+}
+
+export async function addCheckpoint(
+    articleSlug: string,
+    input: { problemSlug: string; position?: number },
+): Promise<CurriculumMutationResult<{ problemId: string; position: number }>> {
+    const articleId = await findArticleId(articleSlug)
+    if (!articleId) return { ok: false, status: 404, error: "Lesson not found." }
+
+    const problem = await prisma.sQLProblem.findUnique({
+        where: { slug: input.problemSlug },
+        select: { id: true },
+    })
+    if (!problem) return { ok: false, status: 404, error: "Problem not found." }
+
+    // A problem checks exactly one lesson — @@unique([problemId]).
+    const claimed = await prisma.lessonCheckpoint.findUnique({
+        where: { problemId: problem.id },
+        select: { articleId: true },
+    })
+    if (claimed) {
+        return {
+            ok: false,
+            status: 409,
+            error:
+                claimed.articleId === articleId
+                    ? "That problem is already a checkpoint on this lesson."
+                    : "That problem is already a checkpoint on another lesson.",
+        }
+    }
+
+    try {
+        const created = await prisma.$transaction(async (tx) => {
+            const current = await tx.lessonCheckpoint.findMany({
+                where: { articleId },
+                orderBy: { position: "asc" },
+                select: { problemId: true, position: true },
+            })
+            const position = Math.min(
+                input.position ?? current.length,
+                current.length,
+            )
+            const toShift = current
+                .filter((c) => c.position >= position)
+                .sort((a, b) => b.position - a.position)
+            for (const c of toShift) {
+                await tx.lessonCheckpoint.update({
+                    where: {
+                        articleId_problemId: { articleId, problemId: c.problemId },
+                    },
+                    data: { position: c.position + 1 },
+                })
+            }
+            return tx.lessonCheckpoint.create({
+                data: { articleId, problemId: problem.id, position },
+                select: { problemId: true, position: true },
+            })
+        })
+
+        return { ok: true, data: created }
+    } catch (error) {
+        // See the matching comment in addLessonToModule: mapWriteFailure's
+        // declared return type doesn't carry `data`, so narrow to its ok:false
+        // arm (the only one it ever actually returns) instead of widening it.
+        const failure = mapWriteFailure(error, "add checkpoint")
+        if (!failure.ok) return failure
+        return { ok: false, status: 500, error: "Failed to add checkpoint." }
+    }
+}
+
+export async function removeCheckpoint(
+    articleSlug: string,
+    problemSlug: string,
+): Promise<CurriculumMutationResult> {
+    const articleId = await findArticleId(articleSlug)
+    if (!articleId) return { ok: false, status: 404, error: "Lesson not found." }
+
+    const checkpoints = await prisma.lessonCheckpoint.findMany({
+        where: { articleId },
+        orderBy: { position: "asc" },
+        select: { problemId: true, problem: { select: { slug: true } } },
+    })
+    const target = checkpoints.find((c) => c.problem.slug === problemSlug)
+    if (!target) {
+        return { ok: false, status: 404, error: "Checkpoint not found." }
+    }
+    const remaining = checkpoints
+        .filter((c) => c.problemId !== target.problemId)
+        .map((c) => c.problemId)
+
+    try {
+        await prisma.$transaction(async (tx) => {
+            await tx.lessonCheckpoint.delete({
+                where: {
+                    articleId_problemId: { articleId, problemId: target.problemId },
+                },
+            })
+            await renumber(remaining, (id, position) =>
+                tx.lessonCheckpoint.update({
+                    where: { articleId_problemId: { articleId, problemId: id } },
+                    data: { position },
+                }),
+            )
+        })
+    } catch (error) {
+        return mapWriteFailure(error, "remove checkpoint")
+    }
+
+    return { ok: true }
+}
+
+export async function reorderCheckpoints(
+    articleSlug: string,
+    problemSlugs: string[],
+): Promise<CurriculumMutationResult> {
+    const articleId = await findArticleId(articleSlug)
+    if (!articleId) return { ok: false, status: 404, error: "Lesson not found." }
+
+    const checkpoints = await prisma.lessonCheckpoint.findMany({
+        where: { articleId },
+        select: { problemId: true, problem: { select: { slug: true } } },
+    })
+    const currentSlugs = new Set(checkpoints.map((c) => c.problem.slug))
+    const requested = new Set(problemSlugs)
+    if (
+        problemSlugs.length !== requested.size ||
+        !setsEqual(currentSlugs, requested)
+    ) {
+        return {
+            ok: false,
+            status: 400,
+            error: "Reorder payload must include every current checkpoint exactly once.",
+        }
+    }
+
+    const idBySlug = new Map(
+        checkpoints.map((c) => [c.problem.slug, c.problemId]),
+    )
+    const ordered = problemSlugs.map((s) => idBySlug.get(s)!)
+
+    try {
+        await prisma.$transaction(async (tx) =>
+            renumber(ordered, (id, position) =>
+                tx.lessonCheckpoint.update({
+                    where: { articleId_problemId: { articleId, problemId: id } },
+                    data: { position },
+                }),
+            ),
+        )
+    } catch (error) {
+        return mapWriteFailure(error, "reorder checkpoints")
+    }
+
+    return { ok: true }
+}
