@@ -627,9 +627,19 @@ async function main() {
             sql: "CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1);",
         })
         passes.push(logResult("create_schema (curriculum fixture)", curSchema))
-        const curSchemaId = JSON.parse(
-            curSchema.result?.content?.[0]?.text ?? "{}"
-        ).id
+        // Setup step, not just an assertion: curSchemaId feeds the
+        // create_problem calls right below and the cleanup delete at the
+        // end of this section, so it must survive an error without
+        // throwing — left undefined on the error path rather than crashing.
+        let curSchemaId
+        if (isToolError(curSchema)) {
+            console.log(
+                `  ✗ create_schema (curriculum fixture) failed: ${textOf(curSchema)}`
+            )
+            passes.push(false)
+        } else {
+            curSchemaId = JSON.parse(textOf(curSchema) ?? "{}").id
+        }
 
         const curProblem = await mcp.callTool("create_problem", {
             title: `MCP E2E Curriculum Problem ${stamp}`,
@@ -729,19 +739,24 @@ async function main() {
         // get_curriculum must reflect the new order: joins before foundations
         const tree = await mcp.callTool("get_curriculum", { trackSlug: curTrackSlug })
         passes.push(logResult("get_curriculum", tree))
-        const treePayload = JSON.parse(tree.result?.content?.[0]?.text ?? "{}")
-        const treeModuleSlugs = (treePayload.modules ?? []).map((m) => m.slug)
-        if (
-            treeModuleSlugs[0] === "joins" &&
-            treeModuleSlugs[1] === "foundations"
-        ) {
-            console.log(`  ✓ get_curriculum reflects reordered modules: ${treeModuleSlugs.join(" -> ")}`)
-            passes.push(true)
-        } else {
-            console.log(
-                `  ✗ get_curriculum expected [joins, foundations], got ${JSON.stringify(treeModuleSlugs)}`
-            )
+        if (isToolError(tree)) {
+            console.log(`  ✗ get_curriculum (order check) failed: ${textOf(tree)}`)
             passes.push(false)
+        } else {
+            const treePayload = JSON.parse(textOf(tree) ?? "{}")
+            const treeModuleSlugs = (treePayload.modules ?? []).map((m) => m.slug)
+            if (
+                treeModuleSlugs[0] === "joins" &&
+                treeModuleSlugs[1] === "foundations"
+            ) {
+                console.log(`  ✓ get_curriculum reflects reordered modules: ${treeModuleSlugs.join(" -> ")}`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ get_curriculum expected [joins, foundations], got ${JSON.stringify(treeModuleSlugs)}`
+                )
+                passes.push(false)
+            }
         }
 
         // unknown track must return {found:false}, not throw
@@ -749,17 +764,22 @@ async function main() {
             trackSlug: "mcpe2e-no-such-track",
         })
         passes.push(logResult("list_modules(unknown track)", missingTrackModules))
-        const missingTrackPayload = JSON.parse(
-            missingTrackModules.result?.content?.[0]?.text ?? "{}"
-        )
-        if (missingTrackPayload.found === false) {
-            console.log(`  ✓ list_modules(unknown track) returns {found:false}`)
-            passes.push(true)
-        } else {
+        if (isToolError(missingTrackModules)) {
             console.log(
-                `  ✗ list_modules(unknown track) expected {found:false}, got: ${missingTrackModules.result?.content?.[0]?.text}`
+                `  ✗ list_modules(unknown track) failed: ${textOf(missingTrackModules)}`
             )
             passes.push(false)
+        } else {
+            const missingTrackPayload = JSON.parse(textOf(missingTrackModules) ?? "{}")
+            if (missingTrackPayload.found === false) {
+                console.log(`  ✓ list_modules(unknown track) returns {found:false}`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ list_modules(unknown track) expected {found:false}, got: ${JSON.stringify(missingTrackPayload)}`
+                )
+                passes.push(false)
+            }
         }
 
         // unknown module must also return {found:false}
@@ -767,17 +787,22 @@ async function main() {
             trackSlug: curTrackSlug,
             moduleSlug: "no-such-module",
         })
-        const missingModulePayload = JSON.parse(
-            missingModule.result?.content?.[0]?.text ?? "{}"
-        )
-        if (missingModulePayload.found === false) {
-            console.log(`  ✓ get_module(unknown module) returns {found:false}`)
-            passes.push(true)
-        } else {
+        if (isToolError(missingModule)) {
             console.log(
-                `  ✗ get_module(unknown module) expected {found:false}, got: ${missingModule.result?.content?.[0]?.text}`
+                `  ✗ get_module(unknown module) failed: ${textOf(missingModule)}`
             )
             passes.push(false)
+        } else {
+            const missingModulePayload = JSON.parse(textOf(missingModule) ?? "{}")
+            if (missingModulePayload.found === false) {
+                console.log(`  ✓ get_module(unknown module) returns {found:false}`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ get_module(unknown module) expected {found:false}, got: ${JSON.stringify(missingModulePayload)}`
+                )
+                passes.push(false)
+            }
         }
 
         // Attach both articles as lessons in "joins" — article2 first so the
@@ -866,21 +891,28 @@ async function main() {
             trackSlug: curTrackSlug,
             moduleSlug: "joins",
         })
-        const joinsPayload = JSON.parse(
-            joinsModule.result?.content?.[0]?.text ?? "{}"
-        )
-        const joinsLessonSlugs = (joinsPayload.lessons ?? []).map((l) => l.article.slug)
-        if (
-            joinsLessonSlugs[0] === curArticleSlug &&
-            joinsLessonSlugs[1] === curArticleSlug2
-        ) {
-            console.log(`  ✓ get_module reflects reordered lessons`)
-            passes.push(true)
-        } else {
+        if (isToolError(joinsModule)) {
             console.log(
-                `  ✗ get_module expected [${curArticleSlug}, ${curArticleSlug2}], got ${JSON.stringify(joinsLessonSlugs)}`
+                `  ✗ get_module (reordered lessons) failed: ${textOf(joinsModule)}`
             )
             passes.push(false)
+        } else {
+            const joinsPayload = JSON.parse(textOf(joinsModule) ?? "{}")
+            const joinsLessonSlugs = (joinsPayload.lessons ?? []).map(
+                (l) => l.article.slug
+            )
+            if (
+                joinsLessonSlugs[0] === curArticleSlug &&
+                joinsLessonSlugs[1] === curArticleSlug2
+            ) {
+                console.log(`  ✓ get_module reflects reordered lessons`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ get_module expected [${curArticleSlug}, ${curArticleSlug2}], got ${JSON.stringify(joinsLessonSlugs)}`
+                )
+                passes.push(false)
+            }
         }
 
         // add_checkpoint: attach problem 1 to article 1, then problem 2 to
