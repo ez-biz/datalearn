@@ -982,54 +982,71 @@ async function main() {
         const checkpointsList = await mcp.callTool("list_checkpoints", {
             articleSlug: curArticleSlug,
         })
-        const checkpointsPayload = JSON.parse(
-            checkpointsList.result?.content?.[0]?.text ?? "[]"
-        )
-        const checkpointSlugs = checkpointsPayload.map((c) => c.problem.slug)
-        if (
-            checkpointSlugs[0] === curProblemSlug2 &&
-            checkpointSlugs[1] === curProblemSlug
-        ) {
-            console.log(`  ✓ list_checkpoints reflects reordered checkpoints`)
-            passes.push(true)
-        } else {
+        if (isToolError(checkpointsList)) {
             console.log(
-                `  ✗ list_checkpoints expected [${curProblemSlug2}, ${curProblemSlug}], got ${JSON.stringify(checkpointSlugs)}`
+                `  ✗ list_checkpoints (order check) failed: ${textOf(checkpointsList)}`
             )
             passes.push(false)
+        } else {
+            const checkpointsPayload = JSON.parse(textOf(checkpointsList) ?? "[]")
+            const checkpointSlugs = checkpointsPayload.map((c) => c.problem.slug)
+            if (
+                checkpointSlugs[0] === curProblemSlug2 &&
+                checkpointSlugs[1] === curProblemSlug
+            ) {
+                console.log(`  ✓ list_checkpoints reflects reordered checkpoints`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ list_checkpoints expected [${curProblemSlug2}, ${curProblemSlug}], got ${JSON.stringify(checkpointSlugs)}`
+                )
+                passes.push(false)
+            }
         }
 
         // unknown lesson must return {found:false}
         const missingLessonCheckpoints = await mcp.callTool("list_checkpoints", {
             articleSlug: "mcpe2e-no-such-article",
         })
-        const missingLessonPayload = JSON.parse(
-            missingLessonCheckpoints.result?.content?.[0]?.text ?? "{}"
-        )
-        if (missingLessonPayload.found === false) {
-            console.log(`  ✓ list_checkpoints(unknown lesson) returns {found:false}`)
-            passes.push(true)
-        } else {
+        if (isToolError(missingLessonCheckpoints)) {
             console.log(
-                `  ✗ list_checkpoints(unknown lesson) expected {found:false}, got: ${missingLessonCheckpoints.result?.content?.[0]?.text}`
+                `  ✗ list_checkpoints(unknown lesson) failed: ${textOf(missingLessonCheckpoints)}`
             )
             passes.push(false)
+        } else {
+            const missingLessonPayload = JSON.parse(
+                textOf(missingLessonCheckpoints) ?? "{}"
+            )
+            if (missingLessonPayload.found === false) {
+                console.log(`  ✓ list_checkpoints(unknown lesson) returns {found:false}`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ list_checkpoints(unknown lesson) expected {found:false}, got: ${JSON.stringify(missingLessonPayload)}`
+                )
+                passes.push(false)
+            }
         }
 
         // Rule: attaching curriculum never publishes the track — it must
         // still be DRAFT after every module/lesson/checkpoint write above.
         const curTrackCheck = await mcp.callTool("get_track", { slug: curTrackSlug })
-        const curTrackPayload = JSON.parse(
-            curTrackCheck.result?.content?.[0]?.text ?? "{}"
-        )
-        if (curTrackPayload.status === "DRAFT") {
-            console.log(`  ✓ track remains DRAFT after curriculum writes`)
-            passes.push(true)
-        } else {
+        if (isToolError(curTrackCheck)) {
             console.log(
-                `  ✗ track expected to remain DRAFT, got status=${curTrackPayload.status}`
+                `  ✗ get_track (DRAFT-status check) failed: ${textOf(curTrackCheck)}`
             )
             passes.push(false)
+        } else {
+            const curTrackPayload = JSON.parse(textOf(curTrackCheck) ?? "{}")
+            if (curTrackPayload.status === "DRAFT") {
+                console.log(`  ✓ track remains DRAFT after curriculum writes`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ track expected to remain DRAFT, got status=${curTrackPayload.status}`
+                )
+                passes.push(false)
+            }
         }
 
         // ── Curriculum teardown ──────────────────────────────────────────
@@ -1098,17 +1115,25 @@ async function main() {
             slug: curTrackSlug,
         })
         passes.push(logResult("delete_track (curriculum fixture)", deleteCurTrackResult))
-        const deleteCurTrackPayload = JSON.parse(
-            deleteCurTrackResult.result?.content?.[0]?.text ?? "{}"
-        )
-        if (deleteCurTrackPayload.deleted === true) {
-            console.log(`  ✓ delete_track hard-deleted (was DRAFT, zero legacy items)`)
-            passes.push(true)
-        } else {
+        // Cleanup site: log a failure but never abort — the prisma cleanup
+        // below (problems, schema, articles, topic) must still run even if
+        // this tool call errored or its result can't be parsed.
+        if (isToolError(deleteCurTrackResult)) {
             console.log(
-                `  ✗ delete_track expected deleted:true, got ${deleteCurTrackResult.result?.content?.[0]?.text}`
+                `  ✗ delete_track (curriculum fixture) failed: ${textOf(deleteCurTrackResult)}`
             )
             passes.push(false)
+        } else {
+            const deleteCurTrackPayload = JSON.parse(textOf(deleteCurTrackResult) ?? "{}")
+            if (deleteCurTrackPayload.deleted === true) {
+                console.log(`  ✓ delete_track hard-deleted (was DRAFT, zero legacy items)`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ delete_track expected deleted:true, got ${JSON.stringify(deleteCurTrackPayload)}`
+                )
+                passes.push(false)
+            }
         }
 
         await prisma.sQLProblem.deleteMany({
