@@ -136,6 +136,15 @@ function isToolError(result) {
     return result.result?.isError === true
 }
 
+// Text content of a tool result. On the error path this is a plain error
+// string (e.g. "MCP error -32603: ..."), NOT JSON — callers must check
+// isToolError() before JSON.parse()-ing this, or a genuine (non-404) tool
+// error throws a SyntaxError that aborts the whole enclosing try/finally,
+// skipping cleanup.
+function textOf(result) {
+    return result.result?.content?.[0]?.text
+}
+
 async function main() {
     console.log("[harness] seeding API key...")
     const { plaintext, keyId } = await seedKey()
@@ -779,17 +788,22 @@ async function main() {
             articleSlug: curArticleSlug2,
         })
         passes.push(logResult("add_lesson_to_module (article 2)", addLesson2))
-        const addLesson2Payload = JSON.parse(
-            addLesson2.result?.content?.[0]?.text ?? "{}"
-        )
-        if (!isToolError(addLesson2) && addLesson2Payload.position === 0) {
-            console.log(`  ✓ add_lesson_to_module (article 2) succeeded at position 0`)
-            passes.push(true)
-        } else {
+        if (isToolError(addLesson2)) {
             console.log(
-                `  ✗ add_lesson_to_module (article 2) expected success at position 0, got: ${addLesson2.result?.content?.[0]?.text}`
+                `  ✗ add_lesson_to_module (article 2) failed: ${textOf(addLesson2)}`
             )
             passes.push(false)
+        } else {
+            const addLesson2Payload = JSON.parse(textOf(addLesson2) ?? "{}")
+            if (addLesson2Payload.position !== 0) {
+                console.log(
+                    `  ✗ add_lesson_to_module (article 2) expected position 0, got: ${JSON.stringify(addLesson2Payload)}`
+                )
+                passes.push(false)
+            } else {
+                console.log(`  ✓ add_lesson_to_module (article 2) succeeded at position 0`)
+                passes.push(true)
+            }
         }
 
         const addLesson1 = await mcp.callTool("add_lesson_to_module", {
@@ -798,17 +812,22 @@ async function main() {
             articleSlug: curArticleSlug,
         })
         passes.push(logResult("add_lesson_to_module (article 1)", addLesson1))
-        const addLesson1Payload = JSON.parse(
-            addLesson1.result?.content?.[0]?.text ?? "{}"
-        )
-        if (!isToolError(addLesson1) && addLesson1Payload.position === 1) {
-            console.log(`  ✓ add_lesson_to_module (article 1) succeeded at position 1`)
-            passes.push(true)
-        } else {
+        if (isToolError(addLesson1)) {
             console.log(
-                `  ✗ add_lesson_to_module (article 1) expected success at position 1, got: ${addLesson1.result?.content?.[0]?.text}`
+                `  ✗ add_lesson_to_module (article 1) failed: ${textOf(addLesson1)}`
             )
             passes.push(false)
+        } else {
+            const addLesson1Payload = JSON.parse(textOf(addLesson1) ?? "{}")
+            if (addLesson1Payload.position !== 1) {
+                console.log(
+                    `  ✗ add_lesson_to_module (article 1) expected position 1, got: ${JSON.stringify(addLesson1Payload)}`
+                )
+                passes.push(false)
+            } else {
+                console.log(`  ✓ add_lesson_to_module (article 1) succeeded at position 1`)
+                passes.push(true)
+            }
         }
 
         // reorder_module_lessons: partial payload rejected, complete payload
@@ -871,17 +890,22 @@ async function main() {
             problemSlug: curProblemSlug,
         })
         passes.push(logResult("add_checkpoint (problem 1 -> article 1)", addCheckpoint1))
-        const addCheckpoint1Payload = JSON.parse(
-            addCheckpoint1.result?.content?.[0]?.text ?? "{}"
-        )
-        if (!isToolError(addCheckpoint1) && addCheckpoint1Payload.position === 0) {
-            console.log(`  ✓ add_checkpoint (problem 1 -> article 1) succeeded at position 0`)
-            passes.push(true)
-        } else {
+        if (isToolError(addCheckpoint1)) {
             console.log(
-                `  ✗ add_checkpoint (problem 1 -> article 1) expected success at position 0, got: ${addCheckpoint1.result?.content?.[0]?.text}`
+                `  ✗ add_checkpoint (problem 1 -> article 1) failed: ${textOf(addCheckpoint1)}`
             )
             passes.push(false)
+        } else {
+            const addCheckpoint1Payload = JSON.parse(textOf(addCheckpoint1) ?? "{}")
+            if (addCheckpoint1Payload.position !== 0) {
+                console.log(
+                    `  ✗ add_checkpoint (problem 1 -> article 1) expected position 0, got: ${JSON.stringify(addCheckpoint1Payload)}`
+                )
+                passes.push(false)
+            } else {
+                console.log(`  ✓ add_checkpoint (problem 1 -> article 1) succeeded at position 0`)
+                passes.push(true)
+            }
         }
 
         const addCheckpoint2 = await mcp.callTool("add_checkpoint", {
@@ -889,17 +913,22 @@ async function main() {
             problemSlug: curProblemSlug2,
         })
         passes.push(logResult("add_checkpoint (problem 2 -> article 1)", addCheckpoint2))
-        const addCheckpoint2Payload = JSON.parse(
-            addCheckpoint2.result?.content?.[0]?.text ?? "{}"
-        )
-        if (!isToolError(addCheckpoint2) && addCheckpoint2Payload.position === 1) {
-            console.log(`  ✓ add_checkpoint (problem 2 -> article 1) succeeded at position 1`)
-            passes.push(true)
-        } else {
+        if (isToolError(addCheckpoint2)) {
             console.log(
-                `  ✗ add_checkpoint (problem 2 -> article 1) expected success at position 1, got: ${addCheckpoint2.result?.content?.[0]?.text}`
+                `  ✗ add_checkpoint (problem 2 -> article 1) failed: ${textOf(addCheckpoint2)}`
             )
             passes.push(false)
+        } else {
+            const addCheckpoint2Payload = JSON.parse(textOf(addCheckpoint2) ?? "{}")
+            if (addCheckpoint2Payload.position !== 1) {
+                console.log(
+                    `  ✗ add_checkpoint (problem 2 -> article 1) expected position 1, got: ${JSON.stringify(addCheckpoint2Payload)}`
+                )
+                passes.push(false)
+            } else {
+                console.log(`  ✓ add_checkpoint (problem 2 -> article 1) succeeded at position 1`)
+                passes.push(true)
+            }
         }
 
         // Rule: a problem checks exactly ONE lesson. Attaching problem 1 to
