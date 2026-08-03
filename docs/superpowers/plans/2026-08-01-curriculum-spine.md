@@ -3832,9 +3832,22 @@ git commit -m "feat(mcp): curriculum tools for modules, lessons, and checkpoints
 
 The dominant cost of this plan. The mechanism is the MCP tools from Task 11; the deliverable is content, and the acceptance criteria below are what "done" means for each lesson.
 
+> **AMENDED 2026-08-03.** The original plan had this task author content through
+> the MCP tools into a live database. That delivers nothing reviewable: API-authored
+> content is database rows, not repo files, so the track would not appear in the PR,
+> would not be reproducible, and would be lost on a database reset. It also risks
+> landing in the wrong database, since `npm run dev` binds to `.env.local` by default.
+>
+> **The track ships as a committed, idempotent seed script instead** —
+> `prisma/seed-analyst-track.ts`, built on the same `lib/admin-curriculum.ts` helpers
+> the REST routes call, runnable against any database via `DATABASE_URL`. The MCP
+> tools remain proven by the Task 11 e2e harness; they are simply not the delivery
+> mechanism for this seeded track.
+
 **Files:**
 
-- No source files. Content is created through the API and lives in the database.
+- Create: `prisma/seed-analyst-track.ts` — idempotent seed, built on `lib/admin-curriculum.ts`.
+- Modify: `package.json` — add `seed:analyst-track`.
 - Create: `docs/superpowers/plans/2026-08-01-curriculum-spine-content-log.md` — a running record of what was authored and what was mapped to existing problems.
 
 **Interfaces:**
