@@ -169,21 +169,26 @@ To publish this track for real, change `Track.status` directly (through
 the admin portal, or a one-off script) — not by editing `TRACK.status` in
 this file, which the seed will never write past track creation.
 
-### Known, undecided gap: `Article.status`
+### `Article.status`: same fix, applied deliberately (resolved)
 
-The same risk shape exists one level down, on `Article.status`, and is
-**not** fixed — flagged here for whoever owns that call, not resolved
-unilaterally. `upsertLessonArticle`'s `changed` comparison includes
-`existing.status !== input.status`, and `CURRICULUM` always supplies
-`status: "PUBLISHED"` for these 17 lessons. Verified empirically: if an
-admin unpublishes one of these lesson articles through the admin portal
-(e.g. `having-vs-where` set to `DRAFT` to pull it while fixing an error),
-a re-run of this seed silently flips it back to `PUBLISHED` (`articles
-updated=1` in the run's summary, with no distinguishing log line for
-"status reverted" vs. "content changed") and stamps a fresh
-`ArticleVersion`. Unlike `Track`, the seed is genuinely the source of
-truth for these articles' *content*, so re-asserting `PUBLISHED` matches
-what the seed is trying to guarantee most of the time — but it means an
-admin's deliberate unpublish of one of these specific 17 lessons does not
-survive a re-run undisturbed, the same failure shape the `Track` fix
-above closes off.
+The same risk shape existed one level down, on `Article.status`. It was
+initially flagged rather than fixed unilaterally (see the fix-round-2
+report), and the decision was then made explicitly by the task owner:
+**an admin's unpublish must stick.**
+
+`upsertLessonArticle`'s `changed` comparison and the upsert's `update:`
+object both dropped `status`, mirroring the `Track` fix above exactly —
+`status` still appears in `create:` so a genuinely new lesson still
+publishes, but an update can never touch it. Content fields
+(`title`/`content`/`summary`/`topicId`/`readingMinutes`/`hasVisualBlocks`)
+still drive both the update and the `ArticleVersion` snapshot exactly as
+before; only `status`'s influence on those two was removed.
+
+Verified empirically: with `having-vs-where` manually set to `DRAFT`
+(simulating an admin pulling it to fix an error), a re-run of the seed
+now leaves it `DRAFT` — `articles updated=0`, `Article.updatedAt`
+unmoved. A genuine content edit on a different lesson in the same run
+still updates the row and takes a fresh `ArticleVersion` snapshot,
+confirming the `changed` guard's content-comparison behavior is
+unaffected. See the Task 12 fix-round-3 report for the exact commands
+and output.

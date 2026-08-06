@@ -1609,19 +1609,25 @@ async function upsertLessonArticle(
             content: true,
             summary: true,
             topicId: true,
-            status: true,
             readingMinutes: true,
             hasVisualBlocks: true,
         },
     })
 
+    // `status` is deliberately excluded from both `changed` and the
+    // upsert's `update:` object, same reasoning as Track.upsert in
+    // main(): publish state is a moderation decision, not this seed's to
+    // make on an update. An admin who unpublishes one of these lessons
+    // through the admin portal (e.g. to pull it while fixing an error)
+    // must have that decision stick -- this seed re-running to fix a typo
+    // in the content must not silently republish it. `status` still
+    // appears in `create:` so a genuinely new lesson still publishes.
     const changed =
         !existing ||
         existing.title !== input.title ||
         existing.content !== input.content ||
         existing.summary !== input.summary ||
         existing.topicId !== input.topicId ||
-        existing.status !== input.status ||
         existing.readingMinutes !== input.readingMinutes ||
         existing.hasVisualBlocks !== validated.hasVisualBlocks
 
@@ -1645,7 +1651,6 @@ async function upsertLessonArticle(
                       title: input.title,
                       content: input.content,
                       summary: input.summary,
-                      status: input.status,
                       topicId: input.topicId,
                       readingMinutes: input.readingMinutes,
                       hasVisualBlocks: validated.hasVisualBlocks,
