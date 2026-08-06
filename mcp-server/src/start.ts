@@ -5,6 +5,7 @@ import { registerArticleTools } from "./tools/articles.js"
 import { registerAssetTools } from "./tools/assets.js"
 import { registerContestHiddenTools } from "./tools/contest-hidden.js"
 import { registerContestPublishTools } from "./tools/contest-publish.js"
+import { registerCurriculumTools } from "./tools/curriculum.js"
 import { registerModeratorTools } from "./tools/moderators.js"
 import { registerProblemTools } from "./tools/problems.js"
 import { registerSchemaTools } from "./tools/schemas.js"
@@ -40,6 +41,7 @@ export function buildServer(config: StartConfig): {
     registerContestHiddenTools(server, client)
     registerContestPublishTools(server, client)
     registerTrackTools(server, client)
+    registerCurriculumTools(server, client)
     registerArticleTools(server, client)
     registerApiKeyTools(server, client)
     registerUserTools(server, client)

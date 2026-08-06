@@ -72,6 +72,7 @@ Data Learn is a single Next.js 16 application backed by Postgres. The runtime ar
 | 10 | Profile & stats | Activity heatmap, streaks, solved donut, skills-by-tag |
 | 11 | Custom problem lists | Private user-curated collections — `/me/lists`, drag-drop reorder, sort options, add-from-workspace popover |
 | 11.6 | Problem discussions | Learner discussion tab, moderation queue, moderator permissions, settings, reputation |
+| 11.7 | Curriculum spine | Ordered track → module → lesson → checkpoint model, per-user read state, admin REST + MCP authoring. Headless — no learner-facing UI yet |
 | 12 | Security posture | Threat model, mitigations, audit log of shipped fixes |
 
 ---
@@ -615,6 +616,55 @@ Reputation is derived from `UserReputationEvent`. Accepted submissions add a sma
 Middleware lets moderators enter only the discussion moderation paths; page guards and route handlers enforce the same checks server-side.
 
 ---
+
+## 11.7 Curriculum Spine
+
+The curriculum spine turns an unordered library of problems and prose into an ordered path: **track → module → lesson → checkpoint problems**. It is headless — sub-project 1 of the learning-platform redesign ships no learner-facing UI; the screens that consume it come later.
+
+### Models
+
+Four additive models. `Article`, `Topic`, `SQLProblem` and `Track` were not modified.
+
+- **`Module`** — a named, ordered stage of a `Track`. `@@unique([trackId, slug])` and `@@unique([trackId, position])`. `slug` deliberately excludes the display number: the breadcrumb renders `04-window-functions` from `position`, so reordering never breaks a URL.
+- **`ModuleLesson`** — an `Article` placed in a `Module`, in order. Composite PK `[moduleId, articleId]`. An article may appear in more than one module; reuse across tracks is intentional.
+- **`LessonCheckpoint`** — a problem that checks a lesson. `@@unique([problemId])` enforces the product rule that a problem belongs to exactly one lesson. Relaxing that later means dropping one constraint, not migrating `SQLProblem`.
+- **`LessonProgress`** — per-user read state, PK `[userId, articleId]`. `percent` is monotonic; `completedAt` is set once when 100 is first reached and never unset. Progress is keyed on the article, so reading a lesson once counts everywhere it appears.
+
+### Three-way code split
+
+The split exists so the arithmetic is testable without a database and the writer cannot become a client-callable endpoint.
+
+- **`lib/curriculum-progress.ts`** — pure rollup maths. No Prisma, no React, no server runtime. Takes already-fetched rows, returns numbers. Unit-tested standalone.
+- **`actions/curriculum.ts`** — `"use server"`. `getTrackCurriculum(trackSlug, userId)` fetches and delegates to the pure module; `recordLessonProgress(articleSlug, percent)` resolves the session and delegates to the writer below.
+- **`lib/curriculum-write.ts`** — `recordLessonProgressForUser(userId, articleSlug, percent)`. **Deliberately NOT a server action.** Every export of a `"use server"` module is an endpoint any client can invoke, so a `userId`-parameterised writer exported from `actions/` would let a caller record progress as any user they name.
+- **`lib/admin-curriculum.ts`** — module/lesson/checkpoint mutations shared by the REST routes, the MCP tools and the seed. Returns `CurriculumMutationResult` (`{ok:true, data?}` or `{ok:false, status, error}`) and never throws.
+
+### Progress semantics
+
+| Quantity | Rule |
+| --- | --- |
+| Lesson done | `LessonProgress.completedAt != null` |
+| Problem done | ≥1 `Submission` with `status = ACCEPTED` |
+| Module % | `(lessonsDone + problemsDone) / (lessonsTotal + problemsTotal)`, rounded; an empty module is 0%, never NaN |
+| Track % | The same formula rolled across modules, recomputed from summed totals rather than averaging module percentages |
+| Module unlocked | `position == 0 \|\| previous module is 100%` |
+| Signed out | Everything renders; nothing persists |
+
+Problems share the percent denominator with lessons — this is derived, not chosen: the learn hub shows `13/37 lessons` beside `38%` on the same track, and 13/37 is 35%.
+
+**Unlocking is advisory and must never be enforced.** `isModuleUnlocked` drives the "Locked until 02" affordance and nothing else — no route guard, no server-action rejection, no redirect. Skipping ahead is always permitted.
+
+### Positions
+
+`Module.position`, `ModuleLesson.position` and `LessonCheckpoint.position` are mutable **only** inside a reorder transaction. The shared private `renumber` helper parks every row at a negative position before assigning final ones, because a single forward pass transiently violates the unique `(parent, position)` constraint.
+
+### Authoring surfaces
+
+- **REST** — nine admin routes, slug-addressed, all wrapped in `withAdmin`. Checkpoints hang off the article (`/api/admin/lessons/[articleSlug]/checkpoints`), not the module path, because `LessonCheckpoint` is keyed on `articleId` and a lesson may sit in several modules.
+- **MCP** — 14 tools in `mcp-server/src/tools/curriculum.ts` wrapping those routes.
+- **Seed** — `prisma/seed-analyst-track.ts`, idempotent, ships the 17-lesson "Analyst interview prep" track. It writes `Track.status` and `Article.status` on **create only**, so a human's publish or unpublish decision survives a re-run.
+
+Attaching curriculum never changes `Track.status`. Publishing stays a deliberate human action.
 
 ## 12. Security Posture
 

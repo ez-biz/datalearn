@@ -6,6 +6,19 @@
 
 ## Recently shipped
 
+### Curriculum spine (SP1 of the learning-platform redesign)
+
+Turns an unordered library into an ordered path — **track → module → lesson → checkpoint problems** — with per-user read state. Headless: no learner-facing UI ships here, but every screen in the redesign renders against this.
+
+- **Four additive models** — `Module`, `ModuleLesson`, `LessonCheckpoint`, `LessonProgress`. `Article`, `Topic`, `SQLProblem` and `Track` untouched. `LessonCheckpoint.@@unique([problemId])` encodes the rule that a problem checks exactly one lesson; choosing a join table over columns on `SQLProblem` avoided auditing every existing `select` projection.
+- **Progress rollups** — pure, Prisma-free maths in `lib/curriculum-progress.ts`, so the arithmetic is unit-tested without a database. Problems share the percent denominator with lessons. Module unlocking is **advisory only** and is never enforced — skipping ahead is always permitted.
+- **Nine admin REST routes + 14 MCP tools** — curriculum authoring through the same contract problems and articles already use. Checkpoints are article-scoped rather than module-scoped, because a lesson can sit in several modules.
+- **One authored track** — "Analyst interview prep": 5 modules, 17 lessons (715–868 words each, every one with a worked SQL example against real fixture data and a pitfall callout), 17 checkpoints. Ships as an idempotent committed seed rather than API calls, so it is reviewable in the PR and re-runnable anywhere. Writes `status` on create only, so a human's publish decision survives a re-run.
+- **101 tests** across five new suites, plus the MCP e2e harness at 94 checks. Several tests were rewritten after review because they could not fail when the code under test was reverted — a deliberate-break check became the standard evidence for new coverage on this branch.
+- **Two pre-existing bugs found and fixed in passing** — the MCP e2e harness had been unrunnable for several releases behind a stale hardcoded tool-count assertion, and its API-key revocation safety net gated on a field that tool-level failures never populate, so a failed revoke read as success.
+
+Known gaps carried forward: four lessons ship without a checkpoint (no existing problem models an event log, cohort table, or metric-definition review), and `LessonProgress` has no `articleId` index.
+
 ### v0.7.0 — MCP enhancements (article workflow + ops + assets)
 
 Three stacked PRs that take the MCP server from 23 → 40 tools, closing every coverage gap an AI-authoring user would hit short of discussion moderation (which intentionally stays out — see below).

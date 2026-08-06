@@ -25,6 +25,10 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that lets an 
 | `archive_article` | Hide an article from the public reader without deleting it. Version history is preserved. |
 | `delete_topic` | Permanently delete a topic. 409 if articles still reference it. |
 | `delete_track` | Delete a track. Hard-delete if DRAFT with zero items; otherwise soft-archived to ARCHIVED. |
+| `list_modules`, `get_module`, `create_module`, `update_module`, `delete_module`, `reorder_modules` | Curriculum modules — ordered containers of lessons within a track. Creating/reordering modules never publishes the track. |
+| `add_lesson_to_module`, `remove_lesson_from_module`, `reorder_module_lessons` | Attach, detach, and reorder articles as lessons within a module. The same article may appear in more than one module. |
+| `list_checkpoints`, `add_checkpoint`, `remove_checkpoint`, `reorder_checkpoints` | Attach, detach, and reorder problems as checkpoints on a lesson. A problem checks exactly **one** lesson — `add_checkpoint` 409s if it already checks another. |
+| `get_curriculum` | Fetch a track's entire module → lesson → checkpoint tree in one call — read this before authoring instead of doing N round-trips. |
 | `list_api_keys`, `create_api_key`, `revoke_api_key` | Admin API-key lifecycle. **`create_api_key` returns the plaintext key once** — surface it with an explicit "save now" warning. |
 | `list_users`, `update_user_role` | List users (filterable by role and substring); change a user's role to USER, CONTRIBUTOR, or MODERATOR. ADMIN transitions are intentionally rejected — use psql. |
 | `list_moderators`, `grant_moderator`, `update_moderator_permissions`, `revoke_moderator` | Moderator role + permission management. Permissions: `VIEW_DISCUSSION_QUEUE`, `HIDE_COMMENT`, `RESTORE_COMMENT`, `DISMISS_REPORT`, `MARK_SPAM`, `LOCK_PROBLEM_DISCUSSION`, `HIDE_PROBLEM_DISCUSSION`. |
@@ -69,7 +73,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) a
 }
 ```
 
-Restart Claude Desktop. The full tool surface (42 tools as of v0.8.0) appears under the `datalearn` namespace.
+Restart Claude Desktop. The full tool surface (56 tools as of v0.8.0) appears under the `datalearn` namespace.
 
 ### Local development
 
@@ -149,6 +153,53 @@ flowchart LR
 An INNER JOIN drops rows that do not find a match.
 :::
 ```
+
+## Curriculum (modules, lessons, checkpoints)
+
+A track's curriculum is a three-level ordered tree: **modules** (containers within a track) → **lessons** (articles placed in a module) → **checkpoints** (problems that check a lesson). 14 tools cover the full CRUD + reorder surface, plus one read-optimized rollup.
+
+**Two rules every authoring assistant needs to know:**
+
+1. **A problem checks exactly ONE lesson.** `add_checkpoint` returns 409 if the problem is already a checkpoint on a different lesson. Remove it from the other lesson first (`remove_checkpoint`) if you need to move it.
+2. **Attaching curriculum never publishes a track.** Creating modules, adding lessons, adding checkpoints, and reordering any of them leave the track's `status` untouched. Publishing a track is a deliberate human action (`update_track({ status: "PUBLISHED" })` or the admin UI) taken after review.
+
+### Modules
+
+| Tool | Arguments | Notes |
+|---|---|---|
+| `list_modules` | `{ trackSlug }` | Modules in curriculum order, with lesson counts. `{found:false}` if the track doesn't exist. |
+| `get_module` | `{ trackSlug, moduleSlug }` | One module with its ordered lessons. `{found:false}` if missing. |
+| `create_module` | `{ trackSlug, name, slug?, description, position? }` | `slug` is derived from `name` if omitted. Appends unless `position` is given. |
+| `update_module` | `{ trackSlug, moduleSlug, name?, newSlug?, description? }` | `position` is **not accepted** — use `reorder_modules`. |
+| `delete_module` | `{ trackSlug, moduleSlug }` | Deletes the module and closes the position gap. Lessons are detached (cascade), not deleted — the underlying articles survive. |
+| `reorder_modules` | `{ trackSlug, moduleSlugs: string[] }` | Sets the full order. `moduleSlugs` must list **every current module slug exactly once** — a partial list is rejected (400). |
+
+### Lessons
+
+| Tool | Arguments | Notes |
+|---|---|---|
+| `add_lesson_to_module` | `{ trackSlug, moduleSlug, articleSlug, position? }` | Attaches an article as a lesson. Appends unless `position` is given. The same article may appear in more than one module. |
+| `remove_lesson_from_module` | `{ trackSlug, moduleSlug, articleSlug }` | Detaches the lesson. The article itself is not deleted. |
+| `reorder_module_lessons` | `{ trackSlug, moduleSlug, articleSlugs: string[] }` | Sets the full lesson order within a module. `articleSlugs` must list **every current lesson's article slug exactly once** — partial lists are rejected (400). |
+
+### Checkpoints
+
+| Tool | Arguments | Notes |
+|---|---|---|
+| `list_checkpoints` | `{ articleSlug }` | A lesson's checkpoint problems, in order. `{found:false}` if the lesson (article) doesn't exist. |
+| `add_checkpoint` | `{ articleSlug, problemSlug, position? }` | Attaches a problem as a checkpoint. **409 if the problem already checks a different lesson** — see rule 1 above. |
+| `remove_checkpoint` | `{ articleSlug, problemSlug }` | Detaches the checkpoint. The problem itself is not deleted. |
+| `reorder_checkpoints` | `{ articleSlug, problemSlugs: string[] }` | Sets the full checkpoint order for a lesson. `problemSlugs` must list **every current checkpoint's problem slug exactly once** — partial lists are rejected (400). |
+
+### Rollup
+
+| Tool | Arguments | Notes |
+|---|---|---|
+| `get_curriculum` | `{ trackSlug }` | Fetches the entire tree — modules, their ordered lessons, and each lesson's checkpoints — in one call. Call this before authoring so you can see current state without N round-trips. `{found:false}` if the track doesn't exist. |
+
+### Reorder semantics
+
+All three reorder tools (`reorder_modules`, `reorder_module_lessons`, `reorder_checkpoints`) are **atomic full-replacement**, not "move item X to position Y". Call the corresponding `get_*` / `list_*` tool first to read the current slugs, compute the desired order client-side, then send the complete list. Positions never move any other way — `create_module`, `update_module`, `add_lesson_to_module`, and `add_checkpoint` all reject a `position` field on update paths (create-time `position` is an insert-at-index, not a raw position write).
 
 ## Authoring guide — exact data formats
 

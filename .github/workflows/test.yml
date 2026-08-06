@@ -104,6 +104,21 @@ jobs:
       - name: Test tracks actions
         run: npm run test:tracks
 
+      - name: Test curriculum progress
+        run: npm run test:curriculum-progress
+
+      - name: Test curriculum admin validation
+        run: npm run test:curriculum-admin-validation
+
+      - name: Test curriculum admin
+        run: npm run test:curriculum-admin
+
+      - name: Test curriculum actions
+        run: npm run test:curriculum-actions
+
+      - name: Test checkpoint backfill
+        run: npm run test:checkpoint-backfill
+
       - name: Test article publish validation
         run: npm run test:article-publish-validation
 
