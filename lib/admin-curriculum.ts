@@ -316,7 +316,7 @@ export async function addLessonToModule(
     const moduleId = found.id
 
     const articleId = await findArticleId(input.articleSlug)
-    if (!articleId) return { ok: false, status: 404, error: "Article not found." }
+    if (!articleId) return { ok: false, status: 404, error: "Lesson not found." }
 
     const existing = await prisma.moduleLesson.findUnique({
         where: { moduleId_articleId: { moduleId, articleId } },
@@ -374,7 +374,7 @@ export async function removeLessonFromModule(
     const moduleId = found.id
 
     const articleId = await findArticleId(articleSlug)
-    if (!articleId) return { ok: false, status: 404, error: "Article not found." }
+    if (!articleId) return { ok: false, status: 404, error: "Lesson not found." }
 
     const lessons = await prisma.moduleLesson.findMany({
         where: { moduleId },

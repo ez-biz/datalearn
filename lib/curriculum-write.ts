@@ -21,6 +21,14 @@ export async function recordLessonProgressForUser(
     articleSlug: string,
     percent: number,
 ): Promise<LessonProgressResult> {
+    // `percent` is untrusted input arriving from a "use server" action —
+    // NaN or +/-Infinity would otherwise flow straight through
+    // clampProgressPercent (Math.round/Math.max/Math.min all propagate NaN)
+    // into a Prisma Int column and throw a 500 instead of failing cleanly.
+    if (!Number.isFinite(percent)) {
+        return { ok: false, percent: 0, completed: false }
+    }
+
     const article = await prisma.article.findUnique({
         where: { slug: articleSlug },
         select: { id: true },

@@ -1820,6 +1820,16 @@ async function main() {
                     checkpointsAdded++
                 } else if (cp.status === 409) {
                     checkpointsAlreadyThere++
+                } else if (cp.status === 404) {
+                    // The problem doesn't exist in this database — e.g. a
+                    // fresh checkout seeded only with prisma/seed.ts's 11
+                    // problems, missing one of the slugs this track's
+                    // checkpoints reference. Record it as a gap, exactly
+                    // like the empty-checkpoint path above, rather than
+                    // aborting the whole run and leaving a partial track.
+                    const gap = `${mod.slug}/${lesson.slug}: checkpoint problem "${problemSlug}" not found in this database (skipped)`
+                    gaps.push(gap)
+                    console.warn(`  ! ${gap}`)
                 } else {
                     throw new Error(
                         `addCheckpoint(${lesson.slug}, ${problemSlug}) failed: ${cp.error}`,
