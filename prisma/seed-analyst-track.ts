@@ -1670,28 +1670,58 @@ async function main() {
     const authorId = await resolveAuthorId()
     console.log(`  author: ${authorId}`)
 
-    const track = await prisma.track.upsert({
+    // Guarded the same way upsertLessonArticle() guards Article: Track has
+    // `updatedAt @updatedAt`, and Prisma's upsert() fires the update branch
+    // (bumping updatedAt) on every run even when the payload is identical
+    // to what's already stored. Read first and only upsert when something
+    // actually changed, so a second run with unchanged TRACK data is a true
+    // no-op for this row too.
+    const existingTrack = await prisma.track.findUnique({
         where: { slug: TRACK_SLUG },
-        update: {
-            name: TRACK.name,
-            summary: TRACK.summary,
-            description: TRACK.description,
-            difficulty: TRACK.difficulty,
-            status: TRACK.status,
-            estimatedMinutes: TRACK.estimatedMinutes,
+        select: {
+            id: true,
+            slug: true,
+            name: true,
+            summary: true,
+            description: true,
+            difficulty: true,
+            status: true,
+            estimatedMinutes: true,
         },
-        create: {
-            slug: TRACK_SLUG,
-            name: TRACK.name,
-            summary: TRACK.summary,
-            description: TRACK.description,
-            difficulty: TRACK.difficulty,
-            status: TRACK.status,
-            estimatedMinutes: TRACK.estimatedMinutes,
-        },
-        select: { id: true, slug: true },
     })
-    console.log(`  track: ${track.slug}`)
+    const trackChanged =
+        !existingTrack ||
+        existingTrack.name !== TRACK.name ||
+        existingTrack.summary !== TRACK.summary ||
+        existingTrack.description !== TRACK.description ||
+        existingTrack.difficulty !== TRACK.difficulty ||
+        existingTrack.status !== TRACK.status ||
+        existingTrack.estimatedMinutes !== TRACK.estimatedMinutes
+
+    const track = trackChanged
+        ? await prisma.track.upsert({
+              where: { slug: TRACK_SLUG },
+              update: {
+                  name: TRACK.name,
+                  summary: TRACK.summary,
+                  description: TRACK.description,
+                  difficulty: TRACK.difficulty,
+                  status: TRACK.status,
+                  estimatedMinutes: TRACK.estimatedMinutes,
+              },
+              create: {
+                  slug: TRACK_SLUG,
+                  name: TRACK.name,
+                  summary: TRACK.summary,
+                  description: TRACK.description,
+                  difficulty: TRACK.difficulty,
+                  status: TRACK.status,
+                  estimatedMinutes: TRACK.estimatedMinutes,
+              },
+              select: { id: true, slug: true },
+          })
+        : existingTrack
+    console.log(`  track: ${track.slug} (${trackChanged ? "created-or-updated" : "unchanged"})`)
 
     const topicCache = new Map<string, string>()
     const tagCache = new Map<string, string>()
