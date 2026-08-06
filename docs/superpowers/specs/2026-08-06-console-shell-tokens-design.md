@@ -173,8 +173,10 @@ The handoff forbids shadows. `--shadow-xs` through `--shadow-xl` and `--shadow-p
 One new token for the single sanctioned exception:
 
 ```css
---shadow-sidebar-active: 0 1px 2px hsl(240 20% 10% / 0.06);  /* light only; none in dark */
+--sidebar-active-shadow: 0 1px 2px hsl(240 20% 10% / 0.06);  /* light; none in dark */
 ```
+
+`@theme inline` maps it to the utility `shadow-sidebar-active`. The variable and the utility must **not** share a name — `@theme inline` emits its value directly, so `--shadow-sidebar-active: var(--shadow-sidebar-active)` would be a circular reference.
 
 **Consequence to handle in the repair pass:** popovers and dropdown menus currently rely on shadow for separation from the page. With shadows flattened they need a visible `--line` border. Known affected: `UserMenu`, `SignInDialog`, the list popovers in `components/lists/`.
 
@@ -281,7 +283,7 @@ Values from `ConsoleSidebar.dc.html` / `ConsoleRail.dc.html`, translated to toke
 **Sidebar, expanded — 236px**, `--panel` background, 1px `--line-soft` right border, column flex, full height.
 
 - **Header row**, 12px 12px 10px padding: 26px circular avatar (`--panel-hover` fill, `user` icon), name at 13.5px/600, `chevron-down`, and a `panel-left` collapse toggle. Everything `--text-dim` except the name. Signed out: this slot becomes the sign-in button and the progress block is omitted.
-- **Nav**, 8px padding, 1px gaps. Items: 7px/9px padding, 5px radius, 13.5px/400, `--text-muted`, 15px icon, 10px gap. Hover `--panel-hover` + `--text`. Active `--panel-active` + `--text` + weight 500 + `--primary` icon; in light also `--shadow-sidebar-active`.
+- **Nav**, 8px padding, 1px gaps. Items: 7px/9px padding, 5px radius, 13.5px/400, `--text-muted`, 15px icon, 10px gap. Hover `--panel-hover` + `--text`. Active `--panel-active` + `--text` + weight 500 + `--primary` icon, plus the `shadow-sidebar-active` utility, which resolves to nothing in dark and to the pill shadow in light.
 - **Footer**, `margin-top:auto`, 1px `--line-soft` top border: track progress block (mono "TRACK" label, `--primary` percentage, 3px bar with square ends on a `--line-faint` track, track name at 11px mono), then Updates and Help center at 13px.
 
 **Rail, collapsed — 56px**, same background and border. 32px `panel-left` toggle, 24px hairline divider, then 34×34 buttons with 17px icons in the same order. Active: `--panel-active` background, `--primary` icon. Bottom: Updates, Help, then a 26px initials avatar.
