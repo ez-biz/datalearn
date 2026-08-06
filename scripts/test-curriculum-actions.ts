@@ -15,6 +15,7 @@ import { recordLessonProgressForUser } from "../lib/curriculum-write"
 
 const PREFIX = "curricread-"
 const TRACK_SLUG = `${PREFIX}track`
+const DRAFT_TRACK_SLUG = `${PREFIX}draft-track`
 
 let pool: pg.Pool
 let prisma: PrismaClient
@@ -59,7 +60,7 @@ before(async () => {
         data: { name: `${PREFIX}Topic`, slug: `${PREFIX}topic` },
     })
     const track = await prisma.track.create({
-        data: { slug: TRACK_SLUG, name: "T", summary: "s", description: "d" },
+        data: { slug: TRACK_SLUG, name: "T", summary: "s", description: "d", status: "PUBLISHED" },
     })
 
     const m1 = await prisma.module.create({
@@ -141,6 +142,32 @@ before(async () => {
     const lw = await article("lesson-write")
     writeLessonId = lw.id
     writeLessonSlug = `${PREFIX}lesson-write`
+
+    // A DRAFT track — Blocker: an unpublished track's curriculum tree must
+    // never leak to a reader, mirroring the DRAFT-lesson guard above one
+    // level up the hierarchy.
+    const draftTrack = await prisma.track.create({
+        data: {
+            slug: DRAFT_TRACK_SLUG,
+            name: "Draft Track",
+            summary: "s",
+            description: "d",
+            status: "DRAFT",
+        },
+    })
+    const draftTrackModule = await prisma.module.create({
+        data: {
+            trackId: draftTrack.id,
+            slug: "m1",
+            name: "M1",
+            description: "d",
+            position: 0,
+        },
+    })
+    const draftTrackLesson = await article("draft-track-lesson")
+    await prisma.moduleLesson.create({
+        data: { moduleId: draftTrackModule.id, articleId: draftTrackLesson.id, position: 0 },
+    })
 })
 
 after(async () => {
@@ -202,6 +229,10 @@ describe("getTrackCurriculumForUser", () => {
         assert.equal(c!.modules[0].lessons[0].checkpoints[0].solved, false)
         // Module 1 is not complete for an anonymous viewer, so module 2 locks.
         assert.equal(c!.modules[1].unlocked, false)
+    })
+
+    it("returns null for a DRAFT track, even with a published module and lesson", async () => {
+        assert.equal(await getTrackCurriculumForUser(DRAFT_TRACK_SLUG, null), null)
     })
 })
 

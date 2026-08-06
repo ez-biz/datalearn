@@ -62,8 +62,13 @@ export async function getTrackCurriculumForUser(
     trackSlug: string,
     userId: string | null,
 ): Promise<TrackCurriculum | null> {
-    const track = await prisma.track.findUnique({
-        where: { slug: trackSlug },
+    // An unpublished track is invisible to learners — same rule as
+    // actions/tracks.ts and the published-lesson filter below. Publishing is
+    // a deliberate human action, not something a DRAFT row should leak by
+    // default. `findFirst` (not `findUnique`) because `status` makes the
+    // where-clause non-unique.
+    const track = await prisma.track.findFirst({
+        where: { slug: trackSlug, status: "PUBLISHED" },
         select: {
             id: true,
             slug: true,
