@@ -1676,6 +1676,16 @@ async function main() {
     // to what's already stored. Read first and only upsert when something
     // actually changed, so a second run with unchanged TRACK data is a true
     // no-op for this row too.
+    //
+    // `status` is deliberately excluded from both the comparison below and
+    // the upsert's `update:` object. Global constraint for this plan:
+    // attaching curriculum never mutates Track.status -- publishing stays a
+    // deliberate human action. TRACK.status is only ever "DRAFT" here, and
+    // it's written on `create:` so a brand-new track still starts as a
+    // draft, but it must never be written on an update, or a re-run of this
+    // script against a track a human already published through the admin
+    // portal would silently revert that publish back to DRAFT. A re-run
+    // against a published track leaves it published.
     const existingTrack = await prisma.track.findUnique({
         where: { slug: TRACK_SLUG },
         select: {
@@ -1685,7 +1695,6 @@ async function main() {
             summary: true,
             description: true,
             difficulty: true,
-            status: true,
             estimatedMinutes: true,
         },
     })
@@ -1695,7 +1704,6 @@ async function main() {
         existingTrack.summary !== TRACK.summary ||
         existingTrack.description !== TRACK.description ||
         existingTrack.difficulty !== TRACK.difficulty ||
-        existingTrack.status !== TRACK.status ||
         existingTrack.estimatedMinutes !== TRACK.estimatedMinutes
 
     const track = trackChanged
@@ -1706,7 +1714,6 @@ async function main() {
                   summary: TRACK.summary,
                   description: TRACK.description,
                   difficulty: TRACK.difficulty,
-                  status: TRACK.status,
                   estimatedMinutes: TRACK.estimatedMinutes,
               },
               create: {

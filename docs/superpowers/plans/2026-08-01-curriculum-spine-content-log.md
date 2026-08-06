@@ -138,10 +138,52 @@ task's explicit instruction not to invent or author new problems.
 
 ## Track-level state
 
-`Track.status` is deliberately left `"DRAFT"` even though all 5 modules
-now carry full, `PUBLISHED` lesson prose. Flipping the track live (making
-it visible/enrollable to real users) is a separate decision for whoever
-owns that call, not something inferred from "the content is done" — the
-seed script will keep it at `DRAFT` on every re-run until a human
-changes `TRACK.status` in `prisma/seed-analyst-track.ts` and re-runs the
-seed.
+`Track.status` is deliberately left `"DRAFT"` in `TRACK` even though all
+5 modules now carry full, `PUBLISHED` lesson prose. Flipping the track
+live (making it visible/enrollable to real users) is a separate decision
+for whoever owns that call, not something inferred from "the content is
+done."
+
+This is enforced structurally, not just by convention: the seed's
+`Track.upsert` writes `status` on **create only**. The `update:` branch
+never includes `status` at all, and the before/after comparison that
+decides whether to write anything (`trackChanged`) doesn't compare it
+either — status isn't a field this script's update path can touch, full
+stop. Concretely, that means:
+
+- A brand-new track is created with `status: "DRAFT"` — a track always
+  starts as a draft.
+- If a human later publishes the track through the admin portal
+  (`Track.status` → `PUBLISHED`) and this seed is re-run — which a
+  re-runnable, production-targetable script explicitly invites — the
+  re-run leaves it `PUBLISHED`. The seed cannot see or revert that change.
+- Verified directly: manually set `Track.status` to `PUBLISHED` via a raw
+  update, re-ran the seed, confirmed the row was still `PUBLISHED`
+  afterward and `Track.updatedAt` had not moved (the update branch never
+  fired, because none of the five fields it actually compares —
+  `name`/`summary`/`description`/`difficulty`/`estimatedMinutes` — had
+  changed). See the Task 12 fix-round-2 report for the exact commands and
+  output.
+
+To publish this track for real, change `Track.status` directly (through
+the admin portal, or a one-off script) — not by editing `TRACK.status` in
+this file, which the seed will never write past track creation.
+
+### Known, undecided gap: `Article.status`
+
+The same risk shape exists one level down, on `Article.status`, and is
+**not** fixed — flagged here for whoever owns that call, not resolved
+unilaterally. `upsertLessonArticle`'s `changed` comparison includes
+`existing.status !== input.status`, and `CURRICULUM` always supplies
+`status: "PUBLISHED"` for these 17 lessons. Verified empirically: if an
+admin unpublishes one of these lesson articles through the admin portal
+(e.g. `having-vs-where` set to `DRAFT` to pull it while fixing an error),
+a re-run of this seed silently flips it back to `PUBLISHED` (`articles
+updated=1` in the run's summary, with no distinguishing log line for
+"status reverted" vs. "content changed") and stamps a fresh
+`ArticleVersion`. Unlike `Track`, the seed is genuinely the source of
+truth for these articles' *content*, so re-asserting `PUBLISHED` matches
+what the seed is trying to guarantee most of the time — but it means an
+admin's deliberate unpublish of one of these specific 17 lessons does not
+survive a re-run undisturbed, the same failure shape the `Track` fix
+above closes off.
