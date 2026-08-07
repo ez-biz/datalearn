@@ -7,6 +7,12 @@ set -e
 
 exit_code=0
 
+# Tokens legitimately defined outside app/globals.css. Use whole-token matching.
+ALLOWED_TOKENS=" --font-inter --font-jetbrains --gap "
+# --font-inter: next/font, via inter.variable on <body> in app/layout.tsx
+# --font-jetbrains: next/font, via jetbrainsMono.variable on <body> in app/layout.tsx
+# --gap: Tailwind spacing mechanism, vendored components/shadcn/toggle-group.tsx
+
 # Try rg first, fall back to grep if unavailable.
 if command -v rg >/dev/null 2>&1; then
     refs=$(rg -hoE 'var\(--[a-z0-9-]+\)' \
@@ -27,6 +33,7 @@ if command -v rg >/dev/null 2>&1; then
         | sort -u)
 
     for token in $refs; do
+        case " $ALLOWED_TOKENS " in *" $token "*) continue ;; esac
         if ! rg -q "^\s*${token}\s*:" app/globals.css; then
             echo "MISSING DECLARATION: $token"
             exit_code=1
@@ -53,6 +60,7 @@ else
         | sort -u)
 
     for token in $refs; do
+        case " $ALLOWED_TOKENS " in *" $token "*) continue ;; esac
         if ! grep -q "^\s*${token}\s*:" app/globals.css; then
             echo "MISSING DECLARATION: $token"
             exit_code=1
