@@ -86,7 +86,7 @@ export const FOOTER_NAV: NavItem[] = [
 ]
 
 export const TAB_BAR: NavItem[] = [
-    { key: "tab-learn", label: "Learn", icon: BookOpen, href: "/learn", status: "live" },
+    { key: "tab-learn", label: "Learn", icon: BookOpen, href: "/learn", status: "live", exclude: ["/learn/tracks"] },
     { key: "tab-practice", label: "Practice", icon: SquarePen, href: "/practice", status: "live" },
     { key: "tab-tracks", label: "Tracks", icon: Route, href: "/learn/tracks", status: "live" },
     { key: "tab-you", label: "You", icon: User, href: "/profile", status: "live" },

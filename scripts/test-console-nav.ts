@@ -21,7 +21,7 @@ import {
 
 function find(key: string): NavItem {
     const flat: NavItem[] = []
-    for (const item of [...PRIMARY_NAV, ...FOOTER_NAV]) {
+    for (const item of [...PRIMARY_NAV, ...FOOTER_NAV, ...TAB_BAR]) {
         flat.push(item)
         for (const child of item.children ?? []) flat.push(child)
     }
@@ -146,6 +146,72 @@ describe("tab bar", () => {
         for (const item of TAB_BAR) {
             assert.equal(item.status, "live", `${item.key} is not live`)
             assert.ok(item.href, `${item.key} has no href`)
+        }
+    })
+
+    describe("isolation — at most one tab matches any route", () => {
+        const routes = [
+            "/",
+            "/learn",
+            "/learn/sql-basics",
+            "/learn/tracks",
+            "/learn/tracks/analyst-interview-prep",
+            "/practice",
+            "/practice/two-sum",
+            "/profile",
+        ]
+
+        for (const path of routes) {
+            it(`selects at most one tab for ${path}`, () => {
+                const hits = TAB_BAR.filter((i) => isNavItemActive(i, path))
+                assert.ok(
+                    hits.length <= 1,
+                    `${path} selected: ${hits.map((h) => h.key).join(", ")}`,
+                )
+            })
+        }
+    })
+
+    describe("exclusion — /learn/tracks belongs to Tracks, not Learn", () => {
+        it("selects tab-tracks and not tab-learn for /learn/tracks", () => {
+            assert.equal(isNavItemActive(find("tab-tracks"), "/learn/tracks"), true)
+            assert.equal(isNavItemActive(find("tab-learn"), "/learn/tracks"), false)
+        })
+
+        it("selects tab-tracks for a track detail page", () => {
+            assert.equal(
+                isNavItemActive(find("tab-tracks"), "/learn/tracks/analyst-interview-prep"),
+                true,
+            )
+            assert.equal(
+                isNavItemActive(find("tab-learn"), "/learn/tracks/analyst-interview-prep"),
+                false,
+            )
+        })
+    })
+
+    describe("consistency with PRIMARY_NAV", () => {
+        // For certain routes, verify that the tab bar and PRIMARY_NAV
+        // select the same logical section.
+        const testCases = [
+            { path: "/learn", tab: "tab-learn", primary: "learn" },
+            { path: "/learn/tracks", tab: "tab-tracks", primary: "tracks" },
+            { path: "/learn/sql-basics", tab: "tab-learn", primary: "learn" },
+            { path: "/learn/tracks/analyst-interview-prep", tab: "tab-tracks", primary: "tracks" },
+            { path: "/practice", tab: "tab-practice", primary: "practice" },
+            { path: "/practice/two-sum", tab: "tab-practice", primary: "practice" },
+        ]
+
+        for (const { path, tab, primary } of testCases) {
+            it(`agrees on ${path}`, () => {
+                const tabActive = isNavItemActive(find(tab), path)
+                const primaryActive = isNavItemActive(find(primary), path)
+                assert.equal(
+                    tabActive,
+                    primaryActive,
+                    `${path}: tab ${tab}=${tabActive}, primary ${primary}=${primaryActive}`,
+                )
+            })
         }
     })
 })
