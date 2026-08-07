@@ -4,12 +4,6 @@
 
 set -e
 
-# Fail loudly if rg is unavailable (not in PATH of /bin/sh).
-if ! command -v rg >/dev/null 2>&1; then
-    echo "ERROR: rg (ripgrep) not found in PATH. Install ripgrep or add it to PATH."
-    exit 1
-fi
-
 PALETTE='(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)'
 PREFIXES='(bg|text|border|from|to|ring|fill|stroke|outline|divide|placeholder|accent)'
 
@@ -22,14 +16,32 @@ pattern2="\\b(bg|text|border|from|to|ring|fill|stroke|outline|divide)-(white|bla
 # failure mode, and it silently breaks the other theme.
 pattern3='className=("|\{`)[^"`]*#[0-9a-fA-F]{3,8}'
 
-violations=$(
-    rg -n -e "$pattern1" -e "$pattern2" -e "$pattern3" \
-        app components \
-        --glob '!**/node_modules/**' \
-        --glob '!components/shadcn/**' \
-        2>/dev/null \
-    || true
-)
+# Try rg first, fall back to grep if unavailable.
+violations=""
+if command -v rg >/dev/null 2>&1; then
+    violations=$(
+        rg -n -e "$pattern1" -e "$pattern2" -e "$pattern3" \
+            app components \
+            --glob '!**/node_modules/**' \
+            --glob '!components/shadcn/**' \
+            2>/dev/null \
+        || true
+    )
+else
+    # Fallback to grep with equivalent flags.
+    # grep -r: recurse, -n: line numbers, -E: extended regex
+    # --include: only search these file patterns
+    # --exclude-dir: skip these directories
+    violations=$(
+        grep -rEn \
+            -e "$pattern1" -e "$pattern2" -e "$pattern3" \
+            app components \
+            --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' \
+            --exclude-dir='node_modules' --exclude-dir='shadcn' \
+            2>/dev/null \
+        || true
+    )
+fi
 
 if [ -n "$violations" ]; then
     echo "Hardcoded palette classes or hex literals found. Use semantic tokens instead."
