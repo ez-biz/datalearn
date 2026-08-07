@@ -76,6 +76,7 @@
     "test:article-publish-validation": "tsx scripts/test-article-publish-validation.ts",
     "test:article-publish-routes": "tsx scripts/test-article-publish-routes.ts",
     "test:mcp-e2e-log-redaction": "node --test scripts/test-mcp-e2e-log-redaction.mjs",
+    "test:console-nav": "node --import tsx --test scripts/test-console-nav.ts",
     "check:mcp-bundle-isolation": "tsx scripts/check-mcp-bundle-isolation.ts",
     "check:token-parity": "./scripts/check-token-theme-parity.sh"
   },
