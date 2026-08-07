@@ -4,6 +4,12 @@
 
 set -e
 
+# Fail loudly if rg is unavailable (not in PATH of /bin/sh).
+if ! command -v rg >/dev/null 2>&1; then
+    echo "ERROR: rg (ripgrep) not found in PATH. Install ripgrep or add it to PATH."
+    exit 1
+fi
+
 PALETTE='(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)'
 PREFIXES='(bg|text|border|from|to|ring|fill|stroke|outline|divide|placeholder|accent)'
 

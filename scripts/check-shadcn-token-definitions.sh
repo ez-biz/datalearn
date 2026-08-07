@@ -5,6 +5,12 @@
 
 set -e
 
+# Fail loudly if rg is unavailable (not in PATH of /bin/sh).
+if ! command -v rg >/dev/null 2>&1; then
+    echo "ERROR: rg (ripgrep) not found in PATH. Install ripgrep or add it to PATH."
+    exit 1
+fi
+
 exit_code=0
 
 refs=$(rg -hoE 'var\(--[a-z0-9-]+\)' \
