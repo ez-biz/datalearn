@@ -128,7 +128,7 @@ export function ConsoleSidebar({
                                 style={{ width: `${trackProgress.percent}%` }}
                             />
                         </div>
-                        <div className="mt-1.5 font-mono text-[11px] tabular-nums text-text-dim">
+                        <div className="mt-1.5 truncate font-mono text-[11px] tabular-nums text-text-dim">
                             {trackProgress.name}
                         </div>
                     </div>
@@ -144,7 +144,7 @@ export function ConsoleSidebar({
                         href={`/${page.slug}`}
                         className={cn(ROW, "text-[13px] text-text-muted hover:bg-panel-hover hover:text-foreground")}
                     >
-                        {page.title}
+                        <span className="min-w-0 flex-1 truncate">{page.title}</span>
                     </Link>
                 ))}
             </div>
