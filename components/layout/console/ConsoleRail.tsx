@@ -41,7 +41,7 @@ function RailItem({ item, pathname }: { item: NavItem; pathname: string }) {
                 CELL,
                 active
                     ? "bg-panel-active text-primary shadow-sidebar-active"
-                    : "text-text-dim hover:bg-panel-active hover:text-foreground",
+                    : "text-text-dim hover:bg-panel-hover hover:text-foreground",
             )}
         >
             <Icon className="h-[17px] w-[17px]" aria-hidden />
@@ -58,6 +58,7 @@ export function ConsoleRail({ onToggle, initials }: ConsoleRailProps) {
                 type="button"
                 onClick={onToggle}
                 aria-label="Expand sidebar"
+                title="Expand sidebar"
                 className="flex h-8 w-8 items-center justify-center rounded-md text-text-dim transition-colors duration-150 hover:text-foreground"
             >
                 <PanelLeft className="h-4 w-4" aria-hidden />

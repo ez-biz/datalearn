@@ -92,6 +92,7 @@ export function ConsoleSidebar({
                     type="button"
                     onClick={onToggle}
                     aria-label="Collapse sidebar"
+                    title="Collapse sidebar"
                     className="text-text-dim transition-colors duration-150 hover:text-foreground"
                 >
                     <PanelLeft className="h-[15px] w-[15px]" aria-hidden />
