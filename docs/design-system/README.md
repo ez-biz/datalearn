@@ -38,7 +38,7 @@ The `colors_and_type.css` file mirrors the live token contract from
 | Repo                                    | <https://github.com/ez-biz/datalearn>      | public     |
 | Design tokens, source of truth          | `datalearn/app/globals.css`                | read-only  |
 | Hand-rolled UI primitives               | `datalearn/components/ui/`                 | read-only  |
-| Layout (Navbar, Footer)                 | `datalearn/components/layout/`             | read-only  |
+| Layout (console sidebar/rail, Footer)   | `datalearn/components/layout/`             | read-only  |
 | SQL workspace (the heart of the app)    | `datalearn/components/sql/` + `practice/`  | read-only  |
 | Project guide for AI contributors       | `datalearn/CLAUDE.md`                      | read-only  |
 
@@ -163,26 +163,42 @@ sake.
 
 ### Palette
 
-Two-color brand: **green** (primary, the "Learn" half of the wordmark and
-every accept / success / progress signal) and **amber** (accent, the "Medium"
-difficulty + warnings + hint highlights). Everything else is neutral.
+A near-neutral **graphite** base (hue 240, almost no chroma) with **green**
+as the sole brand color (primary, the "Learn" half of the wordmark and every
+accept / success / progress / focus-ring signal). **Amber** carries warnings
+and the "Medium" difficulty + hint highlights — a distinct role from the
+legacy `--accent` token, which is now **violet** and reserved for admin
+surfaces. A second functional accent, **blue**, is used only for SQL keyword
+syntax highlighting. Note **dark is the product default**
+(`ThemeProvider` ships `defaultTheme="dark"`), so the table below reads
+dark-first.
 
-| Role               | Light                         | Dark                          | Where it shows up                 |
-|--------------------|-------------------------------|-------------------------------|-----------------------------------|
-| Background         | `hsl(0 0% 100%)`              | `hsl(222 47% 6%)`             | Page surface                      |
-| Foreground         | `hsl(222 47% 11%)`            | `hsl(210 20% 98%)`            | Body text                         |
-| Surface            | `hsl(0 0% 100%)`              | `hsl(220 27% 9%)`             | Cards                             |
-| Surface muted      | `hsl(220 14% 96%)`            | `hsl(222 32% 12%)`            | Toolbars, table headers           |
-| Border             | `hsl(220 13% 91%)`            | `hsl(220 18% 18%)`            | Card / table borders              |
-| **Primary**        | `hsl(142 71% 45%)` 🟢         | same                          | CTAs, "Data·**Learn**", success   |
-| **Accent**         | `hsl(32 95% 44%)` 🟠          | `hsl(32 95% 50%)`             | Medium difficulty, hints          |
-| Destructive / Hard | `hsl(0 72% 51%)`              | `hsl(0 72% 60%)`              | Errors, "Hard" badge              |
-| Easy bg / fg       | `hsl(142 76% 96%)` / `hsl(142 84% 24%)` | `hsl(142 50% 14%)` / `hsl(142 71% 70%)` | "Easy" pills    |
-| Medium bg / fg     | `hsl(33 100% 96%)` / `hsl(26 90% 30%)`  | `hsl(33 50% 14%)` / `hsl(38 92% 70%)`   | "Medium" pills  |
-| Hard bg / fg       | `hsl(0 86% 97%)` / `hsl(0 70% 35%)`     | `hsl(0 40% 16%)` / `hsl(0 80% 75%)`     | "Hard" pills    |
+| Role                              | Dark (default)                | Light                          | Where it shows up                 |
+|------------------------------------|-------------------------------|---------------------------------|-----------------------------------|
+| Background (`--canvas`)            | `hsl(240 10% 6%)` `#0E0E11`   | `hsl(240 11% 98%)` `#FAFAFB`   | Page surface                      |
+| Foreground (`--text`)              | `hsl(60 8% 92%)` `#EDEDEA`    | `hsl(240 8% 10%)` `#17171B`    | Body text                         |
+| Surface (`--panel-raised`)         | `hsl(240 13% 8%)` `#111116`   | `hsl(0 0% 100%)` `#FFFFFF`     | Cards, table headers              |
+| Surface muted (`--panel-sunken`)   | `hsl(240 12% 7%)` `#0F0F13`   | `hsl(240 14% 97%)` `#F7F7F9`   | Toolbars, table rows              |
+| Border (`--line`)                  | `hsl(240 6% 16%)` `#26262B`   | `hsl(240 10% 90%)` `#E3E3E8`   | Card / table borders              |
+| **Primary** 🟢                     | `hsl(154 69% 58%)` `#4ADE9E`  | `hsl(160 84% 34%)` `#0E9F6E`   | CTAs, "Data·**Learn**", success, focus ring |
+| **Warning** 🟠 (amber)             | `hsl(41 72% 60%)` `#E2B44F`   | `hsl(36 100% 35%)` `#B26A00`   | "Medium" difficulty, hints, warnings |
+| **Accent** 🟣 (violet, legacy `--accent`) | `hsl(255 92% 76%)` `#A78BFA` | `hsl(263 70% 50%)` `#6D28D9` | Admin surfaces |
+| **Accent blue**                    | `hsl(221 89% 72%)` `#7AA2F7`  | `hsl(218 74% 47%)` `#1F5FD0`   | SQL keyword syntax highlighting   |
+| Danger / Hard                      | `hsl(0 78% 73%)` `#F08585`    | `hsl(2 61% 47%)` `#C2352F`     | Errors, "Hard" badge              |
+| Easy bg / fg     | `hsl(161 38% 8%)` / `hsl(154 69% 58%)` | `hsl(150 58% 95%)` / `hsl(161 82% 24%)` | "Easy" pills    |
+| Medium bg / fg   | `hsl(47 29% 6%)` / `hsl(41 72% 60%)`   | `hsl(39 100% 95%)` / `hsl(36 100% 27%)` | "Medium" pills  |
+| Hard bg / fg     | `hsl(0 32% 9%)` / `hsl(0 78% 73%)`     | `hsl(4 88% 97%)` / `hsl(2 61% 47%)`     | "Hard" pills    |
 
 The same primary green serves as `--ring` (focus outline) and `--success`.
 This is intentional — focus and "you got it right" feel related.
+
+Every pre-existing token name (`--background`, `--surface`, `--border`,
+`--muted-foreground`, `--easy`, etc.) still resolves — each is now an alias
+onto the graphite vocabulary above (`--canvas`, `--panel`, `--line`,
+`--text`, …). See `colors_and_type.css` for the full raw-channel list,
+including surface/line/text sub-ranks (`--panel-hover`, `--line-faint`,
+`--text-dim`, …) and the code/syntax-highlighting tokens (`--code-bg`,
+`--syntax-keyword`, `--syntax-function`, …) that have no legacy alias at all.
 
 ### Typography
 
@@ -231,15 +247,18 @@ background: var(--color-surface);
 border-radius: var(--radius-lg);    /* 12px */
 ```
 
-No drop shadow at rest. On hover, optionally `shadow-md` and a 0.5px upward
-translate (`-translate-y-0.5`) — that subtle lift is the only "alive"
-animation in the product.
+No drop shadow at rest or on hover — `--shadow-md` and friends are
+flattened to `none` (see Shadows below). The hover lift is the 0.5px
+upward translate (`-translate-y-0.5`) plus a border-color shift to
+`primary/40`; that's the only "alive" animation in the product.
 
-The hero editor preview card on the homepage is the one place a heavier
-shadow (`shadow-2xl shadow-primary/5`) and a soft brand-tinted blur halo
+The hero editor preview card on the homepage still carries a soft
+brand-tinted blur halo
 (`bg-gradient-to-br from-primary/15 via-transparent to-accent/10 blur-2xl`)
-appear. That treatment is reserved for the marketing hero and should not be
-repeated on regular cards.
+and an un-themed `shadow-2xl` (Tailwind's stock 2xl shadow, not one of the
+flattened `--shadow-*` tokens — its paired `shadow-primary/5` is now inert
+since `--shadow-primary` is `none`). That treatment is reserved for the
+marketing hero and should not be repeated on regular cards.
 
 ### Borders
 
@@ -251,15 +270,17 @@ There are two weights:
 
 ### Shadows
 
-Used like seasoning, not bedding.
+**Elevation is surface value and 1px borders only.** Every themed shadow
+token (`--shadow-xs`, `--shadow-sm`, `--shadow-md`, `--shadow-lg`,
+`--shadow-xl`, `--shadow-primary`) is flattened to `none` in both themes —
+a raised surface reads as a lighter/darker fill plus a hairline border, not
+a drop shadow.
 
-| Token            | Where                                              |
-|------------------|----------------------------------------------------|
-| `--shadow-sm`    | Primary buttons (a single hairline shadow)         |
-| `--shadow-md`    | Card hover (with translate-y)                      |
-| `--shadow-lg`    | Dropdown menus, popovers                           |
-| `--shadow-xl`    | Marketing hero card only                           |
-| `--shadow-primary` | Brand-tinted glow under hero card             |
+The **sole exception** is the light-mode active sidebar pill: a white pill
+on a grey rail has no border to define it, so it gets one real shadow
+(`--sidebar-active-shadow`, exposed as the `shadow-sidebar-active` utility,
+`0 1px 2px hsl(240 20% 10% / 0.06)`). It doesn't exist in dark mode — the
+active pill there is defined by `--panel-active` fill instead.
 
 ### Backgrounds
 
@@ -294,8 +315,9 @@ Restrained. The whole transition vocabulary in the product is:
 - `transition-colors` (150ms) on nav links, table rows, list rows
 - `transition-[border-color,box-shadow,translate]` (200ms ease-out) on hover
   cards in `/learn` — the lift is `-translate-y-0.5`
-- `transition-transform` (200ms ease-out) on the theme toggle (Sun/Moon
-  scale + rotate swap)
+- The theme toggle (sidebar footer row, rail footer icon, mobile account
+  menu — logic shared via `lib/use-hydrated-theme.ts`) is a plain
+  conditional Sun/Moon icon swap; no scale/rotate transition
 - `animate-spin` on `<Loader2>` Lucide icon — the only true animation
 - `transition-[width]` (500ms ease-out) on progress bars in the user
   dashboard
@@ -310,8 +332,9 @@ collapses every animation/transition to 0.01ms. Honour it on any new motion.
 - Primary buttons: background → `--primary-hover` (just a tick darker).
 - List rows: background → `--surface-muted/60`. The arrow `<ArrowRight>` to
   the right of the row picks up `--primary` and translates `0.5px` right.
-- Cards (in `/learn`): `border-color` → `primary/40`, `shadow-md`,
-  `translate-y -0.5px`.
+- Cards (in `/learn`): `border-color` → `primary/40`, `translate-y -0.5px`
+  (the paired `shadow-md` class is still applied in code but resolves to
+  `none` — see Shadows above).
 - Ghost buttons: background → `--surface-muted`.
 
 ### Press / active
@@ -326,8 +349,10 @@ and a 4px radius. Defined globally on `:focus-visible`. Never removed.
 
 ### Transparency & blur
 
-- The sticky `<Navbar>` is `bg-background/80 backdrop-blur-md` so content
-  scrolls behind it as a soft wash.
+- The left console sidebar/rail is a solid `bg-panel` fixed column with a
+  1px `border-line-soft` edge — no transparency or blur. (The old sticky,
+  translucent `<Navbar>` no longer exists; it was replaced by the sidebar
+  in the Console shell rework.)
 - Primary / accent overlays use opacity (`primary/10`, `primary/20`) for
   ring tints, soft icon backgrounds, focus halos.
 - Scrolling result tables use `bg-surface-muted/95 backdrop-blur` on the
@@ -368,8 +393,8 @@ icon family is allowed. `CLAUDE.md` enshrines this:
 Used in the product, observed across `app/`, `components/home/`,
 `components/practice/`, `components/sql/`, `components/layout/`:
 
-- Navigation / chrome: `Sun`, `Moon`, `Github`, `Shield`, `PenSquare`,
-  `Menu`, `X`, `User`, `Search`
+- Navigation / chrome: `Sun`, `Moon`, `PanelLeft` (sidebar collapse),
+  `LogIn`, `Github`, `Shield`, `PenSquare`, `User`, `Search`
 - Actions: `Play`, `Send`, `RotateCcw`, `ArrowRight`, `ChevronRight`,
   `ChevronDown`, `Plus`, `Trash`, `Settings`
 - Status / feedback: `CheckCircle2`, `XCircle`, `AlertCircle`, `Loader2`

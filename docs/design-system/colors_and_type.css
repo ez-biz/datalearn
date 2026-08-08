@@ -9,52 +9,107 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
 
 :root {
-    /* ── Raw HSL channels (kept so consumers can compose alpha layers) ── */
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    /* ── Raw HSL channels (kept so consumers can compose alpha layers).
+       Mirrors app/globals.css exactly: :root ships the DARK palette,
+       because dark is the product default (ThemeProvider defaultTheme=
+       "dark"). Light overrides live in .light below. ── */
 
-    --surface: 0 0% 100%;
-    --surface-muted: 220 14% 96%;
-    --surface-elevated: 0 0% 100%;
+    /* surfaces */
+    --canvas: 240 10% 6%;             /* #0E0E11 page background */
+    --canvas-deep: 240 9% 4%;         /* #0A0A0C editor, code blocks */
+    --panel: 240 12% 5%;              /* #0B0B0E sidebar, rails */
+    --panel-raised: 240 13% 8%;       /* #111116 cards, table headers */
+    --panel-sunken: 240 12% 7%;       /* #0F0F13 toolbars, table rows */
+    --panel-hover: 240 9% 8.6%;       /* #141418 nav hover */
+    --panel-active: 240 8% 9.4%;      /* #16161A nav active */
 
-    --border: 220 13% 91%;
-    --border-strong: 220 13% 82%;
+    /* lines */
+    --line: 240 6% 16%;               /* #26262B card + control borders */
+    --line-soft: 240 8% 12%;          /* #1C1C21 structural dividers */
+    --line-faint: 240 9% 13%;         /* #1E1E24 inner dividers, row rules */
+    --line-strong: 240 7% 19%;        /* #2C2C33 hover + secondary borders */
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
+    /* text */
+    --text: 60 8% 92%;                /* #EDEDEA primary */
+    --text-2: 240 4% 78%;             /* #C4C4C8 body prose */
+    --text-3: 240 3% 71%;             /* #B4B4B8 secondary body */
+    --text-muted: 240 3% 53%;         /* #82828A supporting copy */
+    --text-dim: 240 4% 43%;           /* #6A6A72 contrast floor for text */
+    --text-gutter: 240 6% 38%;        /* #5A5A66 editor line numbers only */
 
-    /* Brand green — the "Data" half of the Data·Learn wordmark */
-    --primary: 142 71% 45%;
-    --primary-foreground: 222 47% 11%;
-    --primary-hover: 142 71% 40%;
+    /* Brand green — the "Learn" half of the Data·Learn wordmark */
+    --primary: 154 69% 58%;           /* #4ADE9E */
+    --primary-fg: 163 79% 8%;         /* #04231A text on primary */
+    --primary-hover: 154 69% 52%;
+    --primary-text: 154 69% 58%;      /* #4ADE9E on tinted surfaces */
+    --primary-bg: 161 38% 8%;         /* #0D1D18 */
+    --primary-bg-subtle: 160 27% 6%;  /* #0C1512 */
+    --primary-border: 158 30% 17%;    /* #1F3A30 */
+    --primary-row: 163 28% 10%;       /* #12201C selected curriculum row */
 
-    /* Amber — used for hints, warnings, "medium" difficulty */
-    --accent: 32 95% 44%;
-    --accent-foreground: 0 0% 100%;
+    /* Amber — hints, warnings, "medium" difficulty */
+    --warning: 41 72% 60%;            /* #E2B44F */
+    --warning-text: 41 72% 60%;       /* #E2B44F */
+    --warning-bg: 47 29% 6%;          /* #14120B */
+    --warning-border: 46 41% 16%;     /* #3A3218 */
 
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
+    /* Red — errors, "hard" difficulty */
+    --danger: 0 78% 73%;              /* #F08585 */
+    --danger-text: 0 78% 73%;         /* #F08585 */
+    --danger-bg: 0 32% 9%;            /* #1D0F0F */
+    --danger-border: 0 29% 18%;       /* #3A2020 */
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 28 100% 14%;
+    /* accents */
+    --accent-blue: 221 89% 72%;       /* #7AA2F7 SQL keywords */
+    --accent-violet: 255 92% 76%;     /* #A78BFA admin surfaces */
 
-    --success: 142 71% 45%;
-    --success-foreground: 0 0% 100%;
+    /* glyphs + code */
+    --icon-off: 240 6% 24%;           /* #3A3A42 non-text only */
+    --code-bg: 240 10% 11%;           /* #1A1A20 */
+    --code-text: 154 69% 58%;         /* #4ADE9E */
+    --syntax-keyword: 221 89% 72%;    /* #7AA2F7 */
+    --syntax-function: 41 72% 60%;    /* #E2B44F */
+    --syntax-literal: 154 69% 58%;    /* #4ADE9E */
+    --syntax-comment: 240 4% 37%;     /* #5A5A62 */
+    --syntax-plain: 240 4% 78%;       /* #C4C4C8 */
 
-    /* ── Difficulty system — bg + fg pair for badge/pill use ── */
-    --easy: 142 71% 45%;
-    --easy-bg: 142 76% 96%;
-    --easy-fg: 142 84% 24%;
-
-    --medium: 32 95% 44%;
-    --medium-bg: 33 100% 96%;
-    --medium-fg: 26 90% 30%;
-
-    --hard: 0 72% 51%;
-    --hard-bg: 0 86% 97%;
-    --hard-fg: 0 70% 35%;
-
-    --ring: 142 71% 45%;
+    /* legacy aliases — every token name this file already exposed below,
+       re-skinned onto the vocabulary above (identical mapping in .light) */
+    --background: var(--canvas);
+    --foreground: var(--text);
+    --surface: var(--panel-raised);
+    --surface-muted: var(--panel-sunken);
+    --surface-elevated: var(--panel-raised);
+    --border: var(--line);
+    --border-strong: var(--line-strong);
+    --muted: var(--panel-sunken);
+    --muted-foreground: var(--text-muted);
+    --muted-foreground-dim: var(--text-dim);
+    --primary-foreground: var(--primary-fg);
+    --accent: var(--accent-violet);
+    --accent-foreground: var(--primary-fg);
+    --destructive: var(--danger);
+    --destructive-foreground: var(--primary-fg);
+    --warning-foreground: var(--primary-fg);
+    --success: var(--primary);
+    --success-foreground: var(--primary-fg);
+    --easy: var(--primary);
+    --easy-bg: var(--primary-bg);
+    --easy-fg: var(--primary-text);
+    --medium: var(--warning);
+    --medium-bg: var(--warning-bg);
+    --medium-fg: var(--warning-text);
+    --hard: var(--danger);
+    --hard-bg: var(--danger-bg);
+    --hard-fg: var(--danger-text);
+    --card: var(--panel-raised);
+    --card-foreground: var(--text);
+    --popover: var(--panel-raised);
+    --popover-foreground: var(--text);
+    --secondary: var(--panel-sunken);
+    --secondary-foreground: var(--text);
+    --input: var(--line);
+    --ring: var(--primary);
 
     /* ── Resolved color tokens (use these in HTML mocks) ── */
     --color-bg: hsl(var(--background));
@@ -90,6 +145,56 @@
     --color-hard-bg: hsl(var(--hard-bg));
     --color-hard-fg: hsl(var(--hard-fg));
 
+    /* ── New Console vocabulary (graphite rework) — not covered by the
+       legacy aliases above; exposed directly so mocks can reach the
+       full palette, e.g. sidebar/rail chrome and SQL syntax highlighting. */
+    --color-canvas: hsl(var(--canvas));
+    --color-canvas-deep: hsl(var(--canvas-deep));
+    --color-panel: hsl(var(--panel));
+    --color-panel-raised: hsl(var(--panel-raised));
+    --color-panel-sunken: hsl(var(--panel-sunken));
+    --color-panel-hover: hsl(var(--panel-hover));
+    --color-panel-active: hsl(var(--panel-active));
+
+    --color-line: hsl(var(--line));
+    --color-line-soft: hsl(var(--line-soft));
+    --color-line-faint: hsl(var(--line-faint));
+    --color-line-strong: hsl(var(--line-strong));
+
+    --color-text: hsl(var(--text));
+    --color-text-2: hsl(var(--text-2));
+    --color-text-3: hsl(var(--text-3));
+    --color-text-muted: hsl(var(--text-muted));
+    --color-text-dim: hsl(var(--text-dim));
+    --color-text-gutter: hsl(var(--text-gutter));
+
+    --color-primary-text: hsl(var(--primary-text));
+    --color-primary-bg: hsl(var(--primary-bg));
+    --color-primary-bg-subtle: hsl(var(--primary-bg-subtle));
+    --color-primary-border: hsl(var(--primary-border));
+    --color-primary-row: hsl(var(--primary-row));
+
+    --color-warning-text: hsl(var(--warning-text));
+    --color-warning-bg: hsl(var(--warning-bg));
+    --color-warning-border: hsl(var(--warning-border));
+
+    --color-danger: hsl(var(--danger));
+    --color-danger-text: hsl(var(--danger-text));
+    --color-danger-bg: hsl(var(--danger-bg));
+    --color-danger-border: hsl(var(--danger-border));
+
+    --color-accent-blue: hsl(var(--accent-blue));
+    --color-accent-violet: hsl(var(--accent-violet));
+
+    --color-icon-off: hsl(var(--icon-off));
+    --color-code-bg: hsl(var(--code-bg));
+    --color-code-text: hsl(var(--code-text));
+    --color-syntax-keyword: hsl(var(--syntax-keyword));
+    --color-syntax-function: hsl(var(--syntax-function));
+    --color-syntax-literal: hsl(var(--syntax-literal));
+    --color-syntax-comment: hsl(var(--syntax-comment));
+    --color-syntax-plain: hsl(var(--syntax-plain));
+
     /* ── Radii ── */
     --radius-sm: 0.25rem;   /* 4px  — chips, inline tabs */
     --radius-md: 0.5rem;    /* 8px  — buttons, inputs, badges */
@@ -97,7 +202,14 @@
     --radius-xl: 1rem;      /* 16px — hero cards, modals */
     --radius-full: 9999px;  /* pills, dots, avatars */
 
-    /* ── Shadows — soft, neutral; brand-tinted only on hero panels ── */
+    /* ── Shadows — soft, neutral; brand-tinted only on hero panels.
+       NOTE: the live product (app/globals.css) flattens every one of
+       these to `none` — in-product elevation is surface value + 1px
+       borders, with the sole exception being the light-mode active
+       sidebar pill (`--sidebar-active-shadow`, ~0 1px 2px hsl(240 20%
+       10% / 0.06)). This softer scale is kept here for standalone
+       mockups/marketing collateral only — don't assume it's used
+       in-product. See docs/design-system/README.md. ── */
     --shadow-xs: 0 1px 2px hsl(220 13% 20% / 0.04);
     --shadow-sm: 0 1px 2px hsl(220 13% 20% / 0.05), 0 1px 3px hsl(220 13% 20% / 0.06);
     --shadow-md: 0 4px 6px -1px hsl(220 13% 20% / 0.08), 0 2px 4px -2px hsl(220 13% 20% / 0.06);
@@ -139,49 +251,98 @@
     --leading-relaxed: 1.65;
 }
 
-.dark {
-    --background: 222 47% 6%;
-    --foreground: 210 20% 98%;
+.light {
+    /* Mirrors app/globals.css .light — the override theme. :root above
+       (dark) is the default; this class is applied when the resolved
+       theme is light. */
 
-    --surface: 220 27% 9%;
-    --surface-muted: 222 32% 12%;
-    --surface-elevated: 222 32% 14%;
+    --canvas: 240 11% 98%;             /* #FAFAFB */
+    --canvas-deep: 0 0% 100%;          /* #FFFFFF */
+    --panel: 240 10% 96%;              /* #F4F4F6 rails are the tinted layer */
+    --panel-raised: 0 0% 100%;         /* #FFFFFF content is the brightest */
+    --panel-sunken: 240 14% 97%;       /* #F7F7F9 */
+    --panel-hover: 240 14% 93%;        /* #EAEAEF */
+    --panel-active: 0 0% 100%;         /* #FFFFFF — defined by shadow, not fill */
 
-    --border: 220 18% 18%;
-    --border-strong: 220 14% 28%;
+    --line: 240 10% 90%;               /* #E3E3E8 */
+    --line-soft: 240 14% 93%;          /* #EAEAEF */
+    --line-faint: 240 11% 95%;         /* #F0F0F3 */
+    --line-strong: 240 9% 85%;         /* #D4D4DB */
 
-    --muted: 222 32% 12%;
-    --muted-foreground: 220 9% 65%;
+    --text: 240 8% 10%;                /* #17171B */
+    --text-2: 240 6% 21%;              /* #33333A */
+    --text-3: 240 6% 29%;              /* #45454E */
+    --text-muted: 240 5% 38%;          /* #5C5C66 */
+    --text-dim: 240 4% 47%;            /* #74747E */
+    --text-gutter: 240 5% 62%;         /* #9A9AA4 */
 
-    --primary: 142 71% 45%;
-    --primary-foreground: 222 47% 11%;
-    --primary-hover: 142 71% 50%;
+    --primary: 160 84% 34%;            /* #0E9F6E */
+    --primary-fg: 0 0% 100%;           /* #FFFFFF */
+    --primary-hover: 160 84% 28%;
+    --primary-text: 161 82% 24%;       /* #0B6E4E */
+    --primary-bg: 150 58% 95%;         /* #ECFAF3 */
+    --primary-bg-subtle: 150 57% 97%;  /* #F4FCF8 */
+    --primary-border: 153 52% 81%;     /* #B7E8D2 */
+    --primary-row: 150 50% 95%;        /* #EAF8F1 */
 
-    --accent: 32 95% 50%;
-    --accent-foreground: 28 100% 14%;
+    --warning: 36 100% 35%;            /* #B26A00 */
+    --warning-text: 36 100% 27%;       /* #8A5200 */
+    --warning-bg: 39 100% 95%;         /* #FFF7E8 */
+    --warning-border: 41 67% 82%;      /* #F0DDB4 */
 
-    --destructive: 0 72% 55%;
-    --destructive-foreground: 0 0% 100%;
+    --danger: 2 61% 47%;               /* #C2352F */
+    --danger-text: 2 61% 47%;          /* #C2352F */
+    --danger-bg: 4 88% 97%;            /* #FEF1F0 */
+    --danger-border: 5 62% 88%;        /* #F3CFCC */
 
-    --warning: 38 92% 55%;
-    --warning-foreground: 28 100% 14%;
+    --accent-blue: 218 74% 47%;        /* #1F5FD0 */
+    --accent-violet: 263 70% 50%;      /* #6D28D9 */
 
-    --success: 142 71% 45%;
-    --success-foreground: 222 47% 11%;
+    --icon-off: 240 7% 78%;            /* #C4C4CC */
+    --code-bg: 154 30% 95%;            /* #F0F7F4 */
+    --code-text: 161 82% 24%;          /* #0B6E4E */
+    --syntax-keyword: 218 74% 47%;     /* #1F5FD0 */
+    --syntax-function: 34 100% 31%;    /* #A05A00 */
+    --syntax-literal: 161 82% 24%;     /* #0B6E4E */
+    --syntax-comment: 240 4% 56%;      /* #8A8A94 */
+    --syntax-plain: 240 6% 21%;        /* #33333A */
 
-    --easy: 142 71% 50%;
-    --easy-bg: 142 50% 14%;
-    --easy-fg: 142 71% 70%;
-
-    --medium: 38 92% 55%;
-    --medium-bg: 33 50% 14%;
-    --medium-fg: 38 92% 70%;
-
-    --hard: 0 72% 60%;
-    --hard-bg: 0 40% 16%;
-    --hard-fg: 0 80% 75%;
-
-    --ring: 142 71% 50%;
+    /* legacy aliases (identical mapping to :root) */
+    --background: var(--canvas);
+    --foreground: var(--text);
+    --surface: var(--panel-raised);
+    --surface-muted: var(--panel-sunken);
+    --surface-elevated: var(--panel-raised);
+    --border: var(--line);
+    --border-strong: var(--line-strong);
+    --muted: var(--panel-sunken);
+    --muted-foreground: var(--text-muted);
+    --muted-foreground-dim: var(--text-dim);
+    --primary-foreground: var(--primary-fg);
+    --accent: var(--accent-violet);
+    --accent-foreground: var(--primary-fg);
+    --destructive: var(--danger);
+    --destructive-foreground: var(--primary-fg);
+    --warning-foreground: var(--primary-fg);
+    --success: var(--primary);
+    --success-foreground: var(--primary-fg);
+    --easy: var(--primary);
+    --easy-bg: var(--primary-bg);
+    --easy-fg: var(--primary-text);
+    --medium: var(--warning);
+    --medium-bg: var(--warning-bg);
+    --medium-fg: var(--warning-text);
+    --hard: var(--danger);
+    --hard-bg: var(--danger-bg);
+    --hard-fg: var(--danger-text);
+    --card: var(--panel-raised);
+    --card-foreground: var(--text);
+    --popover: var(--panel-raised);
+    --popover-foreground: var(--text);
+    --secondary: var(--panel-sunken);
+    --secondary-foreground: var(--text);
+    --input: var(--line);
+    --ring: var(--primary);
 }
 
 /* ─────────────────────────────────────────────────────────────────
