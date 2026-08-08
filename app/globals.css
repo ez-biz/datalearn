@@ -56,6 +56,7 @@
 
     /* ---- glyphs + code ---- */
     --icon-off:            240 6% 24%;      /* #3A3A42 NON-TEXT ONLY */
+    --icon-done:           163 32% 43%;     /* #4A8F7B completed lesson tick */
     --code-bg:             240 10% 11%;     /* #1A1A20 */
     --code-text:           154 69% 58%;     /* #4ADE9E */
     --syntax-keyword:      221 89% 72%;     /* #7AA2F7 */
@@ -159,6 +160,12 @@
     --accent-violet:       263 70% 50%;     /* #6D28D9 — SP7 to confirm */
 
     --icon-off:            240 7% 78%;      /* #C4C4CC */
+    /* PROPOSED, unconfirmed — the handoff's light table omits this role.
+       Keeps the dark hue and saturation, darkened for contrast on white,
+       the same move the handoff makes for primary (#4ADE9E -> #0E9F6E).
+       Must stay distinguishable from --primary, or done and current
+       lessons look identical in the rail. */
+    --icon-done:           160 33% 37%;     /* #3F7D68 */
     --code-bg:             154 30% 95%;     /* #F0F7F4 */
     --code-text:           161 82% 24%;     /* #0B6E4E */
     --syntax-keyword:      218 74% 47%;     /* #1F5FD0 */
@@ -296,6 +303,7 @@
   --color-accent-blue: hsl(var(--accent-blue));
   --color-accent-violet: hsl(var(--accent-violet));
   --color-icon-off: hsl(var(--icon-off));
+  --color-icon-done: hsl(var(--icon-done));
   --color-code-bg: hsl(var(--code-bg));
   --color-code-text: hsl(var(--code-text));
   --color-syntax-keyword: hsl(var(--syntax-keyword));
