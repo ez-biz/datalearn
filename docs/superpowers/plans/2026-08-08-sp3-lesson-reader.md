@@ -10,7 +10,7 @@
 
 **Spec:** [`docs/superpowers/specs/2026-08-08-sp3-lesson-reader-design.md`](../specs/2026-08-08-sp3-lesson-reader-design.md)
 
-**Branch:** `docs/sp3-lesson-reader` holds the spec (`b44c34a`). Implementation happens on a new branch `feat/sp3-lesson-reader` cut from `main`.
+**Branch:** `feat/sp3-lesson-reader`, cut from `docs/sp3-lesson-reader` so the spec (`b44c34a`) and this plan (`8170cc9`) ride along in the same PR — the pattern SP2 used.
 
 ## Global Constraints
 
@@ -50,7 +50,7 @@
 | `app/learn/tracks/[slug]/[lessonSlug]/page.tsx` | Server component, sole fetcher |
 | `scripts/test-lesson-nav.ts` | Unit tests for `lesson-nav.ts` |
 | `scripts/test-reading-progress.ts` | Unit tests for `lib/reading-progress.ts` |
-| `e2e/lesson-reader.spec.ts` | Playwright coverage |
+| `tests/e2e/lesson-reader.spec.ts` | Playwright coverage; seeds its own track fixture |
 
 **Modified:**
 
@@ -615,12 +615,20 @@ describe("nav coverage (handoff follow-up #4)", () => {
         }
     })
 
-    it("never marks a nav item active on a focus route", () => {
-        // The reader suppresses the console shell entirely. If a nav item
-        // still claimed active here, a future surface that renders nav
-        // beside the reader would show a stale highlight.
-        const reader = "/learn/tracks/analyst-interview-prep/sessionisation"
-        assert.equal(isFocusRoute(reader), true)
+    it("has no nav item whose own href is a focus route", () => {
+        // A nav entry pointing at a focus route would render a link to a
+        // page that suppresses the very nav it was clicked from. Nothing
+        // does that today; this guards the invariant as nav grows.
+        const all = [...PRIMARY_NAV, ...FOOTER_NAV, ...TAB_BAR]
+        for (const item of all) {
+            for (const candidate of [item, ...(item.children ?? [])]) {
+                if (!candidate.href) continue
+                assert.equal(
+                    isFocusRoute(candidate.href), false,
+                    `nav item "${candidate.key}" points at focus route ${candidate.href}`,
+                )
+            }
+        }
     })
 })
 ```
@@ -831,7 +839,7 @@ root layout's main. Landmark count is unchanged at every viewport."
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `scripts/test-curriculum-actions.ts`:
+Append to `scripts/test-curriculum-actions.ts`. **Do not declare a new slug constant** — the file already declares `DRAFT_TRACK_SLUG` (`curricread-draft-track`) at line 18 and seeds/tears down that fixture in its `before`/`after` hooks. Reuse it. A second declaration is a compile error, and pointing the test at the real seeded track would make it depend on seed data.
 
 ```ts
 describe("getTrackCurriculumForUser draft visibility", () => {
@@ -863,12 +871,6 @@ describe("getTrackCurriculumForUser draft visibility", () => {
         assert.equal(result, null)
     })
 })
-```
-
-Add near the top of the file, beside the existing fixtures:
-
-```ts
-const DRAFT_TRACK_SLUG = "analyst-interview-prep"
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -2265,76 +2267,75 @@ git commit -m "feat(learn): responsive lesson reader"
 ## Task 16: End-to-end coverage, docs, and closing PR #168
 
 **Files:**
-- Create: `e2e/lesson-reader.spec.ts`
+- Create: `tests/e2e/lesson-reader.spec.ts`
 - Modify: `CLAUDE.md`, `docs/ROADMAP.md`
+
+The suite lives in `tests/e2e/` (see `playwright.config.ts` `testDir`). There is **no `storageState` setup** in this repo: specs seed their own users and set a session cookie through `tests/e2e/fixtures/db.ts`, which exports `prisma`, `seedUser`, `deleteUser`, `sessionCookie` and `SESSION_COOKIE_NAME`. Read `tests/e2e/moderators.spec.ts` first and mirror its structure — run-scoped `PREFIX`, `before`/`after` seeding and cleanup.
+
+The spec **seeds its own track, module, lessons and checkpoint** rather than asserting against `analyst-interview-prep`. Depending on seed data would make the suite fail on any database that has not been seeded, and every other spec in this directory seeds its own fixtures.
 
 - [ ] **Step 1: Write the e2e spec**
 
+Mirror `tests/e2e/moderators.spec.ts` for the harness shape. The fixture must create: a `Track` with `status: "DRAFT"`, one `Module`, two `Article`s with `status: "PUBLISHED"` joined via `ModuleLesson` at positions 0 and 1, and one `LessonCheckpoint` on the first article pointing at an existing published problem. Seed one `ADMIN` user and one plain `USER`.
+
+The assertions to cover:
+
 ```ts
-import { test, expect } from "@playwright/test"
+test("is not reachable by anonymous visitors while the track is DRAFT", async ({ page }) => {
+    const response = await page.goto(`${BASE_URL}/learn/tracks/${trackSlug}/${lessonOneSlug}`)
+    expect(response?.status()).toBe(404)
+})
 
-const TRACK = "analyst-interview-prep"
-const LESSON = "over-partition-by-and-frame-clauses"
+test("renders exactly one banner, one main and one h1", async ({ page }) => {
+    await signInAs(page, admin)
+    await page.goto(`${BASE_URL}/learn/tracks/${trackSlug}/${lessonOneSlug}`)
+    await expect(page.getByRole("banner")).toHaveCount(1)
+    await expect(page.getByRole("main")).toHaveCount(1)
+    await expect(page.locator("h1")).toHaveCount(1)
+})
 
-test.describe("lesson reader", () => {
-    test("is not reachable by anonymous visitors while the track is DRAFT", async ({ page }) => {
-        const response = await page.goto(`/learn/tracks/${TRACK}/${LESSON}`)
-        expect(response?.status()).toBe(404)
+test("suppresses the console shell", async ({ page }) => {
+    await signInAs(page, admin)
+    await page.goto(`${BASE_URL}/learn/tracks/${trackSlug}/${lessonOneSlug}`)
+    await expect(page.getByRole("navigation", { name: "Curriculum" })).toBeVisible()
+    await expect(page.getByRole("contentinfo")).toHaveCount(0)
+})
+
+test("marks exactly one lesson as the current page", async ({ page }) => {
+    await signInAs(page, admin)
+    await page.goto(`${BASE_URL}/learn/tracks/${trackSlug}/${lessonOneSlug}`)
+    await expect(page.locator('[aria-current="page"]')).toHaveCount(1)
+})
+
+test("navigates to the next lesson", async ({ page }) => {
+    await signInAs(page, admin)
+    await page.goto(`${BASE_URL}/learn/tracks/${trackSlug}/${lessonOneSlug}`)
+    await page.getByRole("link", { name: /next/i }).first().click()
+    await expect(page).toHaveURL(new RegExp(`/learn/tracks/${trackSlug}/${lessonTwoSlug}`))
+})
+
+test("the lesson-state card tracks the progress bar", async ({ page }) => {
+    await signInAs(page, admin)
+    await page.goto(`${BASE_URL}/learn/tracks/${trackSlug}/${lessonOneSlug}`)
+    const bar = page.getByRole("progressbar", { name: "Reading progress" })
+    await page.evaluate(() => {
+        const el = document.getElementById("app-scroll")!
+        el.scrollTop = el.scrollHeight
     })
+    await expect(bar).toHaveAttribute("aria-valuenow", "100")
+    // The card and the bar share one provider; a frozen card here means
+    // the provider was bypassed.
+    await expect(page.getByText("Auto-completed at 100%")).toBeVisible()
+})
 
-    test.describe("as staff", () => {
-        test.use({ storageState: "e2e/.auth/admin.json" })
-
-        test("renders exactly one banner, one main and one h1", async ({ page }) => {
-            await page.goto(`/learn/tracks/${TRACK}/${LESSON}`)
-            await expect(page.getByRole("banner")).toHaveCount(1)
-            await expect(page.getByRole("main")).toHaveCount(1)
-            await expect(page.locator("h1")).toHaveCount(1)
-        })
-
-        test("suppresses the console shell", async ({ page }) => {
-            await page.goto(`/learn/tracks/${TRACK}/${LESSON}`)
-            await expect(page.getByRole("navigation", { name: "Curriculum" })).toBeVisible()
-            await expect(page.getByRole("contentinfo")).toHaveCount(0)
-        })
-
-        test("marks exactly one lesson as the current page", async ({ page }) => {
-            await page.goto(`/learn/tracks/${TRACK}/${LESSON}`)
-            await expect(page.locator('[aria-current="page"]')).toHaveCount(1)
-        })
-
-        test("navigates to the next lesson", async ({ page }) => {
-            await page.goto(`/learn/tracks/${TRACK}/${LESSON}`)
-            await page.getByRole("link", { name: /next/i }).first().click()
-            await expect(page).toHaveURL(new RegExp(`/learn/tracks/${TRACK}/`))
-        })
-
-        test("the lesson-state card tracks the progress bar", async ({ page }) => {
-            await page.goto(`/learn/tracks/${TRACK}/${LESSON}`)
-            const bar = page.getByRole("progressbar", { name: "Reading progress" })
-            await page.evaluate(() => {
-                const el = document.getElementById("app-scroll")!
-                el.scrollTop = el.scrollHeight
-            })
-            await expect(bar).toHaveAttribute("aria-valuenow", "100")
-            // The card and the bar share one provider; a frozen card here
-            // means the provider was bypassed.
-            await expect(page.getByText("Auto-completed at 100%")).toBeVisible()
-        })
-
-        test("resolves a contents anchor", async ({ page }) => {
-            await page.goto(`/learn/tracks/${TRACK}/${LESSON}`)
-            const first = page.getByRole("navigation", { name: "Contents" })
-                .getByRole("link").first()
-            const href = await first.getAttribute("href")
-            expect(href).toMatch(/^#/)
-            await expect(page.locator(href!)).toHaveCount(1)
-        })
-    })
+test("a signed-in non-staff user gets 404 on the draft track", async ({ page }) => {
+    await signInAs(page, learner)
+    const response = await page.goto(`${BASE_URL}/learn/tracks/${trackSlug}/${lessonOneSlug}`)
+    expect(response?.status()).toBe(404)
 })
 ```
 
-If the repo has no `e2e/.auth/admin.json` storage state, follow the pattern the existing signed-in specs use and mirror it.
+`signInAs` sets the session cookie via `sessionCookie(user)` and `SESSION_COOKIE_NAME` on the browser context — copy the exact call shape from `tests/e2e/moderators.spec.ts`, which already does this.
 
 - [ ] **Step 2: Run it**
 
@@ -2372,7 +2373,7 @@ In `docs/ROADMAP.md`, move the lesson reader to shipped.
 - [ ] **Step 5: Commit and open the PR**
 
 ```bash
-git add CLAUDE.md docs/ROADMAP.md e2e/lesson-reader.spec.ts
+git add CLAUDE.md docs/ROADMAP.md tests/e2e/lesson-reader.spec.ts
 git commit -m "test(e2e): lesson reader coverage, and document the focus-route contract"
 git push -u origin feat/sp3-lesson-reader
 gh pr create --base main --title "feat(learn): SP3 lesson reader" --body "..."
