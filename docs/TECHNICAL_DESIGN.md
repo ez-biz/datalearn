@@ -152,7 +152,7 @@ datalearn/
 │   ├── lists.ts                  Custom problem lists — create / rename / delete / add / remove / reorder; getMyLists, getList, getListIdsContainingProblem
 │   └── nav.ts                    Dynamic navbar links
 ├── components/
-│   ├── ui/                       Hand-rolled primitives (Button, Card, Badge, Input, Skeleton, Logo, ThemeToggle, Container, EmptyState)
+│   ├── ui/                       Hand-rolled primitives (Button, Card, Badge, Input, Skeleton, Logo, Container, EmptyState)
 │   ├── layout/                   Navbar, Footer, ThemeProvider, MobileNav, UserMenu (avatar dropdown)
 │   ├── practice/                 ProblemClient (workspace state), ProblemPanel, PracticeList, HistoryPanel, RelatedArticlesPanel, ReportDialog
 │   ├── lists/                    CreateListButton (popover), ListDetail (rename/delete/reorder/sort), AddToListButton (workspace popover), AddProblemsPicker (search-and-add)

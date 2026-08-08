@@ -3,8 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Moon, PanelLeft, Sun } from "lucide-react"
-import { useTheme } from "next-themes"
-import { useEffect, useState } from "react"
+import { useHydratedTheme } from "@/lib/use-hydrated-theme"
 import { cn } from "@/lib/utils"
 import { FOOTER_NAV, PRIMARY_NAV, isNavItemActive, type NavItem } from "./nav-model"
 
@@ -57,18 +56,14 @@ function RailItem({ item, pathname }: { item: NavItem; pathname: string }) {
 }
 
 /** Same visual footprint as RailItem's interactive state, but for an action
- *  rather than a NavItem — mirrors components/ui/ThemeToggle.tsx's hydration
- *  guard. */
+ *  rather than a NavItem. */
 function ThemeIcon() {
-    const { resolvedTheme, setTheme } = useTheme()
-    const [mounted, setMounted] = useState(false)
-    useEffect(() => setMounted(true), [])
-    const isDark = mounted && resolvedTheme === "dark"
+    const { isDark, toggle } = useHydratedTheme()
 
     return (
         <button
             type="button"
-            onClick={() => setTheme(isDark ? "light" : "dark")}
+            onClick={toggle}
             aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
             title={isDark ? "Switch to light theme" : "Switch to dark theme"}
             className={cn(CELL, "text-text-dim hover:bg-panel-hover hover:text-foreground")}

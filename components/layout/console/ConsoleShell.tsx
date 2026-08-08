@@ -9,6 +9,7 @@ import { SignInDialogButton } from "@/components/auth/SignInDialog"
 import { UserMenu } from "@/components/layout/UserMenu"
 import { cookies } from "next/headers"
 import { ConsoleChrome } from "./ConsoleChrome"
+import { MobileSignInMenu } from "./MobileSignInMenu"
 import { parseSidebarState, SIDEBAR_COOKIE } from "./sidebar-cookie"
 import type { TrackProgress } from "./ConsoleSidebar"
 
@@ -79,18 +80,12 @@ export async function ConsoleShell({ children }: { children: React.ReactNode }) 
         </SignInDialogButton>
     )
 
-    // MobileTabBar's "You" wrapper carries no padding of its own (see
-    // ACCOUNT_CELL in MobileTabBar.tsx) specifically so a plain h-full/w-full
-    // control fills the cell edge to edge — no calc()/negative-margin hack
-    // needed now that that file is no longer frozen.
-    const signInSlot = (
-        <SignInDialogButton
-            className="flex h-full w-full flex-col items-center justify-center gap-1 text-[11px] font-medium text-text-dim"
-            panelLabel="Sign in from navigation"
-        >
-            Sign in
-        </SignInDialogButton>
-    )
+    // Mobile has neither a sidebar nor a rail, so this popover (theme toggle
+    // + sign in) is what makes the theme toggle reachable for signed-out
+    // phone visitors — see MobileSignInMenu for the full rationale. Its root
+    // element is h-full w-full, matching ACCOUNT_CELL in MobileTabBar.tsx so
+    // the control still fills the "You" cell edge to edge.
+    const signInSlot = <MobileSignInMenu />
 
     return (
         <ConsoleChrome

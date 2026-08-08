@@ -15,6 +15,10 @@ interface SignInDialogButtonProps {
     callbackPath?: string | null
     className?: string
     panelLabel?: string
+    /** Set to "menuitem" when this button is a child of a `role="menu"`
+     *  container (e.g. MobileSignInMenu) — an ARIA menu's children must all
+     *  carry a menuitem-family role. Omitted everywhere else. */
+    role?: string
 }
 
 export function SignInDialogButton({
@@ -22,6 +26,7 @@ export function SignInDialogButton({
     callbackPath,
     className,
     panelLabel = "Sign in to Data Learn",
+    role,
 }: SignInDialogButtonProps) {
     const [open, setOpen] = useState(false)
     const [resolvedCallback, setResolvedCallback] = useState("/")
@@ -160,6 +165,7 @@ export function SignInDialogButton({
             <button
                 ref={triggerRef}
                 type="button"
+                role={role}
                 onClick={openDialog}
                 className={cn("cursor-pointer", className)}
             >

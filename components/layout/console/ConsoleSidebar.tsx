@@ -3,8 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Moon, PanelLeft, Sun } from "lucide-react"
-import { useTheme } from "next-themes"
-import { useEffect, useState } from "react"
+import { useHydratedTheme } from "@/lib/use-hydrated-theme"
 import { cn } from "@/lib/utils"
 import {
     FOOTER_NAV,
@@ -80,18 +79,15 @@ function NavRow({ item, pathname, nested }: { item: NavItem; pathname: string; n
 /**
  * Sits beside Updates / Help center in the footer group. Not a NavItem (it's
  * an action, not a destination), so it renders directly rather than through
- * FOOTER_NAV + NavRow. Same hydration guard as components/ui/ThemeToggle.tsx.
+ * FOOTER_NAV + NavRow.
  */
 function ThemeRow() {
-    const { resolvedTheme, setTheme } = useTheme()
-    const [mounted, setMounted] = useState(false)
-    useEffect(() => setMounted(true), [])
-    const isDark = mounted && resolvedTheme === "dark"
+    const { isDark, toggle } = useHydratedTheme()
 
     return (
         <button
             type="button"
-            onClick={() => setTheme(isDark ? "light" : "dark")}
+            onClick={toggle}
             title={isDark ? "Switch to light theme" : "Switch to dark theme"}
             className={cn(ROW, "w-full text-text-muted hover:bg-panel-hover hover:text-foreground")}
         >

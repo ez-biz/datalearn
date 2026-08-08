@@ -20,7 +20,7 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor; querie
 
 - `app/` — App Router pages
 - `actions/` — server actions (`"use server"` files), e.g. `curriculum.ts` — session-resolving curriculum reads (`getTrackCurriculum`) and writes (`recordLessonProgress`)
-- `components/ui/` — primitives (Button, Card, Badge, Input, Skeleton, Logo, ThemeToggle, Container, EmptyState)
+- `components/ui/` — primitives (Button, Card, Badge, Input, Skeleton, Logo, Container, EmptyState)
 - `components/layout/` — Navbar, Footer, ThemeProvider, MobileNav
 - `components/practice/` — workspace pieces (ProblemClient, ProblemPanel, PracticeList, HistoryPanel)
 - `components/sql/` — SQL UI (SqlPlayground, SqlEditor, ResultTable, ValidationResult)

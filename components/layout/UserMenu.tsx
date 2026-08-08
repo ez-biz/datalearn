@@ -16,7 +16,7 @@ import {
     Sun,
     User as UserIcon,
 } from "lucide-react"
-import { useTheme } from "next-themes"
+import { useHydratedTheme } from "@/lib/use-hydrated-theme"
 import { cn } from "@/lib/utils"
 
 type Role = "USER" | "CONTRIBUTOR" | "MODERATOR" | "ADMIN"
@@ -88,13 +88,7 @@ export function UserMenu({
     const containerRef = useRef<HTMLDivElement>(null)
     const triggerRef = useRef<HTMLButtonElement>(null)
 
-    // Hydration-safe theme toggle, same guard as components/ui/ThemeToggle.tsx:
-    // resolvedTheme is undefined until mount, so this renders a neutral state
-    // on the server and swaps in the real theme after mount.
-    const { resolvedTheme, setTheme } = useTheme()
-    const [themeMounted, setThemeMounted] = useState(false)
-    useEffect(() => setThemeMounted(true), [])
-    const isDark = themeMounted && resolvedTheme === "dark"
+    const { isDark, toggle: toggleTheme } = useHydratedTheme()
 
     // Close on click outside or Escape.
     useEffect(() => {
@@ -321,7 +315,10 @@ export function UserMenu({
                                 <button
                                     type="button"
                                     role="menuitem"
-                                    onClick={() => setTheme(isDark ? "light" : "dark")}
+                                    onClick={() => {
+                                        toggleTheme()
+                                        setOpen(false)
+                                    }}
                                     className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-muted"
                                 >
                                     {isDark ? (
