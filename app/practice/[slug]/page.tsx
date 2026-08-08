@@ -135,7 +135,7 @@ export default async function ProblemPage({ params }: Props) {
                                     <Link
                                         href={`/practice/${adjacent.prev.slug}`}
                                         title={`#${adjacent.prev.number}. ${adjacent.prev.title}`}
-                                        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+                                        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
                                     >
                                         <ChevronLeft className="h-3.5 w-3.5" />
                                         <span className="hidden sm:inline">
@@ -157,7 +157,7 @@ export default async function ProblemPage({ params }: Props) {
                                     <Link
                                         href={`/practice/${adjacent.next.slug}`}
                                         title={`#${adjacent.next.number}. ${adjacent.next.title}`}
-                                        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+                                        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
                                     >
                                         <span className="hidden sm:inline">
                                             Next

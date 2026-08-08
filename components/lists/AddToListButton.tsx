@@ -184,7 +184,7 @@ export function AddToListButton({
                                             type="button"
                                             onClick={() => toggle(l.id)}
                                             disabled={pending}
-                                            className="w-full flex items-center justify-between gap-2 px-2 py-2 text-sm rounded-md hover:bg-surface-muted transition-colors text-left cursor-pointer disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                                            className="w-full flex items-center justify-between gap-2 px-2 py-2 text-sm rounded-md hover:bg-surface-hover transition-colors text-left cursor-pointer disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                                         >
                                             <span className="flex items-center gap-2 min-w-0">
                                                 <span
@@ -255,7 +255,7 @@ export function AddToListButton({
                             <button
                                 type="button"
                                 onClick={() => setCreating(true)}
-                                className="w-full flex items-center gap-2 px-2 py-2 text-sm rounded-md hover:bg-surface-muted transition-colors text-muted-foreground hover:text-foreground cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                                className="w-full flex items-center gap-2 px-2 py-2 text-sm rounded-md hover:bg-surface-hover transition-colors text-muted-foreground hover:text-foreground cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                             >
                                 <Plus className="h-3.5 w-3.5" />
                                 New list

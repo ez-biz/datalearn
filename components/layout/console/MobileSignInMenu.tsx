@@ -75,7 +75,7 @@ export function MobileSignInMenu() {
                             toggle()
                             setOpen(false)
                         }}
-                        className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-surface-muted"
+                        className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
                     >
                         {isDark ? (
                             <Sun className="h-4 w-4" aria-hidden="true" />
@@ -89,7 +89,7 @@ export function MobileSignInMenu() {
                             role="menuitem"
                             panelLabel="Sign in from navigation"
                             className={cn(
-                                "flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-surface-muted"
+                                "flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
                             )}
                         >
                             <LogIn className="h-4 w-4" aria-hidden="true" />

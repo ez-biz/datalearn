@@ -230,7 +230,7 @@ export default async function ProfilePage() {
                                                         href={`/practice/${s.problem.slug}`}
                                                         className={cn(
                                                             rowClass,
-                                                            "hover:bg-surface-muted"
+                                                            "hover:bg-surface-hover"
                                                         )}
                                                     >
                                                         {content}

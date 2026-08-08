@@ -118,7 +118,7 @@ export default async function ArticlePage({ params }: Props) {
                             {neighbors.prev ? (
                                 <Link
                                     href={`/learn/${topicSlug}/${neighbors.prev.slug}`}
-                                    className="group rounded-md border border-border bg-surface p-4 hover:bg-surface-muted/60 transition-colors"
+                                    className="group rounded-md border border-border bg-surface p-4 hover:bg-surface-hover transition-colors"
                                 >
                                     <div className="text-[11px] uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1">
                                         <ArrowLeft className="h-3 w-3" />
@@ -134,7 +134,7 @@ export default async function ArticlePage({ params }: Props) {
                             {neighbors.next ? (
                                 <Link
                                     href={`/learn/${topicSlug}/${neighbors.next.slug}`}
-                                    className="group rounded-md border border-border bg-surface p-4 hover:bg-surface-muted/60 transition-colors text-right"
+                                    className="group rounded-md border border-border bg-surface p-4 hover:bg-surface-hover transition-colors text-right"
                                 >
                                     <div className="text-[11px] uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1 justify-end">
                                         Next

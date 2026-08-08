@@ -265,7 +265,7 @@ export function DiscussionComment({
                                         {reported ? "Reported" : "Report"}
                                     </Button>
                                 ) : (
-                                    <SignInDialogButton className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground active:scale-[0.96]">
+                                    <SignInDialogButton className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground active:scale-[0.96]">
                                         <Flag className="h-3.5 w-3.5" />
                                         Report
                                     </SignInDialogButton>

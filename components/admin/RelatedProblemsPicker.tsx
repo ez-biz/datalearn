@@ -102,7 +102,7 @@ export function RelatedProblemsPicker({
                             type="button"
                             key={p.id}
                             onClick={() => add(p.slug)}
-                            className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-surface-muted/60 transition-colors cursor-pointer"
+                            className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-surface-hover transition-colors cursor-pointer"
                         >
                             <span className="text-sm font-medium truncate">
                                 {p.title}

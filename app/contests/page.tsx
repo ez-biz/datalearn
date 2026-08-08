@@ -81,7 +81,7 @@ function ContestGroup({
             <div className="grid gap-3 md:grid-cols-2">
                 {contests.map((contest) => (
                     <Link key={contest.id} href={`/contests/${contest.slug}`}>
-                        <Card className="h-full transition-colors hover:border-border-strong hover:bg-surface-muted/40">
+                        <Card className="h-full transition-colors hover:border-border-strong hover:bg-surface-hover">
                             <CardContent className="p-5">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">

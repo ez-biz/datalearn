@@ -36,7 +36,7 @@ export function RecentActivityFeed({
                             <li key={item.id}>
                                 <Link
                                     href={item.href}
-                                    className="grid grid-cols-[auto_1fr] gap-3 px-4 py-3 text-sm transition-colors hover:bg-surface-muted/60"
+                                    className="grid grid-cols-[auto_1fr] gap-3 px-4 py-3 text-sm transition-colors hover:bg-surface-hover"
                                 >
                                     <span className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-md border border-border bg-surface-muted text-muted-foreground">
                                         <Icon className="h-3.5 w-3.5" />

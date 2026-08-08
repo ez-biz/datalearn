@@ -221,6 +221,17 @@
   --color-foreground: hsl(var(--foreground));
   --color-surface: hsl(var(--surface));
   --color-surface-muted: hsl(var(--surface-muted));
+  /* Interactive hover fill for CONTENT surfaces (cards, list rows, menus,
+     ghost/outline buttons). Deliberately a translucent tint rather than one
+     of the flat --panel-* values: content hovers land on --canvas,
+     --panel-raised and --panel-sunken alike, and in dark those three sit
+     within 2% lightness of each other, so any flat fill is invisible on at
+     least one of them. Measured: --panel-hover on a --panel-raised card is
+     rgb(18,18,23) -> rgb(20,20,24), i.e. no feedback at all. An overlay is
+     relative to whatever is beneath it, so it reads on all three in both
+     themes. --panel-hover remains correct for the console chrome, which
+     always sits on --panel. */
+  --color-surface-hover: hsl(var(--text-muted) / 0.10);
   --color-surface-elevated: hsl(var(--surface-elevated));
   --color-border: hsl(var(--border));
   --color-border-strong: hsl(var(--border-strong));

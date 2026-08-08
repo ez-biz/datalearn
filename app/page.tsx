@@ -233,7 +233,7 @@ export default async function Home() {
                                 <Link
                                     key={p.id}
                                     href={`/practice/${p.slug}`}
-                                    className="flex items-center gap-4 p-4 sm:px-6 hover:bg-surface-muted/60 transition-colors group"
+                                    className="flex items-center gap-4 p-4 sm:px-6 hover:bg-surface-hover transition-colors group"
                                 >
                                     <span className="hidden sm:inline-block w-8 text-xs tabular-nums text-muted-foreground">
                                         {String(i + 1).padStart(2, "0")}

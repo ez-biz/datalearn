@@ -319,7 +319,7 @@ export function UserMenu({
                                         toggleTheme()
                                         setOpen(false)
                                     }}
-                                    className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-muted"
+                                    className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
                                 >
                                     {isDark ? (
                                         <Sun className="h-4 w-4" aria-hidden="true" />
@@ -339,7 +339,7 @@ export function UserMenu({
                             type="button"
                             role="menuitem"
                             disabled={signingOut}
-                            className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground disabled:cursor-wait disabled:opacity-70"
+                            className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:cursor-wait disabled:opacity-70"
                             onClick={handleSignOut}
                         >
                             <LogOut aria-hidden="true" className="h-4 w-4" />
@@ -380,7 +380,7 @@ function MenuItem({
                 role="menuitem"
                 onClick={onClick}
                 className={cn(
-                    "flex items-center gap-2.5 px-4 py-2 text-sm hover:bg-surface-muted transition-colors",
+                    "flex items-center gap-2.5 px-4 py-2 text-sm hover:bg-surface-hover transition-colors",
                     toneClass
                 )}
             >

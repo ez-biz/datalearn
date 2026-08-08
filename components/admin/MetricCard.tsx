@@ -7,7 +7,7 @@ export function MetricCard({ metric }: { metric: AdminMetric }) {
     return (
         <Link
             href={metric.href}
-            className="group block rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-muted/50"
+            className="group block rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-hover"
         >
             <div className="flex items-center justify-between gap-3">
                 <Eyebrow>{metric.label}</Eyebrow>

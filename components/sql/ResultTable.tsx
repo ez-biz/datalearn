@@ -94,7 +94,7 @@ export function ResultTable({
                             {data.map((row, i) => (
                                 <tr
                                     key={i}
-                                    className="border-b border-border last:border-0 hover:bg-surface-muted/50"
+                                    className="border-b border-border last:border-0 hover:bg-surface-hover"
                                 >
                                     {columns.map((col) => {
                                         const v = row[col]
