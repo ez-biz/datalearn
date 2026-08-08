@@ -5,10 +5,12 @@ import { useLayoutEffect, useRef } from "react"
 import { isCrossRoutePop, resolveRestoreScrollTop } from "@/lib/scroll-restoration"
 
 /**
- * Restores #main-content's scroll position on browser back/forward.
+ * Restores #app-scroll's scroll position on browser back/forward.
  *
- * The root layout's <body> is h-dvh overflow-hidden; <main id="main-content">
- * (see app/layout.tsx) is the real scroll container. Next.js's built-in
+ * The root layout's <body> is h-dvh overflow-hidden; <div id="app-scroll">
+ * (see app/layout.tsx) is the real scroll container — it wraps <main> and
+ * the <footer>, which has to sit outside <main> to keep its `contentinfo`
+ * landmark. Next.js's built-in
  * scroll restoration only ever tracks window.scrollY, which never moves
  * here, so back/forward would otherwise always land at the top of the
  * route instead of where the user left off — a regression introduced by
@@ -26,8 +28,8 @@ import { isCrossRoutePop, resolveRestoreScrollTop } from "@/lib/scroll-restorati
  * correct: React runs an *updating* component's layout-effect cleanup in
  * the commit's layout phase, strictly after the commit's mutation phase —
  * i.e. after the outgoing route's DOM has already been replaced by the
- * incoming one. #main-content itself never unmounts (see app/layout.tsx;
- * only its routed children do), so main.scrollTop survives, but by cleanup
+ * incoming one. #app-scroll itself never unmounts (see app/layout.tsx;
+ * only its routed children do), so its scrollTop survives, but by cleanup
  * time it already reflects the NEW page's (freshly-mounted, near-zero)
  * scrollTop, not the departing page's. Verified empirically: a scripted
  * scroll-then-navigate-then-back round trip landed back at 0 instead of the
@@ -67,8 +69,8 @@ export function MainScrollRestoration() {
 
     useLayoutEffect(() => {
         const capture = () => {
-            const main = document.getElementById("main-content")
-            if (main) positions.set(pathnameRef.current, main.scrollTop)
+            const scroller = document.getElementById("app-scroll")
+            if (scroller) positions.set(pathnameRef.current, scroller.scrollTop)
         }
         const onPopState = () => {
             capture()
@@ -85,9 +87,9 @@ export function MainScrollRestoration() {
     }, [])
 
     useLayoutEffect(() => {
-        const main = document.getElementById("main-content")
-        if (main) {
-            main.scrollTop = resolveRestoreScrollTop(isPop.current, positions.get(pathname))
+        const scroller = document.getElementById("app-scroll")
+        if (scroller) {
+            scroller.scrollTop = resolveRestoreScrollTop(isPop.current, positions.get(pathname))
         }
         isPop.current = false
     }, [pathname])

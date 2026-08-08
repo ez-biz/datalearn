@@ -37,11 +37,11 @@ export function SignInDialogButton({
     useEffect(() => {
         if (!open) return
 
-        // <body> no longer scrolls -- the console shell's <main id="main-content">
+        // <body> no longer scrolls -- the console shell's <div id="app-scroll">
         // is the scroll container (app/layout.tsx), so that's what needs locking.
         // Selector-based (not a ref) because this button can mount anywhere in
         // the tree, including outside <main> (sidebar header, tab bar).
-        const scrollContainer = document.getElementById("main-content")
+        const scrollContainer = document.getElementById("app-scroll")
         const previousOverflow = scrollContainer?.style.overflow
         const trigger = triggerRef.current
         if (scrollContainer) scrollContainer.style.overflow = "hidden"
@@ -115,7 +115,7 @@ export function SignInDialogButton({
                               type="button"
                               aria-label="Close sign-in dialog"
                               onClick={() => setOpen(false)}
-                              className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+                              className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
                           >
                               <X aria-hidden="true" className="h-4 w-4" />
                           </button>
