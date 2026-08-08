@@ -108,6 +108,7 @@
     --shadow-md: none;
     --shadow-lg: none;
     --shadow-xl: none;
+    --shadow-2xl: none;
     --shadow-primary: none;
     /* Deliberately NOT named --shadow-sidebar-active: @theme inline maps a
        utility of that name onto this var, and same-name would be circular. */
@@ -208,6 +209,7 @@
     --shadow-md: none;
     --shadow-lg: none;
     --shadow-xl: none;
+    --shadow-2xl: none;
     --shadow-primary: none;
     /* The ONLY shadow in either theme: a white active pill on a grey rail
        has no border to define it. */
@@ -303,6 +305,7 @@
   --shadow-md: none;
   --shadow-lg: none;
   --shadow-xl: none;
+  --shadow-2xl: none;
   --shadow-primary: none;
   --shadow-sidebar-active: var(--sidebar-active-shadow);
 }

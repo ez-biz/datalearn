@@ -255,10 +255,12 @@ upward translate (`-translate-y-0.5`) plus a border-color shift to
 The hero editor preview card on the homepage still carries a soft
 brand-tinted blur halo
 (`bg-gradient-to-br from-primary/15 via-transparent to-accent/10 blur-2xl`)
-and an un-themed `shadow-2xl` (Tailwind's stock 2xl shadow, not one of the
-flattened `--shadow-*` tokens — its paired `shadow-primary/5` is now inert
-since `--shadow-primary` is `none`). That treatment is reserved for the
-marketing hero and should not be repeated on regular cards.
+and a `shadow-2xl` className — like every other shadow utility in the
+product, `--shadow-2xl` is flattened to `none` in `app/globals.css`, so it
+renders no visible shadow. The class is kept only as a landing pad in case
+the hero treatment is revisited later; the dead `shadow-primary/5` modifier
+that used to ride alongside it has been removed. That treatment is reserved
+for the marketing hero and should not be repeated on regular cards.
 
 ### Borders
 
@@ -272,9 +274,9 @@ There are two weights:
 
 **Elevation is surface value and 1px borders only.** Every themed shadow
 token (`--shadow-xs`, `--shadow-sm`, `--shadow-md`, `--shadow-lg`,
-`--shadow-xl`, `--shadow-primary`) is flattened to `none` in both themes —
-a raised surface reads as a lighter/darker fill plus a hairline border, not
-a drop shadow.
+`--shadow-xl`, `--shadow-2xl`, `--shadow-primary`) is flattened to `none`
+in both themes — a raised surface reads as a lighter/darker fill plus a
+hairline border, not a drop shadow.
 
 The **sole exception** is the light-mode active sidebar pill: a white pill
 on a grey rail has no border to define it, so it gets one real shadow

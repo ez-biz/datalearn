@@ -12,7 +12,7 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor; querie
 - **NextAuth v5 (beta)** with Prisma adapter; GitHub + Google providers
 - **DuckDB-WASM** for in-browser query execution (`lib/duckdb.ts`, `lib/use-problem-db.ts`)
 - **Tailwind v4** with `@plugin "@tailwindcss/typography"`; HSL CSS variable tokens in `app/globals.css`
-- **next-themes** for dark/light toggle (light is default)
+- **next-themes** for dark/light toggle (dark is default)
 - **Monaco** editor (`@monaco-editor/react`)
 - **Inter** + **JetBrains Mono** via `next/font`
 
@@ -21,7 +21,7 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor; querie
 - `app/` — App Router pages
 - `actions/` — server actions (`"use server"` files)
 - `components/ui/` — primitives (Button, Card, Badge, Input, Skeleton, Logo, Container, EmptyState)
-- `components/layout/` — Navbar, Footer, ThemeProvider, MobileNav
+- `components/layout/` — Footer, ThemeProvider, UserMenu (avatar dropdown); `console/` — the left sidebar/rail console shell (`ConsoleShell` server component, `ConsoleChrome` client wrapper, `ConsoleSidebar`, `ConsoleRail`, `MobileTabBar`, `MobileSignInMenu`, `nav-model.ts`, `sidebar-cookie.ts`, `useSidebarCollapse.ts`)
 - `components/practice/` — workspace pieces (ProblemClient, ProblemPanel, PracticeList, HistoryPanel)
 - `components/sql/` — SQL UI (SqlPlayground, SqlEditor, ResultTable, ValidationResult)
 - `components/lists/` — custom problem lists (CreateListButton popover, ListDetail with rename/delete/reorder/sort, AddToListButton workspace popover, AddProblemsPicker search-and-add). All client components consuming `actions/lists.ts`.

@@ -104,7 +104,7 @@ export default async function Home() {
                         {/* Editor preview */}
                         <div className="relative">
                             <div className="absolute -inset-4 -z-10 rounded-2xl bg-gradient-to-br from-primary/15 via-transparent to-accent/10 blur-2xl" />
-                            <Card className="overflow-hidden shadow-2xl shadow-primary/5">
+                            <Card className="overflow-hidden shadow-2xl">
                                 <div className="flex items-center gap-2 border-b border-border bg-surface-muted px-4 py-2.5">
                                     <span className="h-2.5 w-2.5 rounded-full bg-hard/70" />
                                     <span className="h-2.5 w-2.5 rounded-full bg-medium/70" />

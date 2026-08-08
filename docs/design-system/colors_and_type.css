@@ -215,6 +215,7 @@
     --shadow-md: 0 4px 6px -1px hsl(220 13% 20% / 0.08), 0 2px 4px -2px hsl(220 13% 20% / 0.06);
     --shadow-lg: 0 10px 15px -3px hsl(220 13% 20% / 0.10), 0 4px 6px -4px hsl(220 13% 20% / 0.05);
     --shadow-xl: 0 20px 25px -5px hsl(220 13% 20% / 0.10), 0 8px 10px -6px hsl(220 13% 20% / 0.04);
+    --shadow-2xl: 0 25px 50px -12px hsl(220 13% 20% / 0.18);
     --shadow-primary: 0 10px 25px -5px hsl(var(--primary) / 0.15);
 
     /* ── Spacing — Tailwind scale, only the rungs we actually use ── */

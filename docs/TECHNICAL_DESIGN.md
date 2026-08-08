@@ -92,7 +92,7 @@ Data Learn is a single Next.js 16 application backed by Postgres. The runtime ar
 | In-browser SQL | **DuckDB-WASM + PGlite** | One shared engine session per problem page via `useProblemDB` |
 | Editor | **Monaco** (`@monaco-editor/react`) | Lazy-loaded via `next/dynamic` |
 | UI tokens | **Tailwind v4** + `@plugin "@tailwindcss/typography"` | HSL CSS variables; light + full dark mode |
-| Theming | **next-themes** | Light default, manual toggle in nav |
+| Theming | **next-themes** | Dark default (`defaultTheme="dark"`), manual toggle in the console sidebar/rail/mobile menus (`lib/use-hydrated-theme.ts`) |
 | Fonts | **Inter** + **JetBrains Mono** | `next/font/google`, character variants `cv02/cv03/cv04/cv11` enabled |
 | Icons | **Lucide** | Single icon family across the product; no emoji icons |
 
@@ -126,7 +126,7 @@ Data Learn is a single Next.js 16 application backed by Postgres. The runtime ar
 ```
 datalearn/
 ├── app/                          App Router pages (RSC by default)
-│   ├── layout.tsx                Root layout: Inter + JetBrains Mono, Navbar, Footer, ThemeProvider, Vercel Analytics
+│   ├── layout.tsx                Root layout: Inter + JetBrains Mono, ConsoleShell (left sidebar/rail chrome), Footer, ThemeProvider, Vercel Analytics
 │   ├── page.tsx                  Homepage — branches on auth(): UserHome dashboard for signed-in, marketing for anonymous
 │   ├── globals.css               Tailwind v4 entry, HSL token system, prefers-reduced-motion clamp
 │   ├── practice/
@@ -150,10 +150,11 @@ datalearn/
 │   ├── content.ts                Public articles + topics
 │   ├── profile.ts                getProfileData — composes 8 cheap Prisma calls for /profile
 │   ├── lists.ts                  Custom problem lists — create / rename / delete / add / remove / reorder; getMyLists, getList, getListIdsContainingProblem
-│   └── nav.ts                    Dynamic navbar links
+│   └── nav.ts                    Dynamic CMS page links, rendered in the console sidebar/rail footer group
 ├── components/
 │   ├── ui/                       Hand-rolled primitives (Button, Card, Badge, Input, Skeleton, Logo, Container, EmptyState)
-│   ├── layout/                   Navbar, Footer, ThemeProvider, MobileNav, UserMenu (avatar dropdown)
+│   ├── layout/                   Footer, ThemeProvider, UserMenu (avatar dropdown)
+│   │   └── console/              ConsoleShell (server), ConsoleChrome (client), ConsoleSidebar, ConsoleRail, MobileTabBar, MobileSignInMenu, nav-model.ts, sidebar-cookie.ts, useSidebarCollapse.ts
 │   ├── practice/                 ProblemClient (workspace state), ProblemPanel, PracticeList, HistoryPanel, RelatedArticlesPanel, ReportDialog
 │   ├── lists/                    CreateListButton (popover), ListDetail (rename/delete/reorder/sort), AddToListButton (workspace popover), AddProblemsPicker (search-and-add)
 │   ├── sql/                      SqlPlayground (Monaco + Run/Submit), SqlEditor, ResultTable, ValidationResult, SqlPlaygroundSkeleton
@@ -509,7 +510,7 @@ Anonymous traffic still gets the full marketing page unchanged.
 
 ### 10.5 Avatar dropdown (`components/layout/UserMenu.tsx`)
 
-Replaces the navbar's previous direct link to `/profile` with a popover that contains a profile chip, a "Problems solved X/Y" stats banner, and links (Profile / My lists / My articles / Admin / Sign out) gated by role. Accessible: `aria-haspopup="menu"`, Escape closes and refocuses trigger, click-outside via document `pointerdown` listener.
+The sole reviewed account surface — `ConsoleShell` renders one instance into the sidebar header, one into the collapsed rail's footer avatar, and one into the mobile tab bar's "You" cell (independent open/close state, different anchor placement, same component). Each is a popover that contains a profile chip, a "Problems solved X/Y" stats banner, and links (Profile / My lists / My articles / Admin / Sign out) gated by role. Accessible: `aria-haspopup="menu"`, Escape closes and refocuses trigger, click-outside via document `pointerdown` listener.
 
 ---
 
