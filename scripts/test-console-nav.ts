@@ -18,6 +18,7 @@ import {
     parseSidebarState,
     sidebarCookieString,
 } from "../components/layout/console/sidebar-cookie"
+import { isFocusRoute } from "../components/layout/console/focus-route"
 
 function find(key: string): NavItem {
     const flat: NavItem[] = []
@@ -238,5 +239,82 @@ describe("sidebar cookie", () => {
 
     it("is not HttpOnly — the client must be able to write it", () => {
         assert.doesNotMatch(sidebarCookieString("expanded"), /HttpOnly/i)
+    })
+})
+
+describe("isFocusRoute", () => {
+    it("is true for a lesson reader route", () => {
+        assert.equal(isFocusRoute("/learn/tracks/analyst-interview-prep/sessionisation"), true)
+    })
+
+    it("is FALSE for the track detail page", () => {
+        // The near-miss that matters: the track page keeps the console
+        // shell. Only the lesson below it is a focus route.
+        assert.equal(isFocusRoute("/learn/tracks/analyst-interview-prep"), false)
+    })
+
+    it("is false for the tracks index", () => {
+        assert.equal(isFocusRoute("/learn/tracks"), false)
+    })
+
+    it("is false for a topic article at the same depth", () => {
+        assert.equal(isFocusRoute("/learn/sql-basics/joins"), false)
+    })
+
+    it("is false for anything deeper than a lesson", () => {
+        assert.equal(isFocusRoute("/learn/tracks/a/b/c"), false)
+    })
+
+    it("ignores a trailing slash", () => {
+        assert.equal(isFocusRoute("/learn/tracks/a/b/"), true)
+    })
+
+    it("is false for the site root", () => {
+        assert.equal(isFocusRoute("/"), false)
+    })
+})
+
+describe("nav coverage (handoff follow-up #4)", () => {
+    it("marks exactly one primary item active on any known route", () => {
+        const routes = [
+            "/", "/practice", "/learn", "/learn/tracks",
+            "/learn/tracks/analyst-interview-prep",
+            "/projects", "/blogs", "/community",
+            "/daily", "/lists", "/profile",
+        ]
+        for (const route of routes) {
+            const active = PRIMARY_NAV.filter((item) => isNavItemActive(item, route))
+            assert.ok(
+                active.length <= 1,
+                `${route} marked ${active.length} primary items active: ${active.map((a) => a.key).join(", ")}`,
+            )
+        }
+    })
+
+    it("marks exactly one footer item active on any footer route", () => {
+        for (const item of FOOTER_NAV) {
+            if (!item.href) continue
+            const active = FOOTER_NAV.filter((other) => isNavItemActive(other, item.href!))
+            assert.equal(
+                active.length, 1,
+                `${item.href} marked ${active.length} footer items active`,
+            )
+        }
+    })
+
+    it("has no nav item whose own href is a focus route", () => {
+        // A nav entry pointing at a focus route would render a link to a
+        // page that suppresses the very nav it was clicked from. Nothing
+        // does that today; this guards the invariant as nav grows.
+        const all = [...PRIMARY_NAV, ...FOOTER_NAV, ...TAB_BAR]
+        for (const item of all) {
+            for (const candidate of [item, ...(item.children ?? [])]) {
+                if (!candidate.href) continue
+                assert.equal(
+                    isFocusRoute(candidate.href), false,
+                    `nav item "${candidate.key}" points at focus route ${candidate.href}`,
+                )
+            }
+        }
     })
 })
