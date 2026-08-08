@@ -21,7 +21,7 @@ export async function Footer() {
     const pages = await getNavPageLinks()
 
     return (
-        <footer className="border-t border-border bg-surface mt-auto">
+        <footer className="border-t border-border bg-surface mt-auto print:hidden">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-8">
                     <div className="col-span-2 sm:col-span-1">

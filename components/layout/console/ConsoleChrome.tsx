@@ -35,7 +35,7 @@ export function ConsoleChrome({
     const { collapsed, toggle } = useSidebarCollapse(initialState)
 
     return (
-        <div className="flex h-dvh overflow-hidden">
+        <div className="flex h-dvh overflow-hidden print:block print:h-auto print:overflow-visible">
             {/* The shell chrome IS the site header, so it carries the `banner`
                 landmark that the deleted <Navbar>'s <header> used to provide.
                 A <header> maps to `banner` only when it is not inside
@@ -54,7 +54,7 @@ export function ConsoleChrome({
                 wraps; below `lg` its only rendered child is the `fixed` tab
                 bar, so it collapses to zero width and the scroll column keeps
                 the full viewport. */}
-            <header className="flex shrink-0">
+            <header className="flex shrink-0 print:hidden">
                 {collapsed ? (
                     <ConsoleRail onToggle={toggle} accountSlot={railAccountSlot} />
                 ) : (

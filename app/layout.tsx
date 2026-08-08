@@ -71,7 +71,7 @@ export default async function RootLayout({
     return (
         <html lang="en" suppressHydrationWarning>
             <body
-                className={`${inter.variable} ${jetbrainsMono.variable} antialiased h-dvh overflow-hidden bg-background text-foreground`}
+                className={`${inter.variable} ${jetbrainsMono.variable} antialiased h-dvh overflow-hidden bg-background text-foreground print:h-auto print:overflow-visible`}
             >
                 <ThemeProvider nonce={nonce}>
                     <a
@@ -100,7 +100,7 @@ export default async function RootLayout({
                             skip link still lands on the content itself. */}
                         <div
                             id="app-scroll"
-                            className="flex flex-1 flex-col overflow-y-auto pb-14 lg:pb-0"
+                            className="flex flex-1 flex-col overflow-y-auto pb-14 lg:pb-0 print:overflow-visible print:pb-0"
                         >
                             <main
                                 id="main-content"

@@ -478,3 +478,46 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Print
+   --------------------------------------------------------------------------
+   The console shell pins the document to the viewport: <body> is
+   h-dvh overflow-hidden and <div id="app-scroll"> owns the only scrollbar
+   (app/layout.tsx). Left alone, Ctrl+P / Save-as-PDF on any route prints a
+   single clipped viewport instead of the whole document.
+
+   Every constraint has to be released, top to bottom: <html>, <body>, the
+   shell row (ConsoleChrome's h-dvh flex container) and the scroll column.
+   The shell elements carry matching `print:` utilities where Tailwind can
+   reach them; these rules cover <html> (which has no className) and use
+   !important so a utility-generated height/overflow cannot win.
+
+   The shell chrome itself (sidebar, rail, mobile tab bar) and the site
+   footer are navigation, not content — `print:hidden` on the <header> in
+   ConsoleChrome.tsx and on the <footer> takes them out of printed output. */
+@media print {
+    html,
+    body {
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    #app-scroll {
+        overflow: visible !important;
+        /* pb-14 reserves room for the fixed mobile tab bar, which does not
+           print. */
+        padding-bottom: 0 !important;
+    }
+
+    /* A viewport-pinned element has nothing to pin to on paper: `fixed` bars
+       overlap the first page's content (and repeat on every page in some
+       engines), and `sticky` is undefined in paged media. Both revert to
+       normal flow. The substring match is deliberate — it also catches
+       responsive variants such as `lg:sticky` and `md:fixed`. */
+    [class*="fixed"],
+    [class*="sticky"] {
+        position: static !important;
+    }
+}
