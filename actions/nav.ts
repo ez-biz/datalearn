@@ -1,16 +1,10 @@
 "use server"
 
-import { prisma } from "@/lib/prisma"
+import { getNavPageLinks } from "@/lib/nav-links"
 
 export async function getNavLinks() {
-    try {
-        const pages = await prisma.page.findMany({
-            where: { isActive: true },
-            select: { title: true, slug: true },
-            orderBy: { createdAt: 'asc' }
-        })
-        return { success: true, data: pages }
-    } catch (error) {
-        return { success: false, data: [] }
-    }
+    // Delegates to the React-cached reader in lib/nav-links.ts so this call
+    // and the Footer's share one query per request. getNavPageLinks never
+    // throws, so `success` is always true; the shape is kept for callers.
+    return { success: true, data: await getNavPageLinks() }
 }
