@@ -74,7 +74,7 @@ export function UserHome({
     const greeting = name ? `Welcome back, ${name.split(" ")[0]}.` : "Welcome back."
 
     return (
-        <main className="flex-1 bg-background">
+        <div className="flex-1 bg-background">
             <Container width="xl" className="py-10 sm:py-14">
                 {/* Greeting strip */}
                 <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-8">
@@ -129,7 +129,7 @@ export function UserHome({
                     </div>
                 )}
             </Container>
-        </main>
+        </div>
     )
 }
 

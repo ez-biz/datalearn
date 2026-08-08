@@ -33,7 +33,7 @@ export function TableOfContents({ entries }: { entries: TocEntry[] }) {
     return (
         <aside
             aria-label="Table of contents"
-            className="hidden lg:block sticky top-24 self-start ml-8 w-56 shrink-0"
+            className="hidden lg:block sticky top-6 self-start ml-8 w-56 shrink-0"
         >
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
                 On this page

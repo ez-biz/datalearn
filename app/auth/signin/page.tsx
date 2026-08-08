@@ -44,7 +44,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
     const showError = Boolean(firstParam(params.error))
 
     return (
-        <main className="min-h-[calc(100dvh-4rem)] bg-background">
+        <div className="min-h-full bg-background">
             <div className="mx-auto grid w-full max-w-7xl gap-7 px-4 py-6 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1fr)_420px] lg:px-8 lg:py-14">
                 <section className="order-2 min-w-0 lg:order-1">
                     <div className="mb-5 hidden items-center gap-2 text-xs font-medium uppercase text-muted-foreground sm:flex">
@@ -182,7 +182,7 @@ LIMIT 5;`}</code></pre>
                     </Card>
                 </section>
             </div>
-        </main>
+        </div>
     )
 }
 

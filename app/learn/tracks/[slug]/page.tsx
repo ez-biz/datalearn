@@ -118,7 +118,7 @@ export default async function TrackDetailPage({ params }: Props) {
             )}
 
             <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_20rem] lg:items-start">
-                <main className="min-w-0">
+                <div className="min-w-0">
                     <section className="prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-headings:tracking-tight prose-a:text-primary hover:prose-a:text-primary-hover">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                             {track.description}
@@ -162,9 +162,9 @@ export default async function TrackDetailPage({ params }: Props) {
                             </Card>
                         )}
                     </section>
-                </main>
+                </div>
 
-                <aside className="lg:sticky lg:top-24">
+                <aside className="lg:sticky lg:top-6">
                     <Card className="p-5">
                         <h2 className="font-semibold tracking-tight">
                             Track rhythm

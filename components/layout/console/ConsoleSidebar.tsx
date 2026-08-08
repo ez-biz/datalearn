@@ -125,56 +125,65 @@ export function ConsoleSidebar({
                 </button>
             </div>
 
-            <nav aria-label="Primary" className="flex flex-col gap-px px-2 py-1.5">
-                {PRIMARY_NAV.map((item) => (
-                    <div key={item.key} className="flex flex-col gap-px">
-                        <NavRow item={item} pathname={pathname} />
-                        {item.children && openKey === item.key && (
-                            <div className="my-0.5 ml-[18px] flex flex-col gap-px border-l border-line-faint pl-2.5">
-                                {item.children.map((child) => (
-                                    <NavRow key={child.key} item={child} pathname={pathname} nested />
-                                ))}
+            {/* flex-1 + min-h-0 lets this region shrink below its content's
+                intrinsic height so overflow-y-auto actually engages; without
+                min-h-0 a flex child won't shrink past its content size and
+                the footer (unbounded admin-entered CMS page links) can
+                overflow the h-dvh shell and become unreachable. mt-auto on
+                the footer group still pins it to the bottom of this region
+                when content is short. */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+                <nav aria-label="Primary" className="flex flex-col gap-px px-2 py-1.5">
+                    {PRIMARY_NAV.map((item) => (
+                        <div key={item.key} className="flex flex-col gap-px">
+                            <NavRow item={item} pathname={pathname} />
+                            {item.children && openKey === item.key && (
+                                <div className="my-0.5 ml-[18px] flex flex-col gap-px border-l border-line-faint pl-2.5">
+                                    {item.children.map((child) => (
+                                        <NavRow key={child.key} item={child} pathname={pathname} nested />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </nav>
+
+                <div className="mt-auto flex flex-col gap-px border-t border-line-soft p-2">
+                    {trackProgress && (
+                        <div className="mx-2.5 mb-2.5 mt-1.5">
+                            <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-text-dim">
+                                <span>Track</span>
+                                <span className="tabular-nums text-primary">
+                                    {trackProgress.percent}%
+                                </span>
                             </div>
-                        )}
-                    </div>
-                ))}
-            </nav>
-
-            <div className="mt-auto flex flex-col gap-px border-t border-line-soft p-2">
-                {trackProgress && (
-                    <div className="mx-2.5 mb-2.5 mt-1.5">
-                        <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-text-dim">
-                            <span>Track</span>
-                            <span className="tabular-nums text-primary">
-                                {trackProgress.percent}%
-                            </span>
+                            <div className="mt-[7px] h-[3px] bg-line-faint">
+                                <div
+                                    className="h-full bg-primary"
+                                    style={{ width: `${trackProgress.percent}%` }}
+                                />
+                            </div>
+                            <div className="mt-1.5 truncate font-mono text-[11px] tabular-nums text-text-dim">
+                                {trackProgress.name}
+                            </div>
                         </div>
-                        <div className="mt-[7px] h-[3px] bg-line-faint">
-                            <div
-                                className="h-full bg-primary"
-                                style={{ width: `${trackProgress.percent}%` }}
-                            />
-                        </div>
-                        <div className="mt-1.5 truncate font-mono text-[11px] tabular-nums text-text-dim">
-                            {trackProgress.name}
-                        </div>
-                    </div>
-                )}
+                    )}
 
-                {FOOTER_NAV.map((item) => (
-                    <NavRow key={item.key} item={item} pathname={pathname} />
-                ))}
-                <ThemeRow />
+                    {FOOTER_NAV.map((item) => (
+                        <NavRow key={item.key} item={item} pathname={pathname} />
+                    ))}
+                    <ThemeRow />
 
-                {pageLinks.map((page) => (
-                    <Link
-                        key={page.slug}
-                        href={`/${page.slug}`}
-                        className={cn(ROW, "text-[13px] text-text-muted hover:bg-panel-hover hover:text-foreground")}
-                    >
-                        <span className="min-w-0 flex-1 truncate">{page.title}</span>
-                    </Link>
-                ))}
+                    {pageLinks.map((page) => (
+                        <Link
+                            key={page.slug}
+                            href={`/${page.slug}`}
+                            className={cn(ROW, "text-[13px] text-text-muted hover:bg-panel-hover hover:text-foreground")}
+                        >
+                            <span className="min-w-0 flex-1 truncate">{page.title}</span>
+                        </Link>
+                    ))}
+                </div>
             </div>
         </div>
     )

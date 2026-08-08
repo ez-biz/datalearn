@@ -57,7 +57,7 @@ export default async function Home() {
     const featuredProblems = (problems ?? []).slice(0, 5)
 
     return (
-        <main className="flex-1">
+        <div className="flex-1">
             {/* Hero */}
             <section className="relative overflow-hidden border-b border-border">
                 <div
@@ -285,7 +285,7 @@ export default async function Home() {
                     </Card>
                 </Container>
             </section>
-        </main>
+        </div>
     )
 }
 

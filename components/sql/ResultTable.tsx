@@ -78,7 +78,7 @@ export function ResultTable({
             <div className="min-h-0 flex-1">
                 <ScrollableTable className="h-full">
                     <table className="min-w-full text-[13px]">
-                        <thead className="sticky top-0 z-10 bg-surface-muted/95 backdrop-blur">
+                        <thead className="sticky top-0 z-10 border-b border-line-faint bg-surface-muted/95 backdrop-blur">
                             <tr>
                                 {columns.map((col) => (
                                     <th

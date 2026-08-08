@@ -111,7 +111,7 @@ export default async function ProblemPage({ params }: Props) {
         parseExpectedOutput(problem.expectedOutput)
 
     return (
-        <div className="flex flex-col h-[calc(100vh-4rem)] bg-background">
+        <div className="flex flex-col h-full bg-background">
             <div className="border-b border-border bg-surface px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 sm:gap-3">
                     <Link
