@@ -10,7 +10,7 @@ import { Eyebrow } from "@/components/ui/Eyebrow"
 import { extractToc } from "@/lib/markdown-toc"
 import { TableOfContents } from "@/components/learn/TableOfContents"
 import { RelatedProblemsPanel } from "@/components/learn/RelatedProblemsPanel"
-import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer"
+import { LessonBody } from "@/components/learn/reader/LessonBody"
 
 type Props = {
     params: Promise<{ topicSlug: string; articleSlug: string }>
@@ -56,14 +56,6 @@ export default async function ArticlePage({ params }: Props) {
                         <Eyebrow variant="bracket" className="mb-2">
                             {article.topic.name.toUpperCase()}
                         </Eyebrow>
-                        <h1 className="text-[32px] sm:text-[34px] font-bold tracking-tight leading-tight">
-                            {article.title}
-                        </h1>
-                        {article.summary && (
-                            <p className="mt-3 text-lg text-muted-foreground leading-relaxed">
-                                {article.summary}
-                            </p>
-                        )}
                         <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                             {article.author?.name && (
                                 <span>By {article.author.name}</span>
@@ -101,10 +93,10 @@ export default async function ArticlePage({ params }: Props) {
                         )}
                     </header>
 
-                    <MarkdownRenderer
+                    <LessonBody
+                        title={article.title}
+                        summary={article.summary}
                         content={article.content}
-                        size="base"
-                        withHeadingIds
                         className="prose-headings:scroll-mt-6"
                     />
 

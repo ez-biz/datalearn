@@ -11,6 +11,7 @@ import {
     modulePrefix,
     lessonBreadcrumb,
 } from "../components/learn/reader/lesson-nav"
+import { stripLeadingH1 } from "../components/learn/reader/LessonBody"
 import type { CurriculumCheckpoint, TrackCurriculum } from "../lib/curriculum-read"
 
 function lesson(
@@ -210,5 +211,41 @@ describe("lessonBreadcrumb", () => {
             module: "02-joins",
             lesson: "semi-and-anti-joins",
         })
+    })
+})
+
+describe("stripLeadingH1", () => {
+    it("removes a leading H1", () => {
+        const out = stripLeadingH1("# Sessionisation\n\nBody text.")
+        assert.equal(out, "Body text.")
+    })
+
+    it("removes a leading H1 after blank lines", () => {
+        const out = stripLeadingH1("\n\n# Sessionisation\n\nBody text.")
+        assert.equal(out, "Body text.")
+    })
+
+    it("leaves content without a leading H1 alone", () => {
+        const md = "Body text.\n\n## A section"
+        assert.equal(stripLeadingH1(md), md)
+    })
+
+    it("leaves an H2 alone", () => {
+        const md = "## A section\n\nBody."
+        assert.equal(stripLeadingH1(md), md)
+    })
+
+    it("removes ONLY the first H1, keeping later ones", () => {
+        const out = stripLeadingH1("# One\n\nBody.\n\n# Two\n\nMore.")
+        assert.equal(out, "Body.\n\n# Two\n\nMore.")
+    })
+
+    it("does not strip an H1 that appears after body text", () => {
+        const md = "Intro.\n\n# Later heading\n\nBody."
+        assert.equal(stripLeadingH1(md), md)
+    })
+
+    it("handles empty content", () => {
+        assert.equal(stripLeadingH1(""), "")
     })
 })
