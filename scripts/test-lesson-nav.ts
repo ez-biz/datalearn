@@ -11,16 +11,21 @@ import {
     modulePrefix,
     lessonBreadcrumb,
 } from "../components/learn/reader/lesson-nav"
-import type { TrackCurriculum } from "../lib/curriculum-read"
+import type { CurriculumCheckpoint, TrackCurriculum } from "../lib/curriculum-read"
 
-function lesson(slug: string, completed = false) {
+function lesson(
+    slug: string,
+    completed = false,
+    readingMinutes = 4,
+    checkpoints: CurriculumCheckpoint[] = [],
+) {
     return {
         articleId: `a-${slug}`,
         slug,
         title: slug.replace(/-/g, " "),
-        readingMinutes: 4,
+        readingMinutes,
         completed,
-        checkpoints: [],
+        checkpoints,
     }
 }
 
@@ -87,6 +92,55 @@ describe("flattenCurriculum", () => {
         const c = fixture()
         c.modules = []
         assert.deepEqual(flattenCurriculum(c), [])
+    })
+
+    it("carries each lesson's payload fields through unchanged", () => {
+        const checkpointsA: CurriculumCheckpoint[] = [
+            {
+                problemId: "p-top-earners",
+                number: 12,
+                slug: "top-earners",
+                title: "Top earners",
+                difficulty: "MEDIUM",
+                solved: true,
+            },
+        ]
+        const checkpointsB: CurriculumCheckpoint[] = [
+            {
+                problemId: "p-null-salaries",
+                number: 20,
+                slug: "null-salaries",
+                title: "Null salaries",
+                difficulty: "EASY",
+                solved: false,
+            },
+            {
+                problemId: "p-coalesce-defaults",
+                number: 21,
+                slug: "coalesce-defaults",
+                title: "Coalesce defaults",
+                difficulty: "HARD",
+                solved: true,
+            },
+        ]
+        const c = fixture()
+        c.modules[0].lessons = [
+            lesson("select-where", true, 9, checkpointsA),
+            lesson("null-is-not-a-value", false, 2, checkpointsB),
+        ]
+        const flat = flattenCurriculum(c)
+
+        const first = flat.find((l) => l.slug === "select-where")
+        assert.equal(first?.articleId, "a-select-where")
+        assert.equal(first?.readingMinutes, 9)
+        assert.equal(first?.completed, true)
+        assert.deepEqual(first?.checkpoints, checkpointsA)
+
+        const second = flat.find((l) => l.slug === "null-is-not-a-value")
+        assert.equal(second?.articleId, "a-null-is-not-a-value")
+        assert.equal(second?.readingMinutes, 2)
+        assert.equal(second?.completed, false)
+        assert.deepEqual(second?.checkpoints, checkpointsB)
     })
 })
 
