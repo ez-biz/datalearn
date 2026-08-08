@@ -697,7 +697,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                                                 : "DUCKDB"
                                         ]
                                     }
-                                    className="ml-2 inline-flex items-center rounded-sm px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    className="ml-2 inline-flex items-center rounded-sm px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                     title={`Copy ${
                                         DIALECT_LABELS[
                                             activeDialect === "DUCKDB"
@@ -820,7 +820,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                 </CardContent>
             </Card>
 
-            <div className="flex items-center gap-3 sticky bottom-0 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-background/80 backdrop-blur border-t border-border">
+            <div className="flex items-center gap-3 sticky bottom-14 lg:bottom-0 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-background/80 backdrop-blur border-t border-border">
                 <Button type="submit" disabled={submitting}>
                     {submitting ? (
                         <>
