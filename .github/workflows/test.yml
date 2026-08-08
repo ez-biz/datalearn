@@ -57,6 +57,9 @@ jobs:
       - name: Palette guard
         run: ./scripts/check-no-palette-colors.sh
 
+      - name: Shadcn token definition guard
+        run: ./scripts/check-shadcn-token-definitions.sh
+
       - uses: actions/setup-node@v7
         with:
           node-version: "20"
@@ -127,6 +130,15 @@ jobs:
 
       - name: Test MCP e2e log redaction
         run: npm run test:mcp-e2e-log-redaction
+
+      - name: Check token theme parity
+        run: npm run check:token-parity
+
+      - name: Test console nav model
+        run: npm run test:console-nav
+
+      - name: Test scroll restoration
+        run: npm run test:scroll-restoration
 
       - name: Cache Playwright browsers
         uses: actions/cache@v6
