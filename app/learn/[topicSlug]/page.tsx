@@ -73,7 +73,7 @@ export default async function TopicPage({ params }: Props) {
                         <Link
                             key={article.id}
                             href={`/learn/${topicSlug}/${article.slug}`}
-                            className="flex items-start gap-4 p-5 hover:bg-surface-muted/60 transition-colors group"
+                            className="flex items-start gap-4 p-5 hover:bg-surface-hover transition-colors group"
                         >
                             <span className="hidden sm:inline-block w-6 mt-0.5 text-xs tabular-nums text-muted-foreground">
                                 {String(i + 1).padStart(2, "0")}

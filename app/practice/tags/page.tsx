@@ -93,7 +93,7 @@ export default async function TagsIndexPage() {
                                         href={`/practice/tags/${t.slug}`}
                                         className="group block"
                                     >
-                                        <Card className="px-5 py-4 transition-colors hover:border-border-strong hover:bg-surface-muted/40">
+                                        <Card className="px-5 py-4 transition-colors hover:border-border-strong hover:bg-surface-hover">
                                             <div className="flex items-baseline justify-between gap-3">
                                                 <h3 className="flex min-w-0 items-center gap-2 font-semibold text-foreground transition-colors group-hover:text-primary">
                                                     <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -151,7 +151,7 @@ function TagGrid({
                         href={`/practice/tags/${t.slug}`}
                         className="group block"
                     >
-                        <Card className="px-5 py-4 transition-colors hover:border-border-strong hover:bg-surface-muted/40">
+                        <Card className="px-5 py-4 transition-colors hover:border-border-strong hover:bg-surface-hover">
                             <div className="flex items-baseline justify-between gap-3">
                                 <h2 className="truncate font-semibold text-foreground transition-colors group-hover:text-primary">
                                     {t.name}

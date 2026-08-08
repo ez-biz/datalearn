@@ -14,9 +14,9 @@ const variants: Record<Variant, string> = {
         "bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm",
     secondary:
         "bg-surface-muted text-foreground hover:bg-surface-elevated border border-border",
-    ghost: "text-foreground hover:bg-surface-muted",
+    ghost: "text-foreground hover:bg-surface-hover",
     outline:
-        "border border-border bg-surface text-foreground hover:bg-surface-muted hover:border-border-strong",
+        "border border-border bg-surface text-foreground hover:bg-surface-hover hover:border-border-strong",
     destructive:
         "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm",
     accent: "bg-accent text-accent-foreground hover:bg-accent/90 shadow-sm",

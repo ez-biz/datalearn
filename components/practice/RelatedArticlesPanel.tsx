@@ -29,7 +29,7 @@ export function RelatedArticlesPanel({
                     <li key={a.id}>
                         <Link
                             href={`/learn/${a.topic.slug}/${a.slug}`}
-                            className="group flex items-start gap-2 rounded-md border border-border bg-surface px-3 py-2 hover:bg-surface-muted/60 transition-colors"
+                            className="group flex items-start gap-2 rounded-md border border-border bg-surface px-3 py-2 hover:bg-surface-hover transition-colors"
                         >
                             <div className="flex-1 min-w-0">
                                 <div className="text-sm font-medium text-foreground group-hover:text-primary transition-colors line-clamp-1">

@@ -433,7 +433,7 @@ export function ArticleForm({
                 </CardContent>
             </Card>
 
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sticky bottom-0 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-background/80 backdrop-blur border-t border-border">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sticky bottom-14 lg:bottom-0 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-background/80 backdrop-blur border-t border-border">
                 <Button type="submit" disabled={submitting || actionPending != null}>
                     {submitting ? (
                         <>

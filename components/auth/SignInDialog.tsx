@@ -15,6 +15,10 @@ interface SignInDialogButtonProps {
     callbackPath?: string | null
     className?: string
     panelLabel?: string
+    /** Set to "menuitem" when this button is a child of a `role="menu"`
+     *  container (e.g. MobileSignInMenu) — an ARIA menu's children must all
+     *  carry a menuitem-family role. Omitted everywhere else. */
+    role?: string
 }
 
 export function SignInDialogButton({
@@ -22,6 +26,7 @@ export function SignInDialogButton({
     callbackPath,
     className,
     panelLabel = "Sign in to Data Learn",
+    role,
 }: SignInDialogButtonProps) {
     const [open, setOpen] = useState(false)
     const [resolvedCallback, setResolvedCallback] = useState("/")
@@ -32,9 +37,14 @@ export function SignInDialogButton({
     useEffect(() => {
         if (!open) return
 
-        const previousOverflow = document.body.style.overflow
+        // <body> no longer scrolls -- the console shell's <div id="app-scroll">
+        // is the scroll container (app/layout.tsx), so that's what needs locking.
+        // Selector-based (not a ref) because this button can mount anywhere in
+        // the tree, including outside <main> (sidebar header, tab bar).
+        const scrollContainer = document.getElementById("app-scroll")
+        const previousOverflow = scrollContainer?.style.overflow
         const trigger = triggerRef.current
-        document.body.style.overflow = "hidden"
+        if (scrollContainer) scrollContainer.style.overflow = "hidden"
         closeRef.current?.focus()
 
         function onKeyDown(event: KeyboardEvent) {
@@ -66,7 +76,7 @@ export function SignInDialogButton({
 
         document.addEventListener("keydown", onKeyDown)
         return () => {
-            document.body.style.overflow = previousOverflow
+            if (scrollContainer) scrollContainer.style.overflow = previousOverflow ?? ""
             document.removeEventListener("keydown", onKeyDown)
             trigger?.focus()
         }
@@ -105,7 +115,7 @@ export function SignInDialogButton({
                               type="button"
                               aria-label="Close sign-in dialog"
                               onClick={() => setOpen(false)}
-                              className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+                              className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
                           >
                               <X aria-hidden="true" className="h-4 w-4" />
                           </button>
@@ -155,6 +165,7 @@ export function SignInDialogButton({
             <button
                 ref={triggerRef}
                 type="button"
+                role={role}
                 onClick={openDialog}
                 className={cn("cursor-pointer", className)}
             >

@@ -48,7 +48,7 @@ export function TopicRowActions({
         <div className="flex items-center gap-1">
             <Link
                 href={`/admin/topics/${slug}/edit`}
-                className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+                className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                 aria-label={`Edit ${name}`}
             >
                 <Pencil className="h-3.5 w-3.5" />

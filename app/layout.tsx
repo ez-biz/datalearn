@@ -5,7 +5,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { headers } from "next/headers";
 import "./globals.css";
-import { Navbar } from "@/components/layout/Navbar";
+import { ConsoleShell } from "@/components/layout/console/ConsoleShell";
 import { Footer } from "@/components/layout/Footer";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
 
@@ -71,24 +71,47 @@ export default async function RootLayout({
     return (
         <html lang="en" suppressHydrationWarning>
             <body
-                className={`${inter.variable} ${jetbrainsMono.variable} antialiased min-h-screen flex flex-col bg-background text-foreground`}
+                className={`${inter.variable} ${jetbrainsMono.variable} antialiased h-dvh overflow-hidden bg-background text-foreground print:h-auto print:overflow-visible`}
             >
                 <ThemeProvider nonce={nonce}>
                     <a
                         href="#main-content"
-                        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
                         Skip to main content
                     </a>
-                    <Navbar />
-                    <div
-                        id="main-content"
-                        tabIndex={-1}
-                        className="flex-1 flex flex-col focus:outline-none"
-                    >
-                        {children}
-                    </div>
-                    <Footer />
+                    <ConsoleShell>
+                        {/* The scroll column, not <main>. A <footer> only maps
+                            to the `contentinfo` landmark when it is NOT inside
+                            article/aside/main/nav/section, so the footer cannot
+                            live inside <main> — and ARIA forbids nesting
+                            `contentinfo` in `main`, which rules out patching it
+                            with an explicit role. Splitting the scroll
+                            container off from <main> keeps the footer in the
+                            scrolling flow (it must scroll away with the page)
+                            while leaving it a sibling of <main>, whose nearest
+                            sectioning ancestor is <body>. Landmarks are back to
+                            banner / main / contentinfo.
+
+                            #app-scroll (not #main-content) is what
+                            MainScrollRestoration, SignInDialog and ReportDialog
+                            reach for — they want the element that owns the
+                            scrollbar. #main-content stays on <main> so the
+                            skip link still lands on the content itself. */}
+                        <div
+                            id="app-scroll"
+                            className="flex flex-1 flex-col overflow-y-auto pb-14 lg:pb-0 print:overflow-visible print:pb-0"
+                        >
+                            <main
+                                id="main-content"
+                                tabIndex={-1}
+                                className="flex flex-1 flex-col focus:outline-none"
+                            >
+                                {children}
+                            </main>
+                            <Footer />
+                        </div>
+                    </ConsoleShell>
                 </ThemeProvider>
                 <Analytics />
                 <SpeedInsights />

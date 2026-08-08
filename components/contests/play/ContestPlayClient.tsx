@@ -274,7 +274,7 @@ export function ContestPlayClient({
                                 "inline-flex h-7 w-7 items-center justify-center rounded-md text-xs font-medium tabular-nums transition-colors",
                                 sibling.slug === problem.slug
                                     ? "bg-primary text-primary-foreground"
-                                    : "border border-border text-muted-foreground hover:bg-surface-muted"
+                                    : "border border-border text-muted-foreground hover:bg-surface-hover"
                             )}
                         >
                             {sibling.letter}

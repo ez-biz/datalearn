@@ -348,7 +348,7 @@ function SchemaOverview({ tables }: { tables: TableInfo[] }) {
                         open={!collapseByDefault}
                         className="group rounded-md border border-border bg-surface-muted/30 overflow-hidden"
                     >
-                        <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer select-none hover:bg-surface-muted/60 list-none [&::-webkit-details-marker]:hidden">
+                        <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer select-none hover:bg-surface-hover list-none [&::-webkit-details-marker]:hidden">
                             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90" />
                             <span className="text-sm font-medium">Table:</span>
                             <code className="rounded bg-surface px-1.5 py-0.5 text-[12px] font-mono border border-border">
@@ -510,7 +510,7 @@ function HintsTab({ hints }: { hints: string[] }) {
                 <button
                     type="button"
                     onClick={() => setRevealed((r) => r + 1)}
-                    className="w-full rounded-md border border-dashed border-border bg-surface-muted/40 px-3 py-3 text-sm font-medium text-muted-foreground hover:bg-surface-muted hover:text-foreground transition-colors cursor-pointer inline-flex items-center justify-center gap-1.5"
+                    className="w-full rounded-md border border-dashed border-border bg-surface-muted/40 px-3 py-3 text-sm font-medium text-muted-foreground hover:bg-surface-hover hover:text-foreground transition-colors cursor-pointer inline-flex items-center justify-center gap-1.5"
                 >
                     <Lightbulb className="h-4 w-4" />
                     Reveal hint {revealed + 1} of {hints.length}

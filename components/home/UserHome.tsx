@@ -74,7 +74,7 @@ export function UserHome({
     const greeting = name ? `Welcome back, ${name.split(" ")[0]}.` : "Welcome back."
 
     return (
-        <main className="flex-1 bg-background">
+        <div className="flex-1 bg-background">
             <Container width="xl" className="py-10 sm:py-14">
                 {/* Greeting strip */}
                 <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-8">
@@ -129,7 +129,7 @@ export function UserHome({
                     </div>
                 )}
             </Container>
-        </main>
+        </div>
     )
 }
 
@@ -258,7 +258,7 @@ function ContinueCard({
                 ) : (
                     <Link
                         href={`/practice/${problem.problem.slug}`}
-                        className="group mt-4 -mx-2 flex items-center gap-3 rounded-md px-2 py-2 hover:bg-surface-muted transition-colors"
+                        className="group mt-4 -mx-2 flex items-center gap-3 rounded-md px-2 py-2 hover:bg-surface-hover transition-colors"
                     >
                         {content}
                     </Link>
@@ -334,7 +334,7 @@ function DailyProblemCard({ status }: { status: DailyStatus }) {
                 {daily ? (
                     <Link
                         href="/daily"
-                        className="group mt-4 -mx-2 flex items-start gap-3 rounded-md px-2 py-2 hover:bg-surface-muted transition-colors"
+                        className="group mt-4 -mx-2 flex items-start gap-3 rounded-md px-2 py-2 hover:bg-surface-hover transition-colors"
                     >
                         <div className="flex-1 min-w-0">
                             <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
@@ -377,7 +377,7 @@ function RecommendedCard({ problem }: { problem: PublicProblem | null }) {
                 {problem ? (
                     <Link
                         href={`/practice/${problem.slug}`}
-                        className="group mt-4 -mx-2 flex items-start gap-3 rounded-md px-2 py-2 hover:bg-surface-muted transition-colors"
+                        className="group mt-4 -mx-2 flex items-start gap-3 rounded-md px-2 py-2 hover:bg-surface-hover transition-colors"
                     >
                         <div className="flex-1 min-w-0">
                             <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
@@ -472,7 +472,7 @@ function RecentActivityCard({
                                 ) : (
                                     <Link
                                         href={`/practice/${s.problem.slug}`}
-                                        className="group flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-md hover:bg-surface-muted transition-colors"
+                                        className="group flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-md hover:bg-surface-hover transition-colors"
                                     >
                                         {content}
                                     </Link>

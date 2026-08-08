@@ -65,7 +65,7 @@ export default async function MyArticlesPage() {
                             <li key={a.id}>
                                 <Link
                                     href={`/me/articles/${a.slug}/edit`}
-                                    className="grid grid-cols-1 sm:grid-cols-[1fr_8rem_8rem] items-center gap-4 px-5 py-4 hover:bg-surface-muted/60 transition-colors group"
+                                    className="grid grid-cols-1 sm:grid-cols-[1fr_8rem_8rem] items-center gap-4 px-5 py-4 hover:bg-surface-hover transition-colors group"
                                 >
                                     <div className="min-w-0">
                                         {a.hasVisualBlocks && (

@@ -3,7 +3,7 @@ import { LinkButton } from "@/components/ui/Button"
 
 export default function NotFound() {
     return (
-        <main className="flex flex-1 min-h-[70vh] flex-col items-center justify-center text-center px-4 py-16">
+        <div className="flex flex-1 min-h-[70vh] flex-col items-center justify-center text-center px-4 py-16">
             <div className="text-7xl sm:text-8xl font-bold tracking-tighter text-primary/15">
                 404
             </div>
@@ -25,6 +25,6 @@ export default function NotFound() {
                     Back to home
                 </LinkButton>
             </div>
-        </main>
+        </div>
     )
 }

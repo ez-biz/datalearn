@@ -181,7 +181,7 @@ export function PracticeList({ problems, solvedSlugs }: PracticeListProps) {
                             // nesting <a> inside <a>.
                             <li
                                 key={p.id}
-                                className="relative grid grid-cols-[1fr_auto] md:grid-cols-[2.5rem_3rem_1fr_8rem_3rem] items-center gap-4 px-4 md:px-6 py-4 hover:bg-surface-muted/60 transition-colors group"
+                                className="relative grid grid-cols-[1fr_auto] md:grid-cols-[2.5rem_3rem_1fr_8rem_3rem] items-center gap-4 px-4 md:px-6 py-4 hover:bg-surface-hover transition-colors group"
                             >
                                 <span className="hidden md:flex items-center justify-center" aria-label={solved ? "Solved" : "Not solved"}>
                                     {solved ? (

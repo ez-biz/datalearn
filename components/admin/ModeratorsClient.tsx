@@ -308,7 +308,7 @@ export function ModeratorsClient({
                                         type="button"
                                         onClick={() => setSelectedUserId(candidate.id)}
                                         className={cn(
-                                            "flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                            "flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                                             selectedUserId === candidate.id &&
                                                 "bg-primary/10"
                                         )}
@@ -486,7 +486,7 @@ function PermissionChecklist({
                     <label
                         key={permission.key}
                         htmlFor={id}
-                        className="flex min-h-10 cursor-pointer items-start gap-3 rounded-md border border-border px-3 py-2 transition-colors hover:bg-surface-muted"
+                        className="flex min-h-10 cursor-pointer items-start gap-3 rounded-md border border-border px-3 py-2 transition-colors hover:bg-surface-hover"
                     >
                         <input
                             id={id}

@@ -34,9 +34,13 @@ export function ReportDialog({ problemSlug, isSignedIn }: ReportDialogProps) {
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
-        document.body.style.overflow = open ? "hidden" : ""
+        // <body> no longer scrolls -- the console shell's <div id="app-scroll">
+        // is the scroll container (app/layout.tsx), so that's what needs locking.
+        const scrollContainer = document.getElementById("app-scroll")
+        if (!scrollContainer) return
+        scrollContainer.style.overflow = open ? "hidden" : ""
         return () => {
-            document.body.style.overflow = ""
+            scrollContainer.style.overflow = ""
         }
     }, [open])
 

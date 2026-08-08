@@ -443,7 +443,7 @@ export function TrackEditor({
                                             onClick={() => move(index, -1)}
                                             disabled={pending || index === 0}
                                             aria-label="Move up"
-                                            className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-surface-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                                            className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                                         >
                                             <ArrowUp className="h-3.5 w-3.5" />
                                         </button>
@@ -455,7 +455,7 @@ export function TrackEditor({
                                                 index === items.length - 1
                                             }
                                             aria-label="Move down"
-                                            className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-surface-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                                            className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                                         >
                                             <ArrowDown className="h-3.5 w-3.5" />
                                         </button>

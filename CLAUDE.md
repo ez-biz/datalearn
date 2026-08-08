@@ -11,8 +11,8 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor; querie
 - **PostgreSQL** (local dev: `postgresql://anchitgupta@localhost:5432/datalearn`)
 - **NextAuth v5 (beta)** with Prisma adapter; GitHub + Google providers
 - **DuckDB-WASM** for in-browser query execution (`lib/duckdb.ts`, `lib/use-problem-db.ts`)
-- **Tailwind v4** with `@plugin "@tailwindcss/typography"`; HSL CSS variable tokens in `app/globals.css`
-- **next-themes** for dark/light toggle (light is default)
+- **Tailwind v4** with `@plugin "@tailwindcss/typography"`; HSL CSS variable tokens in `app/globals.css` — the graphite Console token system (`--canvas`, `--panel`, `--line`, `--text`, `--primary`, etc.), with every pre-existing token (`--background`, `--surface`, `--border`, `--muted-foreground`, `--easy`, etc.) now aliased onto it
+- **next-themes** for dark/light toggle (dark is default)
 - **Monaco** editor (`@monaco-editor/react`)
 - **Inter** + **JetBrains Mono** via `next/font`
 
@@ -20,8 +20,8 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor; querie
 
 - `app/` — App Router pages
 - `actions/` — server actions (`"use server"` files), e.g. `curriculum.ts` — session-resolving curriculum reads (`getTrackCurriculum`) and writes (`recordLessonProgress`)
-- `components/ui/` — primitives (Button, Card, Badge, Input, Skeleton, Logo, ThemeToggle, Container, EmptyState)
-- `components/layout/` — Navbar, Footer, ThemeProvider, MobileNav
+- `components/ui/` — primitives (Button, Card, Badge, Input, Skeleton, Logo, Container, EmptyState)
+- `components/layout/` — Footer, ThemeProvider, UserMenu (avatar dropdown); `console/` — the left sidebar/rail console shell (`ConsoleShell` server component, `ConsoleChrome` client wrapper, `ConsoleSidebar`, `ConsoleRail`, `MobileTabBar`, `MobileSignInMenu`, `nav-model.ts`, `sidebar-cookie.ts`, `useSidebarCollapse.ts`)
 - `components/practice/` — workspace pieces (ProblemClient, ProblemPanel, PracticeList, HistoryPanel)
 - `components/sql/` — SQL UI (SqlPlayground, SqlEditor, ResultTable, ValidationResult)
 - `components/lists/` — custom problem lists (CreateListButton popover, ListDetail with rename/delete/reorder/sort, AddToListButton workspace popover, AddProblemsPicker search-and-add). All client components consuming `actions/lists.ts`.
@@ -59,6 +59,7 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor; querie
 - **Never export a `userId`-parameterised writer from a `"use server"` file.** Every export of a `"use server"` module becomes a client-callable RPC endpoint, so a function that takes `userId` as a caller-supplied argument (rather than reading it from the session) would let any client write data as any other user. `lib/curriculum-write.ts` deliberately has no `"use server"` directive for this reason — `actions/curriculum.ts` resolves the session and delegates to it. Follow the same split for any future writer that needs an explicit `userId`.
 - **`npm run dev` binds to `.env.local`, not `.env`.** Unlike test scripts, the dev server does not default to local Postgres — prefix an explicit `DATABASE_URL='postgresql://anchitgupta@localhost:5432/datalearn'` when you need it against local data, or you'll be silently working against whatever `.env.local` points at.
 - **Under `@prisma/adapter-pg`, a P2002 error's `meta.target` is always `undefined`.** The offending column names instead live at `meta.driverAdapterError.cause.constraint.fields`, and they arrive partly quoted (e.g. `["\"trackId\"", "slug"]`). Strip quotes before comparing. See `isUniqueViolationOn` in `lib/admin-curriculum.ts` for the pattern that checks both this shape and the query-engine-binary `meta.target` shape.
+- **Don't add a token to `:root` without adding it to `.light`.** Both themes ship and light is not an inversion — a missing light value fails silently and only for users on that theme. `npm run check:token-parity` enforces this.
 
 ## Running locally
 
