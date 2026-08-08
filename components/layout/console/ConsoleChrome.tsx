@@ -2,6 +2,7 @@
 
 import { ConsoleRail } from "./ConsoleRail"
 import { ConsoleSidebar, type TrackProgress } from "./ConsoleSidebar"
+import { MainScrollRestoration } from "./MainScrollRestoration"
 import { MobileTabBar } from "./MobileTabBar"
 import { useSidebarCollapse } from "./useSidebarCollapse"
 import type { SidebarState } from "./sidebar-cookie"
@@ -47,6 +48,7 @@ export function ConsoleChrome({
             )}
             {children}
             <MobileTabBar signedIn={signedIn} accountSlot={tabBarAccountSlot} signInSlot={signInSlot} />
+            <MainScrollRestoration />
         </div>
     )
 }
