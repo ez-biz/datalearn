@@ -6,6 +6,7 @@ import { excludeLockedProblems } from "@/lib/contest-locks"
 import { prisma } from "@/lib/prisma"
 import { FEATURED_TRACK_SLUG } from "@/lib/curriculum-featured"
 import { SignInDialogButton } from "@/components/auth/SignInDialog"
+import { Footer } from "@/components/layout/Footer"
 import { UserMenu } from "@/components/layout/UserMenu"
 import { cookies } from "next/headers"
 import { ConsoleChrome } from "./ConsoleChrome"
@@ -87,6 +88,13 @@ export async function ConsoleShell({ children }: { children: React.ReactNode }) 
     // the control still fills the "You" cell edge to edge.
     const signInSlot = <MobileSignInMenu />
 
+    // ConsoleChrome owns the scroll column, <main> and the footer, because it
+    // is the only one of the two that can read the pathname and so decide
+    // whether the route is a focus route. It is a client component, though,
+    // and Footer is an async server component — so the element is created here
+    // and passed down as a slot rather than imported over there. Footer's data
+    // read (getNavPageLinks) is React-`cache`d and already warm from
+    // getNavLinks() above, so this costs no extra query.
     return (
         <ConsoleChrome
             initialState={initialState}
@@ -97,6 +105,7 @@ export async function ConsoleShell({ children }: { children: React.ReactNode }) 
             railAccountSlot={accountMenu("rail")}
             tabBarAccountSlot={accountMenu("tabbar")}
             signInSlot={signInSlot}
+            footerSlot={<Footer />}
         >
             {children}
         </ConsoleChrome>

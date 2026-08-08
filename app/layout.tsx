@@ -6,7 +6,6 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { headers } from "next/headers";
 import "./globals.css";
 import { ConsoleShell } from "@/components/layout/console/ConsoleShell";
-import { Footer } from "@/components/layout/Footer";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
 
 const googleAnalyticsId =
@@ -80,38 +79,12 @@ export default async function RootLayout({
                     >
                         Skip to main content
                     </a>
-                    <ConsoleShell>
-                        {/* The scroll column, not <main>. A <footer> only maps
-                            to the `contentinfo` landmark when it is NOT inside
-                            article/aside/main/nav/section, so the footer cannot
-                            live inside <main> — and ARIA forbids nesting
-                            `contentinfo` in `main`, which rules out patching it
-                            with an explicit role. Splitting the scroll
-                            container off from <main> keeps the footer in the
-                            scrolling flow (it must scroll away with the page)
-                            while leaving it a sibling of <main>, whose nearest
-                            sectioning ancestor is <body>. Landmarks are back to
-                            banner / main / contentinfo.
-
-                            #app-scroll (not #main-content) is what
-                            MainScrollRestoration, SignInDialog and ReportDialog
-                            reach for — they want the element that owns the
-                            scrollbar. #main-content stays on <main> so the
-                            skip link still lands on the content itself. */}
-                        <div
-                            id="app-scroll"
-                            className="flex flex-1 flex-col overflow-y-auto pb-14 lg:pb-0 print:overflow-visible print:pb-0"
-                        >
-                            <main
-                                id="main-content"
-                                tabIndex={-1}
-                                className="flex flex-1 flex-col focus:outline-none"
-                            >
-                                {children}
-                            </main>
-                            <Footer />
-                        </div>
-                    </ConsoleShell>
+                    {/* The scroll column, <main> and <Footer> live inside
+                        ConsoleChrome now — it is the only component that can
+                        see the pathname, and focus routes (the lesson reader)
+                        need to supply their own <header>/<main> pair to keep
+                        the `banner` landmark legal. See ConsoleChrome. */}
+                    <ConsoleShell>{children}</ConsoleShell>
                 </ThemeProvider>
                 <Analytics />
                 <SpeedInsights />
