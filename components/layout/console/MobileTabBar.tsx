@@ -7,14 +7,28 @@ import { TAB_BAR, isNavItemActive } from "./nav-model"
 
 interface MobileTabBarProps {
     signedIn: boolean
-    /** Rendered in place of the "You" link when signed out. */
+    /** Rendered in the "You" cell when signed in — the account menu trigger
+     *  (UserMenu with placement="tabbar"). Mobile has neither a sidebar nor
+     *  a rail, so this is the only place a phone user can sign out. */
+    accountSlot: React.ReactNode
+    /** Rendered in the "You" cell when signed out. */
     signInSlot: React.ReactNode
 }
 
 const CELL =
     "flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-medium transition-colors duration-150"
 
-export function MobileTabBar({ signedIn, signInSlot }: MobileTabBarProps) {
+// The "You" cell's control (UserMenu trigger or sign-in button) is a real
+// interactive element nested inside this wrapper `<div>`, unlike the other
+// three cells where the interactive element (the `<Link>`) carries `CELL`
+// directly and its own padding is part of its clickable border-box. `py-2`
+// here would instead sit *outside* the nested control, leaving a dead strip
+// top and bottom that a plain `h-full` child can't reach. Dropping the
+// vertical padding lets the child fill the cell edge to edge.
+const ACCOUNT_CELL =
+    "flex flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors duration-150"
+
+export function MobileTabBar({ signedIn, accountSlot, signInSlot }: MobileTabBarProps) {
     const pathname = usePathname()
 
     return (
@@ -25,10 +39,10 @@ export function MobileTabBar({ signedIn, signInSlot }: MobileTabBarProps) {
             {TAB_BAR.map((item) => {
                 const Icon = item.icon
 
-                if (item.key === "tab-you" && !signedIn) {
+                if (item.key === "tab-you") {
                     return (
-                        <div key={item.key} className={cn(CELL, "text-text-dim")}>
-                            {signInSlot}
+                        <div key={item.key} className={cn(ACCOUNT_CELL, "text-text-dim")}>
+                            {signedIn ? accountSlot : signInSlot}
                         </div>
                     )
                 }

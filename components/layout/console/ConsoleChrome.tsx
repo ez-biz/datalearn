@@ -8,22 +8,26 @@ import type { SidebarState } from "./sidebar-cookie"
 
 interface ConsoleChromeProps {
     initialState: SidebarState
-    initials: string | null
     signedIn: boolean
     trackProgress: TrackProgress | null
     pageLinks: Array<{ slug: string; title: string }>
     headerSlot: React.ReactNode
+    /** Account menu trigger for the collapsed rail. Null when signed out. */
+    railAccountSlot: React.ReactNode | null
+    /** Account menu trigger for the mobile "You" tab. */
+    tabBarAccountSlot: React.ReactNode
     signInSlot: React.ReactNode
     children: React.ReactNode
 }
 
 export function ConsoleChrome({
     initialState,
-    initials,
     signedIn,
     trackProgress,
     pageLinks,
     headerSlot,
+    railAccountSlot,
+    tabBarAccountSlot,
     signInSlot,
     children,
 }: ConsoleChromeProps) {
@@ -32,7 +36,7 @@ export function ConsoleChrome({
     return (
         <div className="flex h-dvh overflow-hidden">
             {collapsed ? (
-                <ConsoleRail onToggle={toggle} initials={initials} />
+                <ConsoleRail onToggle={toggle} accountSlot={railAccountSlot} />
             ) : (
                 <ConsoleSidebar
                     trackProgress={trackProgress}
@@ -42,7 +46,7 @@ export function ConsoleChrome({
                 />
             )}
             {children}
-            <MobileTabBar signedIn={signedIn} signInSlot={signInSlot} />
+            <MobileTabBar signedIn={signedIn} accountSlot={tabBarAccountSlot} signInSlot={signInSlot} />
         </div>
     )
 }

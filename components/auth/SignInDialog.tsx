@@ -32,9 +32,14 @@ export function SignInDialogButton({
     useEffect(() => {
         if (!open) return
 
-        const previousOverflow = document.body.style.overflow
+        // <body> no longer scrolls -- the console shell's <main id="main-content">
+        // is the scroll container (app/layout.tsx), so that's what needs locking.
+        // Selector-based (not a ref) because this button can mount anywhere in
+        // the tree, including outside <main> (sidebar header, tab bar).
+        const scrollContainer = document.getElementById("main-content")
+        const previousOverflow = scrollContainer?.style.overflow
         const trigger = triggerRef.current
-        document.body.style.overflow = "hidden"
+        if (scrollContainer) scrollContainer.style.overflow = "hidden"
         closeRef.current?.focus()
 
         function onKeyDown(event: KeyboardEvent) {
@@ -66,7 +71,7 @@ export function SignInDialogButton({
 
         document.addEventListener("keydown", onKeyDown)
         return () => {
-            document.body.style.overflow = previousOverflow
+            if (scrollContainer) scrollContainer.style.overflow = previousOverflow ?? ""
             document.removeEventListener("keydown", onKeyDown)
             trigger?.focus()
         }

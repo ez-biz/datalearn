@@ -84,7 +84,7 @@ export default async function RootLayout({
                         <main
                             id="main-content"
                             tabIndex={-1}
-                            className="flex-1 overflow-y-auto pb-14 focus:outline-none lg:pb-0"
+                            className="flex flex-1 flex-col overflow-y-auto pb-14 focus:outline-none lg:pb-0"
                         >
                             {children}
                             <Footer />

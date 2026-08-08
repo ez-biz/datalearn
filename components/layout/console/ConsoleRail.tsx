@@ -2,14 +2,21 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { PanelLeft } from "lucide-react"
+import { Moon, PanelLeft, Sun } from "lucide-react"
+import { useTheme } from "next-themes"
+import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { FOOTER_NAV, PRIMARY_NAV, isNavItemActive, type NavItem } from "./nav-model"
 
 interface ConsoleRailProps {
     onToggle: () => void
-    /** Two-letter avatar fallback, e.g. "AK". Null when signed out. */
-    initials: string | null
+    /**
+     * Account menu trigger (UserMenu with placement="rail"), rendered as the
+     * last footer icon. Null when signed out — the rail shows no separate
+     * "you" affordance for anonymous visitors, matching the previous
+     * behavior; sign-in lives in the expanded sidebar header.
+     */
+    accountSlot: React.ReactNode | null
 }
 
 const CELL =
@@ -49,7 +56,33 @@ function RailItem({ item, pathname }: { item: NavItem; pathname: string }) {
     )
 }
 
-export function ConsoleRail({ onToggle, initials }: ConsoleRailProps) {
+/** Same visual footprint as RailItem's interactive state, but for an action
+ *  rather than a NavItem — mirrors components/ui/ThemeToggle.tsx's hydration
+ *  guard. */
+function ThemeIcon() {
+    const { resolvedTheme, setTheme } = useTheme()
+    const [mounted, setMounted] = useState(false)
+    useEffect(() => setMounted(true), [])
+    const isDark = mounted && resolvedTheme === "dark"
+
+    return (
+        <button
+            type="button"
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+            aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
+            title={isDark ? "Switch to light theme" : "Switch to dark theme"}
+            className={cn(CELL, "text-text-dim hover:bg-panel-hover hover:text-foreground")}
+        >
+            {isDark ? (
+                <Moon className="h-[17px] w-[17px]" aria-hidden />
+            ) : (
+                <Sun className="h-[17px] w-[17px]" aria-hidden />
+            )}
+        </button>
+    )
+}
+
+export function ConsoleRail({ onToggle, accountSlot }: ConsoleRailProps) {
     const pathname = usePathname()
 
     return (
@@ -76,11 +109,8 @@ export function ConsoleRail({ onToggle, initials }: ConsoleRailProps) {
                 {FOOTER_NAV.map((item) => (
                     <RailItem key={item.key} item={item} pathname={pathname} />
                 ))}
-                {initials && (
-                    <span className="mt-1 flex h-[26px] w-[26px] items-center justify-center rounded-full bg-panel-hover text-[10px] font-semibold text-text-muted">
-                        {initials}
-                    </span>
-                )}
+                <ThemeIcon />
+                {accountSlot && <div className="mt-1">{accountSlot}</div>}
             </div>
         </div>
     )

@@ -10,13 +10,36 @@ import {
     CheckCircle2,
     History,
     LogOut,
+    Moon,
     PenSquare,
     Shield,
+    Sun,
     User as UserIcon,
 } from "lucide-react"
+import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 
 type Role = "USER" | "CONTRIBUTOR" | "MODERATOR" | "ADMIN"
+
+/**
+ * Where the trigger renders, which decides which edge the dropdown anchors
+ * to so it stays on-screen:
+ *  - "header": sidebar header, top-left of the panel. Opens down-right
+ *    (original, reviewed behavior — unchanged).
+ *  - "rail": collapsed 56px-wide rail, avatar sits near the bottom of the
+ *    column. Opens up-right so the menu clears both the narrow column and
+ *    the bottom of the viewport.
+ *  - "tabbar": bottom mobile tab bar. Opens upward, right-aligned to the
+ *    "You" cell (the rightmost tab), so it stays clear of the viewport
+ *    bottom and edges.
+ */
+type MenuPlacement = "header" | "rail" | "tabbar"
+
+const PLACEMENT_CLASS: Record<MenuPlacement, string> = {
+    header: "top-[calc(100%+8px)] right-0",
+    rail: "bottom-0 left-[calc(100%+8px)]",
+    tabbar: "bottom-[calc(100%+8px)] right-0",
+}
 
 interface UserMenuProps {
     name: string | null
@@ -28,6 +51,11 @@ interface UserMenuProps {
     /** Total PUBLISHED problems on the platform. */
     total: number
     dailySolved: boolean
+    /** Defaults to "header" — the original sidebar-header trigger. */
+    placement?: MenuPlacement
+    /** Avatar diameter. "sm" (26px) matches the rail's other icon density;
+     *  "md" (32px, default) matches the sidebar header and tab bar. */
+    size?: "sm" | "md"
 }
 
 const ROLE_LABEL: Record<Role, string> = {
@@ -52,11 +80,21 @@ export function UserMenu({
     solved,
     total,
     dailySolved,
+    placement = "header",
+    size = "md",
 }: UserMenuProps) {
     const [open, setOpen] = useState(false)
     const [signingOut, setSigningOut] = useState(false)
     const containerRef = useRef<HTMLDivElement>(null)
     const triggerRef = useRef<HTMLButtonElement>(null)
+
+    // Hydration-safe theme toggle, same guard as components/ui/ThemeToggle.tsx:
+    // resolvedTheme is undefined until mount, so this renders a neutral state
+    // on the server and swaps in the real theme after mount.
+    const { resolvedTheme, setTheme } = useTheme()
+    const [themeMounted, setThemeMounted] = useState(false)
+    useEffect(() => setThemeMounted(true), [])
+    const isDark = themeMounted && resolvedTheme === "dark"
 
     // Close on click outside or Escape.
     useEffect(() => {
@@ -87,6 +125,8 @@ export function UserMenu({
     const displayName = name?.trim() || email?.split("@")[0] || "Account"
     const safeTotal = Math.max(1, total)
     const pct = Math.min(100, (solved / safeTotal) * 100)
+    const avatarPx = size === "sm" ? 26 : 32
+    const avatarClass = size === "sm" ? "h-[26px] w-[26px]" : "h-8 w-8"
 
     // Track whether the avatar image failed to load. Common causes:
     // (a) OAuth provider's avatar URL stopped resolving (user changed avatar
@@ -116,9 +156,11 @@ export function UserMenu({
                 aria-haspopup="menu"
                 aria-expanded={open}
                 aria-label={open ? "Close account menu" : "Open account menu"}
+                title={open ? "Close account menu" : "Open account menu"}
                 onClick={() => setOpen((v) => !v)}
                 className={cn(
-                    "ml-1 rounded-full ring-2 transition-shadow duration-150 cursor-pointer",
+                    "rounded-full ring-2 transition-shadow duration-150 cursor-pointer",
+                    placement === "header" && "ml-1",
                     open
                         ? "ring-primary/40"
                         : "ring-transparent hover:ring-primary/30"
@@ -128,14 +170,19 @@ export function UserMenu({
                     <Image
                         src={image!}
                         alt={name ?? "Profile"}
-                        width={32}
-                        height={32}
-                        className="h-8 w-8 rounded-full object-cover"
+                        width={avatarPx}
+                        height={avatarPx}
+                        className={cn(avatarClass, "rounded-full object-cover")}
                         onError={() => setImageFailed(true)}
                         unoptimized
                     />
                 ) : (
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+                    <span
+                        className={cn(
+                            avatarClass,
+                            "flex items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary"
+                        )}
+                    >
                         {initial}
                     </span>
                 )}
@@ -145,7 +192,10 @@ export function UserMenu({
                 <div
                     role="menu"
                     aria-label="Account menu"
-                    className="absolute right-0 top-[calc(100%+8px)] w-72 rounded-lg border border-border bg-surface shadow-lg overflow-hidden z-50"
+                    className={cn(
+                        "absolute z-50 w-72 max-w-[calc(100vw-1rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg border border-border bg-surface shadow-lg",
+                        PLACEMENT_CLASS[placement]
+                    )}
                 >
                     {/* Header */}
                     <div className="flex items-start gap-3 p-4 border-b border-border">
@@ -263,6 +313,27 @@ export function UserMenu({
                                 }
                                 onClick={() => setOpen(false)}
                             />
+                        )}
+                        {placement === "tabbar" && (
+                            // Mobile has neither a sidebar nor a rail, so this is the
+                            // only place a phone user can reach the theme toggle.
+                            <li role="none">
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => setTheme(isDark ? "light" : "dark")}
+                                    className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-muted"
+                                >
+                                    {isDark ? (
+                                        <Sun className="h-4 w-4" aria-hidden="true" />
+                                    ) : (
+                                        <Moon className="h-4 w-4" aria-hidden="true" />
+                                    )}
+                                    <span>
+                                        {isDark ? "Switch to light theme" : "Switch to dark theme"}
+                                    </span>
+                                </button>
+                            </li>
                         )}
                     </ul>
 

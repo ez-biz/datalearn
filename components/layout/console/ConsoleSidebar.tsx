@@ -2,7 +2,9 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { PanelLeft } from "lucide-react"
+import { Moon, PanelLeft, Sun } from "lucide-react"
+import { useTheme } from "next-themes"
+import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import {
     FOOTER_NAV,
@@ -75,6 +77,34 @@ function NavRow({ item, pathname, nested }: { item: NavItem; pathname: string; n
     )
 }
 
+/**
+ * Sits beside Updates / Help center in the footer group. Not a NavItem (it's
+ * an action, not a destination), so it renders directly rather than through
+ * FOOTER_NAV + NavRow. Same hydration guard as components/ui/ThemeToggle.tsx.
+ */
+function ThemeRow() {
+    const { resolvedTheme, setTheme } = useTheme()
+    const [mounted, setMounted] = useState(false)
+    useEffect(() => setMounted(true), [])
+    const isDark = mounted && resolvedTheme === "dark"
+
+    return (
+        <button
+            type="button"
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+            title={isDark ? "Switch to light theme" : "Switch to dark theme"}
+            className={cn(ROW, "w-full text-text-muted hover:bg-panel-hover hover:text-foreground")}
+        >
+            {isDark ? (
+                <Moon className="h-[15px] w-[15px]" aria-hidden />
+            ) : (
+                <Sun className="h-[15px] w-[15px]" aria-hidden />
+            )}
+            {isDark ? "Dark mode" : "Light mode"}
+        </button>
+    )
+}
+
 export function ConsoleSidebar({
     trackProgress,
     pageLinks,
@@ -138,6 +168,7 @@ export function ConsoleSidebar({
                 {FOOTER_NAV.map((item) => (
                     <NavRow key={item.key} item={item} pathname={pathname} />
                 ))}
+                <ThemeRow />
 
                 {pageLinks.map((page) => (
                     <Link
