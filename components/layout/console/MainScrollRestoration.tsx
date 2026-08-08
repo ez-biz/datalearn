@@ -1,7 +1,8 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import { useEffect, useRef } from "react"
+import { useLayoutEffect, useRef } from "react"
+import { isCrossRoutePop, resolveRestoreScrollTop } from "@/lib/scroll-restoration"
 
 /**
  * Restores #main-content's scroll position on browser back/forward.
@@ -17,15 +18,44 @@ import { useEffect, useRef } from "react"
  * pathname; PUSH (a fresh link click, including to a previously-visited
  * route) starts at the top, matching normal navigation UX.
  *
- * Position capture deliberately happens on a capture-phase document click
- * rather than a passive 'scroll' listener: when the outgoing route's
- * content unmounts, main's scrollHeight can momentarily shrink below its
- * current scrollTop, and the browser auto-clamps scrollTop to 0 — which
- * fires its own 'scroll' event. A passive listener still attached at that
- * instant (cleanup for the old pathname hasn't run yet) would record that
- * clamped 0 and clobber the real position. Reading scrollTop synchronously
- * during the click's capture phase — before React's bubble-phase onClick
- * triggers navigation and unmounts anything — sidesteps that race.
+ * Capture happens synchronously, at the moment a navigation is *initiated*,
+ * from two event sources — a capture-phase document 'click' and a 'popstate'
+ * listener — rather than from a useLayoutEffect cleanup keyed on [pathname].
+ * That alternative reads as simpler (one effect, capture in its cleanup,
+ * fires for every trigger) but reads main's scrollTop too late to be
+ * correct: React runs an *updating* component's layout-effect cleanup in
+ * the commit's layout phase, strictly after the commit's mutation phase —
+ * i.e. after the outgoing route's DOM has already been replaced by the
+ * incoming one. #main-content itself never unmounts (see app/layout.tsx;
+ * only its routed children do), so main.scrollTop survives, but by cleanup
+ * time it already reflects the NEW page's (freshly-mounted, near-zero)
+ * scrollTop, not the departing page's. Verified empirically: a scripted
+ * scroll-then-navigate-then-back round trip landed back at 0 instead of the
+ * scrolled position with that design.
+ *
+ * Capturing on 'click' (before React's bubble-phase onClick can trigger
+ * navigation) and on 'popstate' (before Next's own popstate handler —
+ * registered via a plain useEffect and wrapped in startTransition, see
+ * next/dist/client/components/app-router.js — can commit the new route)
+ * both read scrollTop before anything unmounts, so together they capture
+ * every real navigation trigger: click, Back, Forward, and swipe-gesture
+ * navigation (which also dispatches 'popstate'). A popstate fires for the
+ * departure leg of BOTH Back and Forward, so a scroll-B / Back-to-A /
+ * Forward-to-B round trip records and restores B's position on each leg,
+ * not just the first — leaving via the Back button used to never be
+ * captured at all, since the old design only ever captured on 'click'.
+ *
+ * isCrossRoutePop (lib/scroll-restoration.ts) guards against a second bug:
+ * 'popstate' also fires for a same-pathname history entry (e.g. Back after
+ * clicking a `#anchor` hash link). Treating that as a pop would arm isPop
+ * with nothing to reset it — the [pathname] effect below never re-runs when
+ * the pathname doesn't change — so the *next* ordinary push would be
+ * misread as a pop and jump to a stale saved position. Only a popstate that
+ * actually changes the pathname counts.
+ *
+ * The RESTORE side is a useLayoutEffect (not useEffect) so a POP never
+ * paints an intermediate frame at scrollTop 0 before jumping to the saved
+ * position.
  */
 const positions = new Map<string, number>()
 
@@ -35,26 +65,30 @@ export function MainScrollRestoration() {
     pathnameRef.current = pathname
     const isPop = useRef(false)
 
-    useEffect(() => {
-        const onPopState = () => {
-            isPop.current = true
-        }
-        const onClickCapture = () => {
+    useLayoutEffect(() => {
+        const capture = () => {
             const main = document.getElementById("main-content")
             if (main) positions.set(pathnameRef.current, main.scrollTop)
         }
+        const onPopState = () => {
+            capture()
+            if (isCrossRoutePop(pathnameRef.current, window.location.pathname)) {
+                isPop.current = true
+            }
+        }
         window.addEventListener("popstate", onPopState)
-        document.addEventListener("click", onClickCapture, true)
+        document.addEventListener("click", capture, true)
         return () => {
             window.removeEventListener("popstate", onPopState)
-            document.removeEventListener("click", onClickCapture, true)
+            document.removeEventListener("click", capture, true)
         }
     }, [])
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         const main = document.getElementById("main-content")
-        if (!main) return
-        main.scrollTop = isPop.current ? (positions.get(pathname) ?? 0) : 0
+        if (main) {
+            main.scrollTop = resolveRestoreScrollTop(isPop.current, positions.get(pathname))
+        }
         isPop.current = false
     }, [pathname])
 
