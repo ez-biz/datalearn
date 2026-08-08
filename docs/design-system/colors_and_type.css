@@ -201,22 +201,28 @@
     --radius-lg: 0.75rem;   /* 12px — cards, large buttons */
     --radius-xl: 1rem;      /* 16px — hero cards, modals */
     --radius-full: 9999px;  /* pills, dots, avatars */
+    /* Theme-invariant legacy alias, same value as --radius-md above.
+       app/globals.css declares it once in :root only and never redeclares
+       it in .light (see check-token-theme-parity.sh's THEME_INVARIANT
+       list) — mirrored the same way here. */
+    --radius: 0.5rem;
 
-    /* ── Shadows — soft, neutral; brand-tinted only on hero panels.
-       NOTE: the live product (app/globals.css) flattens every one of
-       these to `none` — in-product elevation is surface value + 1px
-       borders, with the sole exception being the light-mode active
-       sidebar pill (`--sidebar-active-shadow`, ~0 1px 2px hsl(240 20%
-       10% / 0.06)). This softer scale is kept here for standalone
-       mockups/marketing collateral only — don't assume it's used
-       in-product. See docs/design-system/README.md. ── */
-    --shadow-xs: 0 1px 2px hsl(220 13% 20% / 0.04);
-    --shadow-sm: 0 1px 2px hsl(220 13% 20% / 0.05), 0 1px 3px hsl(220 13% 20% / 0.06);
-    --shadow-md: 0 4px 6px -1px hsl(220 13% 20% / 0.08), 0 2px 4px -2px hsl(220 13% 20% / 0.06);
-    --shadow-lg: 0 10px 15px -3px hsl(220 13% 20% / 0.10), 0 4px 6px -4px hsl(220 13% 20% / 0.05);
-    --shadow-xl: 0 20px 25px -5px hsl(220 13% 20% / 0.10), 0 8px 10px -6px hsl(220 13% 20% / 0.04);
-    --shadow-2xl: 0 25px 50px -12px hsl(220 13% 20% / 0.18);
-    --shadow-primary: 0 10px 25px -5px hsl(var(--primary) / 0.15);
+    /* ── Shadows — flattened to match the live product exactly.
+       Elevation is surface value + 1px borders, not drop shadows: every
+       token below resolves to `none` in :root (dark, the default). The
+       one real shadow in the whole system, --shadow-sidebar-active, only
+       gets a non-none value in .light below — see docs/design-system/
+       README.md § Shadows for the full rule. Do not reintroduce a
+       richer marketing scale here; app/globals.css is the source of
+       truth and it has none. ── */
+    --shadow-xs: none;
+    --shadow-sm: none;
+    --shadow-md: none;
+    --shadow-lg: none;
+    --shadow-xl: none;
+    --shadow-2xl: none;
+    --shadow-primary: none;
+    --shadow-sidebar-active: none;
 
     /* ── Spacing — Tailwind scale, only the rungs we actually use ── */
     --space-1: 0.25rem;   /* 4px  */
@@ -344,6 +350,20 @@
     --secondary-foreground: var(--text);
     --input: var(--line);
     --ring: var(--primary);
+
+    /* Shadows — identical to :root except the one real shadow in the
+       system: a white active sidebar pill on a grey rail has no border
+       to define it against the panel fill, so it gets a real drop
+       shadow. It does not exist in dark mode — the active pill there is
+       defined by --panel-active fill instead. */
+    --shadow-xs: none;
+    --shadow-sm: none;
+    --shadow-md: none;
+    --shadow-lg: none;
+    --shadow-xl: none;
+    --shadow-2xl: none;
+    --shadow-primary: none;
+    --shadow-sidebar-active: 0 1px 2px hsl(240 20% 10% / 0.06);
 }
 
 /* ─────────────────────────────────────────────────────────────────
