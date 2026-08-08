@@ -248,4 +248,9 @@ describe("stripLeadingH1", () => {
     it("handles empty content", () => {
         assert.equal(stripLeadingH1(""), "")
     })
+
+    it("leaves an indented code block whose first line starts with '# ' alone", () => {
+        const md = "    # TODO: fix this\n    print(1)\n\nBody."
+        assert.equal(stripLeadingH1(md), md)
+    })
 })

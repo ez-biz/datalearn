@@ -11,10 +11,15 @@ import { cn } from "@/lib/utils"
  * accessibility defect and, in the reader, a visible duplicate.
  *
  * Only a heading at the very start is removed, so a legitimate H1 further
- * down (rare, but valid) survives.
+ * down (rare, but valid) survives. The leading-whitespace class is
+ * deliberately `[\r\n]*` (blank lines only), not `\s*` — `\s*` also
+ * consumes leading spaces/tabs, which would eat the indentation of a
+ * CommonMark indented code block that happens to start with a line like
+ * `    # TODO: ...`, silently deleting that line instead of leaving the
+ * block untouched.
  */
 export function stripLeadingH1(content: string): string {
-    return content.replace(/^\s*#\s+.*(?:\r?\n)+/, "")
+    return content.replace(/^[\r\n]*#\s+.*(?:\r?\n)+/, "")
 }
 
 interface LessonBodyProps {
@@ -23,6 +28,12 @@ interface LessonBodyProps {
     content: string
     /** Mono meta line above the title. */
     metaSlot?: ReactNode
+    /**
+     * Rendered below the summary and above the body. The topic article
+     * route puts its byline/reading-time row and tag chips here, which is
+     * where they have always sat.
+     */
+    belowSummarySlot?: ReactNode
     className?: string
 }
 
@@ -35,12 +46,13 @@ export function LessonBody({
     summary,
     content,
     metaSlot,
+    belowSummarySlot,
     className,
 }: LessonBodyProps) {
     return (
         <div className={cn("mx-auto w-full max-w-[76ch]", className)}>
             {metaSlot}
-            <h1 className="mt-2 text-[27px] font-semibold leading-tight tracking-[-0.025em] text-text lg:text-[34px]">
+            <h1 className="mt-2 text-[27px] font-semibold leading-tight tracking-[-0.025em] text-foreground lg:text-[34px]">
                 {title}
             </h1>
             {summary && (
@@ -48,6 +60,7 @@ export function LessonBody({
                     {summary}
                 </p>
             )}
+            {belowSummarySlot}
             <div className="article-body mt-8">
                 <MarkdownRenderer
                     content={stripLeadingH1(content)}
