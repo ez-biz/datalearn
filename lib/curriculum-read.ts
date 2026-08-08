@@ -61,14 +61,18 @@ export type TrackCurriculum = {
 export async function getTrackCurriculumForUser(
     trackSlug: string,
     userId: string | null,
+    options: { allowDraft?: boolean } = {},
 ): Promise<TrackCurriculum | null> {
-    // An unpublished track is invisible to learners — same rule as
-    // actions/tracks.ts and the published-lesson filter below. Publishing is
-    // a deliberate human action, not something a DRAFT row should leak by
-    // default. `findFirst` (not `findUnique`) because `status` makes the
-    // where-clause non-unique.
+    // An unpublished track is invisible to learners. Staff get a preview so
+    // a track can be reviewed before the deliberate human act of publishing
+    // it — see app/admin/layout.tsx for the matching ADMIN/MODERATOR gate.
+    // `findFirst` (not `findUnique`) because `status` makes the where-clause
+    // non-unique.
     const track = await prisma.track.findFirst({
-        where: { slug: trackSlug, status: "PUBLISHED" },
+        where: {
+            slug: trackSlug,
+            ...(options.allowDraft ? {} : { status: "PUBLISHED" }),
+        },
         select: {
             id: true,
             slug: true,

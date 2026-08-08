@@ -311,6 +311,36 @@ describe("recordLessonProgressForUser", () => {
     })
 })
 
+describe("getTrackCurriculumForUser draft visibility", () => {
+    it("hides a DRAFT track by default", async () => {
+        const result = await getTrackCurriculumForUser(DRAFT_TRACK_SLUG, null)
+        assert.equal(result, null)
+    })
+
+    it("hides a DRAFT track when allowDraft is explicitly false", async () => {
+        const result = await getTrackCurriculumForUser(DRAFT_TRACK_SLUG, null, {
+            allowDraft: false,
+        })
+        assert.equal(result, null)
+    })
+
+    it("returns a DRAFT track when allowDraft is true", async () => {
+        const result = await getTrackCurriculumForUser(DRAFT_TRACK_SLUG, null, {
+            allowDraft: true,
+        })
+        assert.ok(result, "expected the draft track to be returned to staff")
+        assert.equal(result.slug, DRAFT_TRACK_SLUG)
+        assert.ok(result.modules.length > 0)
+    })
+
+    it("still returns null for a slug that does not exist at all", async () => {
+        const result = await getTrackCurriculumForUser("no-such-track", null, {
+            allowDraft: true,
+        })
+        assert.equal(result, null)
+    })
+})
+
 describe("recordLessonProgress (session wrapper)", () => {
     it("with no session returns {ok:false, percent:0, completed:false} and writes no row", async () => {
         const countBefore = await prisma.lessonProgress.count({
