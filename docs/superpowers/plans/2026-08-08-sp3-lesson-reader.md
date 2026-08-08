@@ -1085,15 +1085,27 @@ import { cn } from "@/lib/utils"
  * down (rare, but valid) survives.
  */
 export function stripLeadingH1(content: string): string {
-    return content.replace(/^\s*#\s+.*(?:\r?\n)+/, "")
+    // `[\r\n]*`, not `\s*`: `\s` would also match the 4-space indent of a
+    // CommonMark indented code block, so a document opening with an
+    // indented block whose first line began with "# " would silently lose
+    // that line.
+    return content.replace(/^[\r\n]*#\s+.*(?:\r?\n)+/, "")
 }
 
 interface LessonBodyProps {
     title: string
     summary: string | null
     content: string
-    /** Mono meta line above the title. */
+    /** Mono meta line ABOVE the title — the reader's "Module 4 · Lesson 2". */
     metaSlot?: ReactNode
+    /**
+     * Slot BELOW the summary, above the body. The topic article route puts
+     * its byline/reading-time row and tag chips here, which is where they
+     * have always sat. Without this slot the extraction shoves them above
+     * the title, so a reader meets the metadata before learning what the
+     * article is called.
+     */
+    belowSummarySlot?: ReactNode
     className?: string
 }
 
@@ -1106,12 +1118,13 @@ export function LessonBody({
     summary,
     content,
     metaSlot,
+    belowSummarySlot,
     className,
 }: LessonBodyProps) {
     return (
         <div className={cn("mx-auto w-full max-w-[76ch]", className)}>
             {metaSlot}
-            <h1 className="mt-2 text-[27px] font-semibold leading-tight tracking-[-0.025em] text-text lg:text-[34px]">
+            <h1 className="mt-2 text-[27px] font-semibold leading-tight tracking-[-0.025em] text-foreground lg:text-[34px]">
                 {title}
             </h1>
             {summary && (
@@ -1119,6 +1132,7 @@ export function LessonBody({
                     {summary}
                 </p>
             )}
+            {belowSummarySlot}
             <div className="article-body mt-8">
                 <MarkdownRenderer
                     content={stripLeadingH1(content)}
@@ -1435,7 +1449,7 @@ export function CurriculumRail({
                                             <span
                                                 className={cn(
                                                     "text-[13px] leading-snug",
-                                                    current ? "text-text" : "text-text-3",
+                                                    current ? "text-foreground" : "text-text-3",
                                                 )}
                                             >
                                                 {lesson.title}
@@ -1528,7 +1542,7 @@ export function LessonHeader({
                         <li aria-hidden="true">/</li>
                         <li className="truncate">{crumb.module}</li>
                         <li aria-hidden="true">/</li>
-                        <li className="truncate text-text">{crumb.lesson}</li>
+                        <li className="truncate text-foreground">{crumb.lesson}</li>
                     </ol>
                 </nav>
 
@@ -1540,7 +1554,7 @@ export function LessonHeader({
                     {prev && (
                         <Link
                             href={`/learn/tracks/${trackSlug}/${prev.slug}`}
-                            className="inline-flex items-center gap-1 rounded-md border border-line-strong px-2 py-1 font-mono text-[11px] text-text-3 transition-colors duration-150 hover:text-text"
+                            className="inline-flex items-center gap-1 rounded-md border border-line-strong px-2 py-1 font-mono text-[11px] text-text-3 transition-colors duration-150 hover:text-foreground"
                         >
                             <ArrowLeft aria-hidden="true" className="size-3" />
                             <span className="hidden sm:inline">Prev</span>
@@ -1640,7 +1654,7 @@ export function CheckpointBlock({ checkpoints }: CheckpointBlockProps) {
                             ) : (
                                 <Circle aria-hidden="true" className="size-4 text-icon-off" />
                             )}
-                            <span className="text-sm text-text">
+                            <span className="text-sm text-foreground">
                                 {checkpoint.number}. {checkpoint.title}
                             </span>
                             <span
@@ -1689,7 +1703,7 @@ export function LessonPrevNext({ trackSlug, prev, next }: LessonPrevNextProps) {
                     <span className="font-mono text-[10px] uppercase tracking-wider text-text-dim">
                         ← Previous
                     </span>
-                    <p className="mt-1 text-sm text-text">{prev.title}</p>
+                    <p className="mt-1 text-sm text-foreground">{prev.title}</p>
                 </Link>
             ) : (
                 // Keeps the next card in the right-hand column on the first
@@ -1705,7 +1719,7 @@ export function LessonPrevNext({ trackSlug, prev, next }: LessonPrevNextProps) {
                     <span className="font-mono text-[10px] uppercase tracking-wider text-primary-text">
                         Next →
                     </span>
-                    <p className="mt-1 text-sm text-text">{next.title}</p>
+                    <p className="mt-1 text-sm text-foreground">{next.title}</p>
                 </Link>
             )}
         </nav>
@@ -1791,8 +1805,8 @@ export function LessonAsideRail({
                                         "block border-l-2 py-1 pl-2.5 text-[13px] transition-colors duration-150",
                                         entry.level === 3 && "pl-5",
                                         entry.slug === activeSlug
-                                            ? "border-l-primary bg-panel-raised text-text"
-                                            : "border-l-transparent text-text-3 hover:text-text",
+                                            ? "border-l-primary bg-panel-raised text-foreground"
+                                            : "border-l-transparent text-text-3 hover:text-foreground",
                                     )}
                                 >
                                     {entry.text}
@@ -1827,7 +1841,7 @@ export function LessonAsideRail({
 
             {!signedIn && (
                 <section className="rounded-lg border border-dashed border-line-strong p-3">
-                    <h2 className="flex items-center gap-1.5 text-[13px] font-medium text-text">
+                    <h2 className="flex items-center gap-1.5 text-[13px] font-medium text-foreground">
                         <Lock aria-hidden="true" className="size-3.5" />
                         Not signed in
                     </h2>
@@ -1876,7 +1890,7 @@ export function ContentsSheet({ toc, nextHref }: ContentsSheetProps) {
                     onClick={() => setOpen(true)}
                     disabled={toc.length === 0}
                     aria-expanded={open}
-                    className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-md border border-line-strong text-sm text-text disabled:opacity-40"
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-md border border-line-strong text-sm text-foreground disabled:opacity-40"
                 >
                     <List aria-hidden="true" className="size-4" />
                     Contents
@@ -2169,7 +2183,7 @@ Fetch the curriculum alongside the existing track query and render, below the ex
 ```tsx
 {curriculum && curriculum.modules.length > 0 && (
     <section className="mt-10">
-        <h2 className="mb-4 text-lg font-semibold text-text">Curriculum</h2>
+        <h2 className="mb-4 text-lg font-semibold text-foreground">Curriculum</h2>
         <ol className="space-y-6">
             {curriculum.modules.map((mod) => (
                 <li key={mod.id}>
@@ -2188,7 +2202,7 @@ Fetch the curriculum alongside the existing track query and render, below the ex
                                     href={`/learn/tracks/${slug}/${lesson.slug}`}
                                     className="flex min-h-11 items-center justify-between px-4 py-2.5 transition-colors duration-150 hover:bg-panel-hover"
                                 >
-                                    <span className="text-sm text-text">
+                                    <span className="text-sm text-foreground">
                                         {lesson.title}
                                     </span>
                                     {lesson.readingMinutes !== null && (
