@@ -11,15 +11,18 @@ import { cn } from "@/lib/utils"
  * accessibility defect and, in the reader, a visible duplicate.
  *
  * Only a heading at the very start is removed, so a legitimate H1 further
- * down (rare, but valid) survives. The leading-whitespace class is
- * deliberately `[\r\n]*` (blank lines only), not `\s*` — `\s*` also
- * consumes leading spaces/tabs, which would eat the indentation of a
- * CommonMark indented code block that happens to start with a line like
- * `    # TODO: ...`, silently deleting that line instead of leaving the
- * block untouched.
+ * down (rare, but valid) survives. The prefix admits whitespace-only blank
+ * lines and CommonMark's one-to-three-space ATX indentation, but deliberately
+ * stops short of four spaces. A broad `\s*` would consume the indentation of
+ * an indented code block that starts with `    # TODO: ...`, silently deleting
+ * it instead of leaving the block untouched.
  */
-export function stripLeadingH1(content: string): string {
-    return content.replace(/^[\r\n]*#\s+.*(?:\r?\n)+/, "")
+export function stripLeadingH1(content: string, title: string): string {
+    const match = content.match(
+        /^(?:[ \t]*\r?\n)* {0,3}# ([^\r\n]*)(?:(?:\r?\n)+|$)/,
+    )
+    if (!match || match[1] !== title) return content
+    return content.slice(match[0].length)
 }
 
 interface LessonBodyProps {
@@ -63,7 +66,7 @@ export function LessonBody({
             {belowSummarySlot}
             <div className="article-body mt-8">
                 <MarkdownRenderer
-                    content={stripLeadingH1(content)}
+                    content={stripLeadingH1(content, title)}
                     size="base"
                     withHeadingIds
                 />

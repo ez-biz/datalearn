@@ -24,7 +24,50 @@ let lessonAId: string
 let problemAId: string
 let writeLessonId: string
 let writeLessonSlug: string
+let raceLessonId: string
+let raceLessonSlug: string
 let draftLessonSlug: string
+
+async function waitForBlockedProgressWrites(expected: number, lockerPid: number) {
+    const deadline = Date.now() + 5_000
+    while (Date.now() < deadline) {
+        const result = await pool.query<{ count: string }>(
+            `SELECT count(*)
+             FROM pg_stat_activity
+             WHERE datname = current_database()
+               AND wait_event_type = 'Lock'
+               AND query LIKE '%LessonProgress%'
+               AND EXISTS (
+                   WITH RECURSIVE blocking_chain(pid) AS (
+                       SELECT unnest(pg_blocking_pids(pg_stat_activity.pid))
+                       UNION
+                       SELECT unnest(pg_blocking_pids(blocking_chain.pid))
+                       FROM blocking_chain
+                   )
+                   SELECT 1
+                   FROM blocking_chain
+                   WHERE pid = $1::integer
+               )`,
+            [lockerPid],
+        )
+        if (Number(result.rows[0]?.count ?? 0) >= expected) return
+        await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    throw new Error(`timed out waiting for ${expected} blocked LessonProgress write(s)`)
+}
+
+async function waitForBackendBlockedBy(blockedPid: number, lockerPid: number) {
+    const deadline = Date.now() + 5_000
+    while (Date.now() < deadline) {
+        const result = await pool.query<{ blocked: boolean }>(
+            `SELECT $2::integer = ANY(pg_blocking_pids($1::integer)) AS "blocked"`,
+            [blockedPid, lockerPid],
+        )
+        if (result.rows[0]?.blocked) return
+        await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    throw new Error(`timed out waiting for backend ${blockedPid} to block on ${lockerPid}`)
+}
 
 async function cleanup() {
     await prisma.submission.deleteMany({ where: { user: { email: { startsWith: PREFIX } } } })
@@ -142,6 +185,13 @@ before(async () => {
     const lw = await article("lesson-write")
     writeLessonId = lw.id
     writeLessonSlug = `${PREFIX}lesson-write`
+
+    // Isolated from the sequential progress tests below. The concurrency
+    // regression creates this row inside a lock-holding transaction so both
+    // requests must make their update decision before either can commit.
+    const lr = await article("lesson-race")
+    raceLessonId = lr.id
+    raceLessonSlug = `${PREFIX}lesson-race`
 
     // A DRAFT track — Blocker: an unpublished track's curriculum tree must
     // never leak to a reader, mirroring the DRAFT-lesson guard above one
@@ -278,6 +328,104 @@ describe("recordLessonProgressForUser", () => {
         })
         assert.equal(after?.percent, 100)
         assert.equal(after?.completedAt?.getTime(), before?.completedAt?.getTime())
+    })
+
+    it("keeps 100% and completion when a delayed 40% write follows it", async () => {
+        const locker = await pool.connect()
+        const noiseLocker = await pool.connect()
+        const noiseWriter = await pool.connect()
+        let committed = false
+        let noiseReleased = false
+        let high: Promise<Awaited<ReturnType<typeof recordLessonProgressForUser>>> | undefined
+        let low: Promise<Awaited<ReturnType<typeof recordLessonProgressForUser>>> | undefined
+        let noiseWrite: Promise<pg.QueryResult> | undefined
+
+        try {
+            await prisma.lessonProgress.create({
+                data: { userId, articleId: raceLessonId, percent: 0 },
+            })
+            await locker.query("BEGIN")
+            await noiseLocker.query("BEGIN")
+            await locker.query(
+                `SELECT 1
+                 FROM "LessonProgress"
+                 WHERE "userId" = $1 AND "articleId" = $2
+                 FOR UPDATE`,
+                [userId, raceLessonId],
+            )
+            await noiseLocker.query(
+                `SELECT 1
+                 FROM "LessonProgress"
+                 WHERE "userId" = $1 AND "articleId" = $2
+                 FOR UPDATE`,
+                [userId, writeLessonId],
+            )
+            const lockerPid = Number(
+                (await locker.query<{ pid: number }>("SELECT pg_backend_pid() AS pid"))
+                    .rows[0]?.pid,
+            )
+            const noiseLockerPid = Number(
+                (await noiseLocker.query<{ pid: number }>("SELECT pg_backend_pid() AS pid"))
+                    .rows[0]?.pid,
+            )
+            const noiseWriterPid = Number(
+                (await noiseWriter.query<{ pid: number }>("SELECT pg_backend_pid() AS pid"))
+                    .rows[0]?.pid,
+            )
+
+            // Both legacy calls read the committed 0 before trying to update
+            // it. The row lock queues 100 first and 40 second. Releasing it
+            // therefore makes the old read-then-write code deterministically
+            // overwrite 100 with 40, while the conflict update retains 100.
+            high = recordLessonProgressForUser(userId, raceLessonSlug, 100)
+            await waitForBlockedProgressWrites(1, lockerPid)
+            noiseWrite = noiseWriter.query(
+                `UPDATE "LessonProgress"
+                 SET "updatedAt" = now()
+                 WHERE "userId" = $1 AND "articleId" = $2`,
+                [userId, writeLessonId],
+            )
+            await waitForBackendBlockedBy(noiseWriterPid, noiseLockerPid)
+
+            // The global waiter wrongly counts high plus this unrelated
+            // locked update as two progress writes. A locker-scoped waiter
+            // must wait until the delayed low writer below is also blocked.
+            const bothRaceWrites = waitForBlockedProgressWrites(2, lockerPid)
+            const settledBeforeLow = await Promise.race([
+                bothRaceWrites.then(() => true),
+                new Promise<false>((resolve) => setTimeout(() => resolve(false), 50)),
+            ])
+            assert.equal(settledBeforeLow, false)
+
+            low = recordLessonProgressForUser(userId, raceLessonSlug, 40)
+            await bothRaceWrites
+
+            await locker.query("COMMIT")
+            committed = true
+
+            await noiseLocker.query("COMMIT")
+            noiseReleased = true
+            await noiseWrite
+
+            const [highResult, lowResult] = await Promise.all([high, low])
+            assert.deepEqual(highResult, { ok: true, percent: 100, completed: true })
+            assert.deepEqual(lowResult, { ok: true, percent: 100, completed: true })
+
+            const row = await prisma.lessonProgress.findUnique({
+                where: { userId_articleId: { userId, articleId: raceLessonId } },
+                select: { percent: true, completedAt: true },
+            })
+            assert.equal(row?.percent, 100)
+            assert.notEqual(row?.completedAt, null)
+        } finally {
+            if (!committed) await locker.query("ROLLBACK")
+            if (!noiseReleased) await noiseLocker.query("ROLLBACK")
+            locker.release()
+            noiseLocker.release()
+            noiseWriter.release()
+            await Promise.allSettled([high, low].filter(Boolean))
+            await Promise.allSettled([noiseWrite].filter(Boolean))
+        }
     })
 
     it("an unknown article slug returns {ok:false} and writes no row", async () => {

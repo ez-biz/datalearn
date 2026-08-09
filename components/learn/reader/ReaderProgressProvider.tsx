@@ -9,6 +9,10 @@ import {
 } from "react"
 import { recordLessonProgress } from "@/actions/curriculum"
 import { scrollPercent, shouldPersist } from "@/lib/reading-progress"
+import {
+    ProgressWriteQueue,
+    type ProgressWrite,
+} from "@/lib/reader-progress-write-queue"
 
 const ReaderProgressContext = createContext<number>(0)
 
@@ -37,6 +41,9 @@ export function ReaderProgressProvider({
     // handler needs the latest value without being re-created.
     const maxRef = useRef(initialPercent)
     const writtenRef = useRef(initialPercent)
+    const writeQueueRef = useRef(new ProgressWriteQueue(initialPercent))
+    const signedInRef = useRef(signedIn)
+    signedInRef.current = signedIn
     const frameRef = useRef<number | null>(null)
 
     // `initialPercent` is a useState/useRef seed — React honours it on first
@@ -61,19 +68,44 @@ export function ReaderProgressProvider({
         slugRef.current = articleSlug
         maxRef.current = initialPercent
         writtenRef.current = initialPercent
+        // Replace, rather than reset, the queue. In-flight requests retain
+        // their old instance identity, so an A → B → A response cannot
+        // acknowledge or clear the newly-created A queue.
+        writeQueueRef.current = new ProgressWriteQueue(initialPercent)
         setPercent(initialPercent)
     }
 
     useEffect(() => {
         const scroller = document.getElementById("app-scroll")
         if (!scroller) return
+        const queue = writeQueueRef.current
 
-        function persist(value: number) {
+        function send(write: ProgressWrite) {
+            void recordLessonProgress(articleSlug, write.percent)
+                .then((result) => {
+                    if (writeQueueRef.current !== queue) return
+
+                    const acknowledgement = queue.acknowledge(write, result)
+                    if (!acknowledgement.accepted) return
+                    if (result.ok) {
+                        writtenRef.current = queue.acknowledged
+                    }
+                    if (acknowledgement.next && signedInRef.current) {
+                        send(acknowledgement.next)
+                    }
+                })
+                .catch(() => {
+                    if (writeQueueRef.current !== queue) return
+                    // Keep the local maximum pending. A later boundary or
+                    // visibility flush will retry without surfacing an error.
+                    queue.acknowledge(write, { ok: false, percent: 0 })
+                })
+        }
+
+        function persist(force = false) {
             if (!signedIn) return
-            writtenRef.current = value
-            // Fire-and-forget: a failed progress write must never surface to
-            // a reader, and the next boundary retries anyway.
-            void recordLessonProgress(articleSlug, value).catch(() => {})
+            const next = queue.flush(maxRef.current, force)
+            if (next !== null) send(next)
         }
 
         function measure() {
@@ -87,7 +119,7 @@ export function ReaderProgressProvider({
             if (next <= maxRef.current) return
             maxRef.current = next
             setPercent(next)
-            if (shouldPersist(writtenRef.current, next)) persist(next)
+            if (shouldPersist(writtenRef.current, next)) persist()
         }
 
         function onScroll() {
@@ -99,7 +131,7 @@ export function ReaderProgressProvider({
             if (document.visibilityState !== "hidden") return
             // Flush what the last boundary missed, so closing the tab
             // mid-lesson does not lose up to 10% of progress.
-            if (maxRef.current > writtenRef.current) persist(maxRef.current)
+            if (maxRef.current > writtenRef.current) persist(true)
         }
 
         // Measure once on mount. A lesson short enough not to scroll has no

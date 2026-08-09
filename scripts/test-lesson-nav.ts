@@ -216,42 +216,68 @@ describe("lessonBreadcrumb", () => {
 })
 
 describe("stripLeadingH1", () => {
-    it("removes a leading H1", () => {
-        const out = stripLeadingH1("# Sessionisation\n\nBody text.")
+    it("removes a leading H1 matching the rendered title", () => {
+        const out = stripLeadingH1("# Sessionisation\n\nBody text.", "Sessionisation")
         assert.equal(out, "Body text.")
     })
 
     it("removes a leading H1 after blank lines", () => {
-        const out = stripLeadingH1("\n\n# Sessionisation\n\nBody text.")
+        const out = stripLeadingH1("\n\n# Sessionisation\n\nBody text.", "Sessionisation")
         assert.equal(out, "Body text.")
+    })
+
+    it("removes a matching H1 at end of file", () => {
+        assert.equal(stripLeadingH1("# Sessionisation", "Sessionisation"), "")
+    })
+
+    it("removes a matching H1 with one to three leading spaces", () => {
+        for (const indent of [" ", "  ", "   "]) {
+            assert.equal(
+                stripLeadingH1(`${indent}# Sessionisation\n\nBody text.`, "Sessionisation"),
+                "Body text.",
+            )
+        }
+    })
+
+    it("removes a matching H1 after whitespace-only blank prefix lines", () => {
+        const out = stripLeadingH1(
+            " \t\r\n\t \n  # Sessionisation\n\nBody text.",
+            "Sessionisation",
+        )
+        assert.equal(out, "Body text.")
+    })
+
+    it("preserves a leading H1 with a different authored title", () => {
+        const md = "# Query plans in practice\n\nBody text."
+        assert.equal(stripLeadingH1(md, "Introduction to indexes"), md)
     })
 
     it("leaves content without a leading H1 alone", () => {
         const md = "Body text.\n\n## A section"
-        assert.equal(stripLeadingH1(md), md)
+        assert.equal(stripLeadingH1(md, "Lesson title"), md)
     })
 
     it("leaves an H2 alone", () => {
         const md = "## A section\n\nBody."
-        assert.equal(stripLeadingH1(md), md)
+        assert.equal(stripLeadingH1(md, "Lesson title"), md)
     })
 
     it("removes ONLY the first H1, keeping later ones", () => {
-        const out = stripLeadingH1("# One\n\nBody.\n\n# Two\n\nMore.")
+        const out = stripLeadingH1("# One\n\nBody.\n\n# Two\n\nMore.", "One")
         assert.equal(out, "Body.\n\n# Two\n\nMore.")
     })
 
     it("does not strip an H1 that appears after body text", () => {
         const md = "Intro.\n\n# Later heading\n\nBody."
-        assert.equal(stripLeadingH1(md), md)
+        assert.equal(stripLeadingH1(md, "Later heading"), md)
     })
 
     it("handles empty content", () => {
-        assert.equal(stripLeadingH1(""), "")
+        assert.equal(stripLeadingH1("", "Lesson title"), "")
     })
 
     it("leaves an indented code block whose first line starts with '# ' alone", () => {
         const md = "    # TODO: fix this\n    print(1)\n\nBody."
-        assert.equal(stripLeadingH1(md), md)
+        assert.equal(stripLeadingH1(md, "TODO: fix this"), md)
     })
 })
