@@ -1888,7 +1888,7 @@ export function LessonAsideRail({
                         Reading is free. Sign in to keep the checkmarks and the
                         streak.
                     </p>
-                    <LinkButton href="/signin" className="mt-3 w-full" size="sm">
+                    <LinkButton href="/auth/signin" className="mt-3 w-full" size="sm">
                         Sign in
                     </LinkButton>
                 </section>
