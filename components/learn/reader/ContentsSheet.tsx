@@ -18,14 +18,22 @@ interface ContentsSheetProps {
 export function ContentsSheet({ toc, nextHref }: ContentsSheetProps) {
     const [open, setOpen] = useState(false)
     const triggerRef = useRef<HTMLButtonElement>(null)
+    // Defaults to "restore". The three CANCEL vectors (X button, backdrop,
+    // Escape) leave this true, so closing the sheet returns focus to the
+    // trigger. The TOC link's onClick flips it to false before closing:
+    // that path is a NAVIGATE, not a cancel, and the browser's own
+    // fragment-navigation focus/scroll already lands the user where they
+    // asked to go — pulling focus back to a footer button afterward would
+    // fight that instead of preserving the user's place.
+    const restoreFocusRef = useRef(true)
 
     // Registered only while the sheet is open, torn down the moment it
     // isn't — via whichever path got it there (X button, backdrop,
-    // Escape, or a TOC link). The cleanup also returns focus to the
-    // trigger: this is a disclosure, not a modal (see the `role="region"`
-    // below), so there's no focus trap to release, but a keyboard user who
-    // opened the sheet should not be dumped at the top of the document
-    // when it closes.
+    // Escape, or a TOC link). The cleanup conditionally returns focus to
+    // the trigger: this is a disclosure, not a modal (see the
+    // `role="region"` below), so there's no focus trap to release, but a
+    // keyboard user who dismissed the sheet without navigating anywhere
+    // should not be dumped at the top of the document.
     useEffect(() => {
         if (!open) return
         function onKeyDown(event: KeyboardEvent) {
@@ -34,7 +42,8 @@ export function ContentsSheet({ toc, nextHref }: ContentsSheetProps) {
         document.addEventListener("keydown", onKeyDown)
         return () => {
             document.removeEventListener("keydown", onKeyDown)
-            triggerRef.current?.focus()
+            if (restoreFocusRef.current) triggerRef.current?.focus()
+            restoreFocusRef.current = true
         }
     }, [open])
 
@@ -94,7 +103,14 @@ export function ContentsSheet({ toc, nextHref }: ContentsSheetProps) {
                                 <li key={entry.slug}>
                                     <a
                                         href={`#${entry.slug}`}
-                                        onClick={() => setOpen(false)}
+                                        onClick={() => {
+                                            // The browser's fragment navigation owns focus on
+                                            // this path; returning it to the trigger would
+                                            // scroll the user to their heading and then yank
+                                            // focus to a footer button.
+                                            restoreFocusRef.current = false
+                                            setOpen(false)
+                                        }}
                                         className={`block min-h-11 py-2.5 text-sm text-text-3 ${
                                             entry.level === 3 ? "pl-4" : ""
                                         }`}
