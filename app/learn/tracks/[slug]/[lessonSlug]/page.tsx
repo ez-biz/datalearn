@@ -100,7 +100,31 @@ export default async function LessonPage({ params }: Props) {
                 next={next}
             />
 
-            <div className="flex min-h-0 flex-1">
+            {/*
+                No `min-h-0` on this row, and that is load-bearing. `min-h-0`
+                overrides a flex item's `min-height: auto`, which pinned this
+                row to the viewport remainder (100dvh - 3rem) while the article
+                ran to ~5300px. Two things broke as a result, and neither is
+                obvious from a first-viewport screenshot:
+
+                1. Backgrounds paint the BORDER BOX, not the overflow. So
+                   <main>'s `bg-panel-raised` and the rails' `bg-panel` and
+                   border lines stopped at the first viewport and the article
+                   sat on bare `--canvas` below the fold. In dark that is
+                   #0E0E11 under #111116 — near-invisible. In LIGHT it is
+                   #FAFAFB under a #FFFFFF article: a visible seam and a colour
+                   change across the fold, on the flagship screen.
+                2. Both rails declare `h-[calc(100dvh-3rem)]` — the row's exact
+                   height — so their containing block was the same size as they
+                   were and `sticky` had ZERO range. They scrolled away
+                   (measured `top: -1952` after a 2000px scroll).
+
+                Without it the row's automatic minimum is its content height:
+                #app-scroll scrolls the row instead of <main> overflowing,
+                <main> stretches to the whole article so its background paints
+                all of it, and the rails get a real sticky range.
+            */}
+            <div className="flex flex-1">
                 <CurriculumRail
                     curriculum={curriculum}
                     currentSlug={lessonSlug}
@@ -137,20 +161,13 @@ export default async function LessonPage({ params }: Props) {
                     />
 
                     {/*
-                        `pb-24` lives here, not on <main>. <main> is a
-                        `flex-1 min-w-0` child of a `min-h-0 flex-1` row, so
-                        its BOX is only the viewport remainder (measured: 796px
-                        on a 390x844 viewport) while its CONTENT runs to
-                        ~5283px and overflows it. A padding-bottom on <main>
-                        therefore paints at y=748 — in the middle of the
-                        article — and creates no space after the last element.
-                        Measured with it there: the sign-in card's button sat
-                        at 787-831 under the `fixed bottom-0 z-40` ContentsSheet
-                        bar (top 783), and elementFromPoint on the button
-                        returned the bar, not the link. On the last child,
-                        which the overflow carries, the padding does what it
-                        says. 96px below `lg` clears the 61px bar with room;
-                        `lg:pb-14` is plain breathing room, there being no bar.
+                        `pb-24` lives on this column rather than on <main> so
+                        the clearance travels with the reading column it
+                        protects. It clears the `fixed bottom-0 z-40`
+                        ContentsSheet bar, measured at 61px (a 44px button plus
+                        2*8px of `p-2` plus the 1px `border-t`) — 96px leaves
+                        35px of margin. `lg:pb-14` is plain breathing room,
+                        there being no bar at that width.
                     */}
                     <div className="mx-auto w-full max-w-[76ch] pb-24 lg:pb-14">
                         <CheckpointBlock checkpoints={lesson.checkpoints} />
@@ -160,10 +177,9 @@ export default async function LessonPage({ params }: Props) {
                             Below `lg` the aside rail is hidden, and this is a
                             focus route — ConsoleChrome suppresses MobileTabBar
                             and its sign-in slot too — so without this the page
-                            has no sign-in affordance at all on a phone. It
-                            clears the `fixed bottom-0` ContentsSheet bar
-                            (44px button + 2*8px padding = 60px) via <main>'s
-                            96px `pb-24`.
+                            has no sign-in affordance at all on a phone. The
+                            61px ContentsSheet bar is cleared by this column's
+                            `pb-24`, above.
                         */}
                         {!signedIn && (
                             <LessonSignInNudge className="mt-6 lg:hidden" size="lg" />
