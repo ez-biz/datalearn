@@ -1953,8 +1953,17 @@ export function ContentsSheet({ toc, nextHref }: ContentsSheetProps) {
                         onClick={() => setOpen(false)}
                         className="absolute inset-0 bg-canvas-deep/70"
                     />
+                    {/* Deliberately NOT role="dialog". That role asserts a
+                        modal contract — focus moved in, trapped, returned on
+                        close, Escape to dismiss — and a screen reader will
+                        announce "dialog" and then let the user Tab straight
+                        out into the page behind. This is a flat list of anchor
+                        links with two labelled close buttons: a disclosure,
+                        not a modal. Model it honestly rather than hand-rolling
+                        a focus trap over a dynamically-sized TOC. Escape-to-
+                        close and focus-return are still provided below. */}
                     <div
-                        role="dialog"
+                        role="region"
                         aria-label="Contents"
                         className="absolute inset-x-0 bottom-0 max-h-[70vh] overflow-y-auto rounded-t-xl border-t border-line bg-panel-raised p-4"
                     >
