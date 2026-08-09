@@ -278,6 +278,7 @@ Following SP2's pattern, because its real defects were all found in pure predica
 4. **Problem pass rate** — needs a stored aggregate or a `[problemId, status]` index on `Submission`. Meaningless until submission volume is real.
 5. **Publish `analyst-interview-prep`** — a human decision, deliberately not made by SP3.
 6. **SP4 replaces** the interim module-grouped list on `/learn/tracks/[slug]`.
+7. **Guard the utility side of the token contract, not just the variable side.** `npm run check:token-parity` cannot catch a missing Tailwind utility. It diffs `:root` against `.light` and never inspects the `@theme inline` block, which is where the variable-to-utility mapping lives. Two dead classes shipped in this project — `text-text` and `text-primary-fg` — and both passed that guard cleanly. A guard that asserts every `--color-<name>` referenced by a `text-`/`bg-`/`border-` utility in the codebase actually exists in `@theme inline` would have caught both.
 
 ## Out of scope
 
