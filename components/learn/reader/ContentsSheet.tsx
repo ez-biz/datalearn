@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowRight, List, X } from "lucide-react"
 import type { TocEntry } from "@/lib/markdown-toc"
@@ -17,11 +17,32 @@ interface ContentsSheetProps {
  */
 export function ContentsSheet({ toc, nextHref }: ContentsSheetProps) {
     const [open, setOpen] = useState(false)
+    const triggerRef = useRef<HTMLButtonElement>(null)
+
+    // Registered only while the sheet is open, torn down the moment it
+    // isn't — via whichever path got it there (X button, backdrop,
+    // Escape, or a TOC link). The cleanup also returns focus to the
+    // trigger: this is a disclosure, not a modal (see the `role="region"`
+    // below), so there's no focus trap to release, but a keyboard user who
+    // opened the sheet should not be dumped at the top of the document
+    // when it closes.
+    useEffect(() => {
+        if (!open) return
+        function onKeyDown(event: KeyboardEvent) {
+            if (event.key === "Escape") setOpen(false)
+        }
+        document.addEventListener("keydown", onKeyDown)
+        return () => {
+            document.removeEventListener("keydown", onKeyDown)
+            triggerRef.current?.focus()
+        }
+    }, [open])
 
     return (
         <>
             <div className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t border-line bg-panel p-2 lg:hidden print:hidden">
                 <button
+                    ref={triggerRef}
                     type="button"
                     onClick={() => setOpen(true)}
                     disabled={toc.length === 0}
@@ -51,7 +72,7 @@ export function ContentsSheet({ toc, nextHref }: ContentsSheetProps) {
                         className="absolute inset-0 bg-canvas-deep/70"
                     />
                     <div
-                        role="dialog"
+                        role="region"
                         aria-label="Contents"
                         className="absolute inset-x-0 bottom-0 max-h-[70vh] overflow-y-auto rounded-t-xl border-t border-line bg-panel-raised p-4"
                     >
