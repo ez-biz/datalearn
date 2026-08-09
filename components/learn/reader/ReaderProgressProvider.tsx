@@ -39,6 +39,31 @@ export function ReaderProgressProvider({
     const writtenRef = useRef(initialPercent)
     const frameRef = useRef<number | null>(null)
 
+    // `initialPercent` is a useState/useRef seed — React honours it on first
+    // mount only and silently ignores it on every later render. On the
+    // Prev/Next path between lessons, React may reconcile this provider in
+    // place (same component, new props) rather than remounting it, so
+    // `articleSlug` can change while `maxRef`/`writtenRef`/`percent` still
+    // hold the PREVIOUS lesson's values. Left alone, the monotonic guard in
+    // `measure()` (`if (next <= maxRef.current) return`) then reads as "this
+    // lesson already reached lesson 1's progress" and silently blocks the
+    // new lesson's real progress from ever registering or persisting until
+    // it exceeds the leaked value — if lesson 1 hit 100, lesson 2 could
+    // never complete at all. This render-phase reset (React's documented
+    // "adjusting state when a prop changes" pattern) detects the slug
+    // change during render and reseeds all three before paint, so a
+    // reconciled-in-place provider behaves identically to a remounted one.
+    // Deliberately keyed on `articleSlug` ALONE, not folded into the effect
+    // below (whose deps also include `signedIn`) — a sign-in change
+    // mid-lesson must not wipe the reader's in-progress percent.
+    const slugRef = useRef(articleSlug)
+    if (slugRef.current !== articleSlug) {
+        slugRef.current = articleSlug
+        maxRef.current = initialPercent
+        writtenRef.current = initialPercent
+        setPercent(initialPercent)
+    }
+
     useEffect(() => {
         const scroller = document.getElementById("app-scroll")
         if (!scroller) return
