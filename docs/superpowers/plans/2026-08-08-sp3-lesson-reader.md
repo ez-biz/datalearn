@@ -1583,9 +1583,15 @@ export function LessonHeader({
                 </span>
 
                 <div className="flex items-center gap-2">
+                    {/* aria-label, not just the span: below `sm` the label
+                        span is display:none, which removes it from the
+                        accessibility tree, and the icon is aria-hidden — so
+                        without this the link has NO accessible name at exactly
+                        the viewport where only the icon shows (WCAG 4.1.2). */}
                     {prev && (
                         <Link
                             href={`/learn/tracks/${trackSlug}/${prev.slug}`}
+                            aria-label="Previous lesson"
                             className="inline-flex items-center gap-1 rounded-md border border-line-strong px-2 py-1 font-mono text-[11px] text-text-3 transition-colors duration-150 hover:text-foreground"
                         >
                             <ArrowLeft aria-hidden="true" className="size-3" />
@@ -1595,7 +1601,8 @@ export function LessonHeader({
                     {next && (
                         <Link
                             href={`/learn/tracks/${trackSlug}/${next.slug}`}
-                            className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 font-mono text-[11px] text-primary-fg transition-colors duration-150"
+                            aria-label="Next lesson"
+                            className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 font-mono text-[11px] text-primary-foreground transition-colors duration-150"
                         >
                             <span className="hidden sm:inline">Next</span>
                             <ArrowRight aria-hidden="true" className="size-3" />
@@ -1930,7 +1937,7 @@ export function ContentsSheet({ toc, nextHref }: ContentsSheetProps) {
                 {nextHref && (
                     <Link
                         href={nextHref}
-                        className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-md bg-primary text-sm font-medium text-primary-fg"
+                        className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-md bg-primary text-sm font-medium text-primary-foreground"
                     >
                         Next lesson
                         <ArrowRight aria-hidden="true" className="size-4" />
