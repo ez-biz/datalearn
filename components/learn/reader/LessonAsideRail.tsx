@@ -1,9 +1,9 @@
 "use client"
 
-import { CircleCheck, Lock } from "lucide-react"
-import { LinkButton } from "@/components/ui/Button"
+import { CircleCheck } from "lucide-react"
 import type { TocEntry } from "@/lib/markdown-toc"
 import { cn } from "@/lib/utils"
+import { LessonSignInNudge } from "./LessonSignInNudge"
 import { useReaderProgress } from "./ReaderProgressProvider"
 
 interface LessonAsideRailProps {
@@ -28,7 +28,20 @@ export function LessonAsideRail({
             : Math.max(0, Math.round(readingMinutes * (1 - percent / 100)))
 
     return (
-        <aside className="w-[250px] shrink-0 space-y-4 overflow-y-auto border-l border-line bg-panel px-3 py-4">
+        /*
+            The `lg` gate lives here rather than on the call site, and the
+            breakpoint is not a free choice: `ContentsSheet` is `lg:hidden`,
+            so `lg:block` is its exact complement — below it the sheet owns
+            the table of contents, at and above it this rail does. Every
+            width has exactly one owner, none has zero. Do not "restore" the
+            `xl` used by `CurriculumRail`: that would leave the 1024–1280
+            band with no Contents at all.
+
+            Ungated, the fixed 250px is held at every width — measured on a
+            390px viewport it squeezed <main> to 140px and the reading column
+            to 100px.
+        */
+        <aside className="sticky top-12 hidden h-[calc(100dvh-3rem)] w-[250px] shrink-0 space-y-4 overflow-y-auto border-l border-line bg-panel px-3 py-4 lg:block">
             {toc.length > 0 && (
                 <nav aria-label="Contents">
                     <h2 className="mb-2 font-mono text-[10px] uppercase tracking-wider text-text-muted">
@@ -77,21 +90,7 @@ export function LessonAsideRail({
                 </div>
             </section>
 
-            {!signedIn && (
-                <section className="rounded-lg border border-dashed border-line-strong p-3">
-                    <h2 className="flex items-center gap-1.5 text-[13px] font-medium text-foreground">
-                        <Lock aria-hidden="true" className="size-3.5" />
-                        Not signed in
-                    </h2>
-                    <p className="mt-1.5 text-[13px] leading-relaxed text-text-muted">
-                        Reading is free. Sign in to keep the checkmarks and the
-                        streak.
-                    </p>
-                    <LinkButton href="/auth/signin" className="mt-3 w-full" size="sm">
-                        Sign in
-                    </LinkButton>
-                </section>
-            )}
+            {!signedIn && <LessonSignInNudge />}
         </aside>
     )
 }
