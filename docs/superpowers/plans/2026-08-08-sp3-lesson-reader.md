@@ -2328,19 +2328,39 @@ replaces this."
 - Modify: `app/learn/tracks/[slug]/[lessonSlug]/page.tsx`
 - Modify: `components/learn/reader/LessonAsideRail.tsx`
 
-| Width | Layout |
-|---|---|
-| ≥1280 (`xl`) | three columns, 270 / 1fr / 250 |
-| 1024–1280 | curriculum rail hidden; right rail hidden; single reading column |
-| <1024 (`lg`) | single column; sticky footer with Contents + Next lesson |
+| Width | Curriculum rail | Contents | Layout |
+|---|---|---|---|
+| ≥1280 (`xl`) | visible (270px) | aside rail (250px) | three columns |
+| 1024–1280 (`lg`) | hidden | **aside rail** | two columns |
+| <1024 | hidden | **`ContentsSheet`** | single column + sticky footer |
+
+**The aside gate is `lg`, NOT `xl`.** An earlier draft of this table said "right rail hidden" at 1024–1280 while `ContentsSheet` is `lg:hidden` — which left that whole band with **no owner for the table of contents at all**. `lg` on the aside is the exact complement of `ContentsSheet`'s `lg:hidden`, so Contents has exactly one owner at every width. Do not "restore" `xl` here.
 
 - [ ] **Step 1: Gate the rails**
 
-The curriculum rail already carries `hidden xl:block` from Task 13. `LessonAsideRail` takes no `className` prop, so set the responsive and sticky classes directly on its root `<aside>`:
+The curriculum rail already carries `hidden xl:block` from Task 13.
+
+Task 13 also had to wrap `LessonAsideRail`'s call site in `hidden shrink-0 lg:flex`, because the aside's own root had no responsive class and its fixed 250px squeezed `<main>` to 140px — a ~100px reading column — at 390px. That wrapper is correct and must not be duplicated.
+
+So: move the gate onto the aside's own root and REMOVE the call-site wrapper, rather than leaving both. Leaving both would nest an `lg`-gated wrapper around an independently-gated child, which is dead weight and drifts the moment one is edited.
 
 ```tsx
-className="sticky top-12 hidden h-[calc(100dvh-3rem)] w-[250px] shrink-0 space-y-4 overflow-y-auto border-l border-line bg-panel px-3 py-4 xl:block"
+className="sticky top-12 hidden h-[calc(100dvh-3rem)] w-[250px] shrink-0 space-y-4 overflow-y-auto border-l border-line bg-panel px-3 py-4 lg:block"
 ```
+
+- [ ] **Step 1b: Give the mobile sign-in nudge an owner**
+
+The signed-out "Reading is free. Sign in to keep the checkmarks and the streak." card lives in `LessonAsideRail`, which is now hidden below `lg`. On a focus route `ConsoleChrome` also suppresses `MobileTabBar` and its `signInSlot`, so below `lg` there is currently **no sign-in affordance anywhere on the page**.
+
+This is a gap in a new route rather than a shipped regression, and the header's logo does link back to a non-focus route that restores the shell. It still needs an owner rather than a note in a report — this project has a documented habit of losing capability across refactors.
+
+Render a compact `lg:hidden` version of the same nudge at the end of `<main>`, after `LessonPrevNext`, shown only when `signedIn` is false. Reuse the exact copy above; link to `/auth/signin`.
+
+- [ ] **Step 1c: Fix the draft banner's copy for ARCHIVED tracks**
+
+`isDraft` is computed as `curriculum.status !== "PUBLISHED"`, but `TrackStatus` is `DRAFT | PUBLISHED | ARCHIVED`. An archived track therefore renders "Draft — not visible to learners." The second half is true; the word "Draft" is not.
+
+Derive the label from the status instead of assuming DRAFT — e.g. `` `${curriculum.status === "ARCHIVED" ? "Archived" : "Draft"} — not visible to learners.` `` — keeping the same warning styling for both.
 
 - [ ] **Step 2: Confirm the mobile footer has no tab bar to clear**
 
@@ -2351,6 +2371,11 @@ Verify at 390×844 in a device emulator: the footer touches the bottom edge, no 
 - [ ] **Step 3: Verify each breakpoint**
 
 At 1440, 1200 and 390 wide, confirm the table above. Reading column stays legible at every width; code blocks scroll horizontally rather than wrap.
+
+Two specific checks, since both were live defects earlier:
+
+- At **1200px** (the `lg`–`xl` band), Contents must be reachable — the aside rail is visible and `ContentsSheet` is hidden. Exactly one of them, never zero.
+- At **390px**, `<main>` must get the full viewport width and the reading column must not collapse. Before Task 13's wrapper the aside held its 250px here and left a ~100px reading column. Measure `main`'s width and report the number.
 
 - [ ] **Step 4: Commit**
 
