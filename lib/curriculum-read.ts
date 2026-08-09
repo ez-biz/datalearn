@@ -1,3 +1,4 @@
+import type { TrackStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { excludeLockedProblems } from "@/lib/contest-locks"
 import {
@@ -41,6 +42,12 @@ export type TrackCurriculum = {
     trackId: string
     slug: string
     name: string
+    /**
+     * Only ever anything but PUBLISHED for a staff viewer — the where-clause
+     * below filters unpublished tracks out for everyone else. The reader
+     * uses it to show its "Draft — not visible to learners" banner.
+     */
+    status: TrackStatus
     modules: CurriculumModule[]
     rollup: TrackRollup
 }
@@ -77,6 +84,7 @@ export async function getTrackCurriculumForUser(
             id: true,
             slug: true,
             name: true,
+            status: true,
             modules: {
                 orderBy: { position: "asc" },
                 select: {
@@ -220,6 +228,7 @@ export async function getTrackCurriculumForUser(
         trackId: track.id,
         slug: track.slug,
         name: track.name,
+        status: track.status,
         modules: modules.map((m, i) => ({
             ...m,
             unlocked: isModuleUnlocked(rollups, i),

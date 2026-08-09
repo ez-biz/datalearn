@@ -35,6 +35,7 @@ function fixture(): TrackCurriculum {
         trackId: "t1",
         slug: "analyst-interview-prep",
         name: "Analyst Interview Prep",
+        status: "PUBLISHED",
         rollup: {
             lessonsDone: 1, lessonsTotal: 3,
             problemsDone: 0, problemsTotal: 0, percent: 33,
