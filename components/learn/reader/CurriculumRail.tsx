@@ -27,6 +27,17 @@ export function CurriculumRail({
     trackSlug,
     className,
 }: CurriculumRailProps) {
+    // One article may appear in two modules of the same track. findLesson
+    // resolves such a slug to the occurrence in the LOWEST module position;
+    // the rail must highlight that same occurrence, or a cross-listed lesson
+    // lights up two module headers with two different n/m fractions and
+    // announces "current page" twice. `modules` arrives ordered by position,
+    // so the first match is the lowest.
+    const currentModuleId =
+        curriculum.modules.find((mod) =>
+            mod.lessons.some((lesson) => lesson.slug === currentSlug),
+        )?.id ?? null
+
     return (
         <nav
             aria-label="Curriculum"
@@ -51,7 +62,7 @@ export function CurriculumRail({
                             <span
                                 className={cn(
                                     "font-mono text-[10px] uppercase tracking-wider",
-                                    mod.lessons.some((l) => l.slug === currentSlug)
+                                    mod.id === currentModuleId
                                         ? "text-primary"
                                         : "text-text-dim",
                                 )}
@@ -65,7 +76,9 @@ export function CurriculumRail({
 
                         <ul>
                             {mod.lessons.map((lesson) => {
-                                const current = lesson.slug === currentSlug
+                                const current =
+                                    lesson.slug === currentSlug &&
+                                    mod.id === currentModuleId
                                 return (
                                     <li key={`${mod.id}-${lesson.articleId}`}>
                                         <Link
