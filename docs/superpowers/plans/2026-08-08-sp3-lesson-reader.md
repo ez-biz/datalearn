@@ -1234,6 +1234,24 @@ export function ReaderProgressProvider({
     const writtenRef = useRef(initialPercent)
     const frameRef = useRef<number | null>(null)
 
+    // React honours a useState/useRef initial argument on first mount only.
+    // Navigating lesson -> lesson via Prev/Next reconciles this provider in
+    // place, so without this reset lesson 2 inherits lesson 1's maxRef — and
+    // the monotonic guard below then blocks lesson 2's real progress from
+    // ever registering. If lesson 1 was complete, maxRef is 100 and lesson 2
+    // can never be completed at all. Silent, and it looks like it works.
+    //
+    // Keyed on articleSlug ALONE, deliberately: folding this into the effect
+    // (whose deps include signedIn) would wipe a reader's progress the moment
+    // their sign-in state changed mid-lesson.
+    const slugRef = useRef(articleSlug)
+    if (slugRef.current !== articleSlug) {
+        slugRef.current = articleSlug
+        maxRef.current = initialPercent
+        writtenRef.current = initialPercent
+        setPercent(initialPercent)
+    }
+
     useEffect(() => {
         const scroller = document.getElementById("app-scroll")
         if (!scroller) return
