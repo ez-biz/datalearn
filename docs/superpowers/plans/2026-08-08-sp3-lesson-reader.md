@@ -2371,6 +2371,10 @@ The suite lives in `tests/e2e/` (see `playwright.config.ts` `testDir`). There is
 
 The spec **seeds its own track, module, lessons and checkpoint** rather than asserting against `analyst-interview-prep`. Depending on seed data would make the suite fail on any database that has not been seeded, and every other spec in this directory seeds its own fixtures.
 
+Give the seeded lesson body a distinctive canary string — `const DRAFT_CANARY = "draft-canary-must-not-leak"` — and put it in the article `content`. The draft-visibility tests assert that string is absent, which proves unpublished content did not leak. That is a stronger and more durable claim than an HTTP status.
+
+**Do not assert on HTTP status for not-found.** `notFound()` returns 200 app-wide in this build — Next's streaming commits the status before the throw — and this is true even for a nonexistent path. `tests/e2e/security.spec.ts:117` documents it, and every page-level not-found test in this repo asserts the rendered body instead.
+
 - [ ] **Step 1: Write the e2e spec**
 
 Mirror `tests/e2e/moderators.spec.ts` for the harness shape. The fixture must create: a `Track` with `status: "DRAFT"`, one `Module`, two `Article`s with `status: "PUBLISHED"` joined via `ModuleLesson` at positions 0 and 1, and one `LessonCheckpoint` on the first article pointing at an existing published problem. Seed one `ADMIN` user and one plain `USER`.
@@ -2378,9 +2382,18 @@ Mirror `tests/e2e/moderators.spec.ts` for the harness shape. The fixture must cr
 The assertions to cover:
 
 ```ts
-test("is not reachable by anonymous visitors while the track is DRAFT", async ({ page }) => {
-    const response = await page.goto(`${BASE_URL}/learn/tracks/${trackSlug}/${lessonOneSlug}`)
-    expect(response?.status()).toBe(404)
+// Assert on CONTENT, not HTTP status. Next renders the not-found body
+// inside a 200 in this app — `notFound()` returns 200 app-wide, including
+// for a nonexistent path, because streaming commits the status before the
+// throw. `tests/e2e/security.spec.ts:117` already documents this and every
+// page-level not-found test in this repo asserts the body. Asserting the
+// draft content is ABSENT is also the stronger claim: it proves nothing
+// leaked, which is the thing actually at stake.
+test("does not leak a DRAFT track to anonymous visitors", async ({ page }) => {
+    await page.goto(`${BASE_URL}/learn/tracks/${trackSlug}/${lessonOneSlug}`)
+    const html = (await page.content()).toLowerCase()
+    expect(html).toContain("not found")
+    expect(html).not.toContain(DRAFT_CANARY)
 })
 
 test("renders exactly one banner, one main and one h1", async ({ page }) => {
@@ -2425,10 +2438,12 @@ test("the lesson-state card tracks the progress bar", async ({ page }) => {
     await expect(page.getByText("Auto-completed at 100%")).toBeVisible()
 })
 
-test("a signed-in non-staff user gets 404 on the draft track", async ({ page }) => {
+test("does not leak a DRAFT track to a signed-in non-staff user", async ({ page }) => {
     await signInAs(page, learner)
-    const response = await page.goto(`${BASE_URL}/learn/tracks/${trackSlug}/${lessonOneSlug}`)
-    expect(response?.status()).toBe(404)
+    await page.goto(`${BASE_URL}/learn/tracks/${trackSlug}/${lessonOneSlug}`)
+    const html = (await page.content()).toLowerCase()
+    expect(html).toContain("not found")
+    expect(html).not.toContain(DRAFT_CANARY)
 })
 ```
 
