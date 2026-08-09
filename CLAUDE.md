@@ -21,7 +21,8 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor; querie
 - `app/` — App Router pages
 - `actions/` — server actions (`"use server"` files), e.g. `curriculum.ts` — session-resolving curriculum reads (`getTrackCurriculum`) and writes (`recordLessonProgress`)
 - `components/ui/` — primitives (Button, Card, Badge, Input, Skeleton, Logo, Container, EmptyState)
-- `components/layout/` — Footer, ThemeProvider, UserMenu (avatar dropdown); `console/` — the left sidebar/rail console shell (`ConsoleShell` server component, `ConsoleChrome` client wrapper, `ConsoleSidebar`, `ConsoleRail`, `MobileTabBar`, `MobileSignInMenu`, `nav-model.ts`, `sidebar-cookie.ts`, `useSidebarCollapse.ts`)
+- `components/layout/` — Footer, ThemeProvider, UserMenu (avatar dropdown); `console/` — the left sidebar/rail console shell (`ConsoleShell` server component, `ConsoleChrome` client wrapper, `ConsoleSidebar`, `ConsoleRail`, `MobileTabBar`, `MobileSignInMenu`, `nav-model.ts`, `focus-route.ts` — the pure predicate that decides which routes opt out of the shell, `sidebar-cookie.ts`, `useSidebarCollapse.ts`, `MainScrollRestoration.tsx`)
+- `components/learn/reader/` — the lesson reader rendered by `/learn/tracks/[slug]/[lessonSlug]`, the app's only focus route (`LessonHeader` carrying the `banner` landmark, `ReaderProgressProvider` owning the scroll listener + the percent + the writes, presentational `ReadingProgressBar`, `CurriculumRail`, `LessonBody` — shared with the topic article route so both stay typographically identical, `LessonAsideRail`, `ContentsSheet` for mobile, `CheckpointBlock`, `LessonPrevNext`, `LessonSignInNudge`, `lesson-nav.ts` — pure curriculum flattening and prev/next resolution)
 - `components/practice/` — workspace pieces (ProblemClient, ProblemPanel, PracticeList, HistoryPanel)
 - `components/sql/` — SQL UI (SqlPlayground, SqlEditor, ResultTable, ValidationResult)
 - `components/lists/` — custom problem lists (CreateListButton popover, ListDetail with rename/delete/reorder/sort, AddToListButton workspace popover, AddProblemsPicker search-and-add). All client components consuming `actions/lists.ts`.
@@ -60,6 +61,7 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor; querie
 - **`npm run dev` binds to `.env.local`, not `.env`.** Unlike test scripts, the dev server does not default to local Postgres — prefix an explicit `DATABASE_URL='postgresql://anchitgupta@localhost:5432/datalearn'` when you need it against local data, or you'll be silently working against whatever `.env.local` points at.
 - **Under `@prisma/adapter-pg`, a P2002 error's `meta.target` is always `undefined`.** The offending column names instead live at `meta.driverAdapterError.cause.constraint.fields`, and they arrive partly quoted (e.g. `["\"trackId\"", "slug"]`). Strip quotes before comparing. See `isUniqueViolationOn` in `lib/admin-curriculum.ts` for the pattern that checks both this shape and the query-engine-binary `meta.target` shape.
 - **Don't add a token to `:root` without adding it to `.light`.** Both themes ship and light is not an inversion — a missing light value fails silently and only for users on that theme. `npm run check:token-parity` enforces this.
+- **Don't render page content outside `<main>` on non-focus routes.** `ConsoleChrome` owns `#app-scroll`, `<main id="main-content">` and `<Footer>`. Focus routes (`isFocusRoute`, today only the lesson reader) opt out and must supply their own `<header>` + `<main id="main-content">` pair — ARIA forbids `banner` inside `main`, which is why the header cannot simply live in the page body of a normal route.
 
 ## Running locally
 
@@ -71,6 +73,17 @@ npm run build                  # next build --webpack (do not drop --webpack)
 ```
 
 After modifying `prisma/schema.prisma`, restart the dev server — the running process holds the old generated client.
+
+The UI guards below are the ones to run after any shell, nav or reader change. All four unit suites are pure — no database, no DOM.
+
+```bash
+npm run test:console-nav          # nav model + the isFocusRoute predicate
+npm run test:lesson-nav           # curriculum flattening, prev/next, breadcrumbs
+npm run test:reading-progress     # scroll-percent maths + persistence boundaries
+npm run test:scroll-restoration   # #app-scroll restore-on-pop rules
+npm run check:token-parity        # every :root token also defined in .light
+npm run test:e2e -- lesson-reader # reader landmarks, draft gate, live progress
+```
 
 ## Subagent routing policy
 
