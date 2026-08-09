@@ -1903,7 +1903,7 @@ export function LessonAsideRail({
 ```tsx
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowRight, List, X } from "lucide-react"
 import type { TocEntry } from "@/lib/markdown-toc"
@@ -1920,12 +1920,35 @@ interface ContentsSheetProps {
  */
 export function ContentsSheet({ toc, nextHref }: ContentsSheetProps) {
     const [open, setOpen] = useState(false)
+    const triggerRef = useRef<HTMLButtonElement | null>(null)
+    // Whether closing should hand focus back to the trigger. True for the
+    // CANCEL vectors (X, backdrop, Escape) — the user dismissed the sheet
+    // without going anywhere, so returning them to where they were is right.
+    // False for the NAVIGATE vector (a TOC link), where the browser's
+    // fragment navigation owns focus. See the TOC onClick below.
+    const restoreFocusRef = useRef(true)
+
+    useEffect(() => {
+        if (!open) return
+        function onKeyDown(event: KeyboardEvent) {
+            if (event.key === "Escape") setOpen(false)
+        }
+        document.addEventListener("keydown", onKeyDown)
+        return () => {
+            document.removeEventListener("keydown", onKeyDown)
+            // Optional chaining matters: this cleanup also runs on unmount,
+            // where the trigger may already be gone.
+            if (restoreFocusRef.current) triggerRef.current?.focus()
+            restoreFocusRef.current = true
+        }
+    }, [open])
 
     return (
         <>
             <div className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t border-line bg-panel p-2 lg:hidden print:hidden">
                 <button
                     type="button"
+                    ref={triggerRef}
                     onClick={() => setOpen(true)}
                     disabled={toc.length === 0}
                     aria-expanded={open}
@@ -1985,7 +2008,19 @@ export function ContentsSheet({ toc, nextHref }: ContentsSheetProps) {
                                 <li key={entry.slug}>
                                     <a
                                         href={`#${entry.slug}`}
-                                        onClick={() => setOpen(false)}
+                                        onClick={() => {
+                                            // Effect cleanup is a PASSIVE
+                                            // effect, flushed after paint,
+                                            // while this anchor's fragment
+                                            // navigation is synchronous. So
+                                            // without opting out here, the
+                                            // browser scrolls the user to
+                                            // their heading and the cleanup
+                                            // then yanks focus back to the
+                                            // footer trigger.
+                                            restoreFocusRef.current = false
+                                            setOpen(false)
+                                        }}
                                         className={`block min-h-11 py-2.5 text-sm text-text-3 ${
                                             entry.level === 3 ? "pl-4" : ""
                                         }`}
