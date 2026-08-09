@@ -77,6 +77,8 @@
     "test:article-publish-routes": "tsx scripts/test-article-publish-routes.ts",
     "test:mcp-e2e-log-redaction": "node --test scripts/test-mcp-e2e-log-redaction.mjs",
     "test:console-nav": "node --import tsx --test scripts/test-console-nav.ts",
+    "test:lesson-nav": "node --import tsx --test scripts/test-lesson-nav.ts",
+    "test:reading-progress": "node --import tsx --test scripts/test-reading-progress.ts scripts/test-reader-progress-persistence.ts",
     "test:scroll-restoration": "node --import tsx --test scripts/test-scroll-restoration.ts",
     "check:mcp-bundle-isolation": "tsx scripts/check-mcp-bundle-isolation.ts",
     "check:token-parity": "./scripts/check-token-theme-parity.sh"

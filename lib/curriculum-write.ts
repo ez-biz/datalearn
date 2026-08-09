@@ -35,25 +35,37 @@ export async function recordLessonProgressForUser(
     })
     if (!article) return { ok: false, percent: 0, completed: false }
 
-    const existing = await prisma.lessonProgress.findUnique({
-        where: { userId_articleId: { userId, articleId: article.id } },
-        select: { percent: true, completedAt: true },
-    })
+    const incoming = clampProgressPercent(0, percent)
+    const [stored] = await prisma.$queryRaw<
+        Array<{ percent: number; completedAt: Date | null }>
+    >`
+        INSERT INTO "LessonProgress" ("userId", "articleId", "percent", "completedAt", "updatedAt")
+        VALUES (
+            ${userId},
+            ${article.id},
+            ${incoming}::integer,
+            CASE WHEN ${incoming}::integer >= 100 THEN now() ELSE NULL END,
+            now()
+        )
+        ON CONFLICT ("userId", "articleId") DO UPDATE
+        SET
+            "percent" = GREATEST("LessonProgress"."percent", EXCLUDED."percent"),
+            "completedAt" = COALESCE(
+                "LessonProgress"."completedAt",
+                CASE
+                    WHEN GREATEST("LessonProgress"."percent", EXCLUDED."percent") >= 100
+                    THEN now()
+                    ELSE NULL
+                END
+            ),
+            "updatedAt" = now()
+        RETURNING "percent", "completedAt"
+    `
 
-    const next = clampProgressPercent(existing?.percent ?? 0, percent)
-    const completedAt =
-        existing?.completedAt ?? (next >= 100 ? new Date() : null)
-
-    await prisma.lessonProgress.upsert({
-        where: { userId_articleId: { userId, articleId: article.id } },
-        create: {
-            userId,
-            articleId: article.id,
-            percent: next,
-            completedAt,
-        },
-        update: { percent: next, completedAt },
-    })
-
-    return { ok: true, percent: next, completed: completedAt !== null }
+    if (!stored) return { ok: false, percent: 0, completed: false }
+    return {
+        ok: true,
+        percent: stored.percent,
+        completed: stored.completedAt !== null,
+    }
 }

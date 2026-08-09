@@ -32,13 +32,19 @@ export async function getTrackCurriculum(trackSlug: string) {
     // a try/catch, not a `.catch()` chained onto the call. Matches the
     // established fail-closed pattern in `recordLessonProgress` below.
     let userId: string | null = null
+    let allowDraft = false
     try {
         const session = await auth()
         userId = session?.user?.id ?? null
+        const role = session?.user?.role
+        // Same staff gate as app/admin/layout.tsx, so draft preview and the
+        // admin portal agree on who is staff.
+        allowDraft = role === "ADMIN" || role === "MODERATOR"
     } catch {
         userId = null
+        allowDraft = false
     }
-    return getTrackCurriculumForUser(trackSlug, userId)
+    return getTrackCurriculumForUser(trackSlug, userId, { allowDraft })
 }
 
 /**

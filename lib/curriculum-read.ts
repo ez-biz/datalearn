@@ -1,3 +1,4 @@
+import type { TrackStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { excludeLockedProblems } from "@/lib/contest-locks"
 import {
@@ -41,6 +42,12 @@ export type TrackCurriculum = {
     trackId: string
     slug: string
     name: string
+    /**
+     * Only ever anything but PUBLISHED for a staff viewer — the where-clause
+     * below filters unpublished tracks out for everyone else. The reader
+     * uses it to show its "Draft — not visible to learners" banner.
+     */
+    status: TrackStatus
     modules: CurriculumModule[]
     rollup: TrackRollup
 }
@@ -61,18 +68,23 @@ export type TrackCurriculum = {
 export async function getTrackCurriculumForUser(
     trackSlug: string,
     userId: string | null,
+    options: { allowDraft?: boolean } = {},
 ): Promise<TrackCurriculum | null> {
-    // An unpublished track is invisible to learners — same rule as
-    // actions/tracks.ts and the published-lesson filter below. Publishing is
-    // a deliberate human action, not something a DRAFT row should leak by
-    // default. `findFirst` (not `findUnique`) because `status` makes the
-    // where-clause non-unique.
+    // An unpublished track is invisible to learners. Staff get a preview so
+    // a track can be reviewed before the deliberate human act of publishing
+    // it — see app/admin/layout.tsx for the matching ADMIN/MODERATOR gate.
+    // `findFirst` (not `findUnique`) because `status` makes the where-clause
+    // non-unique.
     const track = await prisma.track.findFirst({
-        where: { slug: trackSlug, status: "PUBLISHED" },
+        where: {
+            slug: trackSlug,
+            ...(options.allowDraft ? {} : { status: "PUBLISHED" }),
+        },
         select: {
             id: true,
             slug: true,
             name: true,
+            status: true,
             modules: {
                 orderBy: { position: "asc" },
                 select: {
@@ -216,6 +228,7 @@ export async function getTrackCurriculumForUser(
         trackId: track.id,
         slug: track.slug,
         name: track.name,
+        status: track.status,
         modules: modules.map((m, i) => ({
             ...m,
             unlocked: isModuleUnlocked(rollups, i),

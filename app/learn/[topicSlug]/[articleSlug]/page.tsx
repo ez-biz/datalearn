@@ -10,7 +10,7 @@ import { Eyebrow } from "@/components/ui/Eyebrow"
 import { extractToc } from "@/lib/markdown-toc"
 import { TableOfContents } from "@/components/learn/TableOfContents"
 import { RelatedProblemsPanel } from "@/components/learn/RelatedProblemsPanel"
-import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer"
+import { LessonBody } from "@/components/learn/reader/LessonBody"
 
 type Props = {
     params: Promise<{ topicSlug: string; articleSlug: string }>
@@ -52,60 +52,56 @@ export default async function ArticlePage({ params }: Props) {
                         {article.topic.name}
                     </Link>
 
-                    <header className="mb-8 pb-6 border-b border-border">
+                    <header>
                         <Eyebrow variant="bracket" className="mb-2">
                             {article.topic.name.toUpperCase()}
                         </Eyebrow>
-                        <h1 className="text-[32px] sm:text-[34px] font-bold tracking-tight leading-tight">
-                            {article.title}
-                        </h1>
-                        {article.summary && (
-                            <p className="mt-3 text-lg text-muted-foreground leading-relaxed">
-                                {article.summary}
-                            </p>
-                        )}
-                        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                            {article.author?.name && (
-                                <span>By {article.author.name}</span>
-                            )}
-                            <span>·</span>
-                            <span>
-                                {new Date(article.createdAt).toLocaleDateString(undefined, {
-                                    year: "numeric",
-                                    month: "long",
-                                    day: "numeric",
-                                })}
-                            </span>
-                            {article.readingMinutes != null && (
-                                <>
-                                    <span>·</span>
-                                    <span className="inline-flex items-center gap-1 tabular-nums">
-                                        <Clock className="h-3.5 w-3.5" />
-                                        {article.readingMinutes} min read
-                                    </span>
-                                </>
-                            )}
-                        </div>
-                        {article.tags.length > 0 && (
-                            <div className="mt-4 flex flex-wrap gap-1.5">
-                                {article.tags.map((t) => (
-                                    <Badge
-                                        key={t.id}
-                                        variant="secondary"
-                                        className="normal-case tracking-normal"
-                                    >
-                                        {t.slug}
-                                    </Badge>
-                                ))}
-                            </div>
-                        )}
                     </header>
 
-                    <MarkdownRenderer
+                    <LessonBody
+                        title={article.title}
+                        summary={article.summary}
                         content={article.content}
-                        size="base"
-                        withHeadingIds
                         className="prose-headings:scroll-mt-6"
+                        belowSummarySlot={
+                            <div className="mt-4 pb-6 border-b border-border">
+                                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                                    {article.author?.name && (
+                                        <span>By {article.author.name}</span>
+                                    )}
+                                    <span>·</span>
+                                    <span>
+                                        {new Date(article.createdAt).toLocaleDateString(undefined, {
+                                            year: "numeric",
+                                            month: "long",
+                                            day: "numeric",
+                                        })}
+                                    </span>
+                                    {article.readingMinutes != null && (
+                                        <>
+                                            <span>·</span>
+                                            <span className="inline-flex items-center gap-1 tabular-nums">
+                                                <Clock className="h-3.5 w-3.5" />
+                                                {article.readingMinutes} min read
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
+                                {article.tags.length > 0 && (
+                                    <div className="mt-4 flex flex-wrap gap-1.5">
+                                        {article.tags.map((t) => (
+                                            <Badge
+                                                key={t.id}
+                                                variant="secondary"
+                                                className="normal-case tracking-normal"
+                                            >
+                                                {t.slug}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        }
                     />
 
                     <RelatedProblemsPanel problems={article.relatedProblems} />

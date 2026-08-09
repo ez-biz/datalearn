@@ -1,10 +1,23 @@
 # 🚀 Antigravity Data Learning Platform — Long-Term Roadmap
 
-> **Last updated:** 2026-06-15
+> **Last updated:** 2026-08-09
 > **Status:** Live — <https://www.learndatanow.com>
 > **Version:** 0.8.0 (current)
 
 ## Recently shipped
+
+### Lesson reader (SP3 of the learning-platform redesign)
+
+The first learner-facing screen rendered against SP1's spine: a full-bleed reading route at `/learn/tracks/<track>/<lesson>` with the curriculum on the left, the article in the middle, and contents + lesson state on the right.
+
+- **A focus route** — `isFocusRoute` (`components/layout/console/focus-route.ts`) is a pure predicate matching exactly four path segments, so the track page one level up keeps the console shell while the reader replaces it. `ConsoleChrome` reads it and renders only `#app-scroll`; the page then supplies its own `<header>` + `<main id="main-content">` **as siblings**, because a `<header>` maps to the `banner` landmark only outside sectioning content and ARIA forbids `banner` inside `main`. Exactly one banner, one main and one h1 at every viewport — asserted in e2e, not assumed.
+- **Live progress, split two ways** — `ReaderProgressProvider` owns the `#app-scroll` listener, the monotonic percent and the writes; `ReadingProgressBar` in the header and the "Read 62% · 3 min left" card in the right rail are both pure consumers. They are siblings under a server component, so a single component owning the listener could not have fed both — the card would have rendered a frozen server value and never flipped to "Auto-completed at 100%", a bug that looks like working software. Writes fire on 10% boundaries (≤10 round trips per lesson) plus a `visibilitychange` flush, and a render-phase reset on `articleSlug` stops one lesson's percent leaking into the next when React reconciles the provider in place across Prev/Next.
+- **Staff-only draft preview** — an unpublished track renders for `ADMIN`/`MODERATOR` behind the same gate `app/admin/layout.tsx` uses, with a "Draft — not visible to learners" banner that distinguishes DRAFT from ARCHIVED. Everyone else gets `notFound()`. Two e2e tests assert a canary string in the lesson body is absent for anonymous and for signed-in non-staff, which is a stronger claim than a status code — `notFound()` returns 200 app-wide in this build.
+- **Responsive at three widths** — `CurriculumRail` is `xl:`, `LessonAsideRail` is `lg:`, and `ContentsSheet` is `lg:hidden`, so the table of contents has exactly one owner at every width and never zero. Below `lg` the console tab bar is suppressed too, so the reader carries its own sign-in affordance.
+- **One new token** (`--icon-done`) and four guard suites — 93 unit assertions across `test:lesson-nav`, `test:reading-progress`, `test:console-nav` (widened to cover the routes the old model omitted, which had already produced a real double-`aria-current` bug) and `test:scroll-restoration`, plus `tests/e2e/lesson-reader.spec.ts` which seeds its own track, module, two lessons and checkpoint rather than depending on seed data.
+- **PR #168 absorbed** — its typographic intent (body line-height, the 450 weight, softened body colour, scrollable TOC, tabular-nums percentage) is carried forward re-expressed against SP2's graphite tokens; its `globals.css` hunk targeted the pre-SP2 palette and is not.
+
+Known gaps carried forward: `analyst-interview-prep` is still DRAFT (publishing is a deliberate human decision), `/learn/tracks/[slug]` ships an interim module-grouped list that SP4 replaces, and light-theme `--icon-done` still wants a designer's confirmation.
 
 ### Curriculum spine (SP1 of the learning-platform redesign)
 

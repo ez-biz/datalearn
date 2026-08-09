@@ -5,10 +5,12 @@ import { notFound } from "next/navigation"
 import { ArrowLeft, Clock, ListChecks, Route } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { getTrackCurriculum } from "@/actions/curriculum"
 import { getTrackBySlug, getTrackProgress } from "@/actions/tracks"
 import { TrackDifficultyBadge } from "@/components/learn/TrackCard"
 import { TrackItemRow } from "@/components/learn/TrackItemRow"
 import { TrackProgressBar } from "@/components/learn/TrackProgressBar"
+import { modulePrefix } from "@/components/learn/reader/lesson-nav"
 import { LinkButton } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 import { Container } from "@/components/ui/Container"
@@ -41,6 +43,7 @@ export default async function TrackDetailPage({ params }: Props) {
     if (!track) notFound()
 
     const progress = await getTrackProgress(track.id)
+    const curriculum = await getTrackCurriculum(slug)
     const completedItemIds = new Set(progress.completedItemIds)
     const nextItem = track.items.find((item) => item.id === progress.nextItemId)
     const reviewItem = track.items[0]
@@ -115,6 +118,52 @@ export default async function TrackDetailPage({ params }: Props) {
                         className="h-full w-full object-cover"
                     />
                 </div>
+            )}
+
+            {/* Interim entry point into the lesson reader. TrackItem has 0 rows
+                locally, so without this nothing on the site links to a lesson.
+                SP4's Module screen replaces this module-grouped list with the
+                fully-designed version — do not gold-plate. */}
+            {curriculum && curriculum.modules.length > 0 && (
+                <section className="mt-10">
+                    <h2 className="mb-4 text-lg font-semibold text-foreground">
+                        Curriculum
+                    </h2>
+                    <ol className="space-y-6">
+                        {curriculum.modules.map((mod) => (
+                            <li key={mod.id}>
+                                <div className="mb-2 flex items-baseline justify-between">
+                                    <h3 className="font-mono text-[11px] uppercase tracking-wider text-text-muted">
+                                        {modulePrefix(mod.position)} · {mod.name}
+                                    </h3>
+                                    <span className="font-mono text-[11px] tabular-nums text-text-dim">
+                                        {mod.rollup.lessonsDone}/
+                                        {mod.rollup.lessonsTotal}
+                                    </span>
+                                </div>
+                                <ul className="divide-y divide-line-faint rounded-lg border border-line">
+                                    {mod.lessons.map((lesson) => (
+                                        <li key={lesson.articleId}>
+                                            <Link
+                                                href={`/learn/tracks/${slug}/${lesson.slug}`}
+                                                className="flex min-h-11 items-center justify-between px-4 py-2.5 transition-colors duration-150 hover:bg-panel-hover"
+                                            >
+                                                <span className="text-sm text-foreground">
+                                                    {lesson.title}
+                                                </span>
+                                                {lesson.readingMinutes !== null && (
+                                                    <span className="font-mono text-[11px] tabular-nums text-text-dim">
+                                                        {lesson.readingMinutes}m
+                                                    </span>
+                                                )}
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </li>
+                        ))}
+                    </ol>
+                </section>
             )}
 
             <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_20rem] lg:items-start">
