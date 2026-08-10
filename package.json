@@ -142,7 +142,7 @@
     "tailwindcss": "^4",
     "tsup": "^8.5.1",
     "tsx": "^4.23.9",
-    "typescript": "^6"
+    "typescript": "^7"
   },
   "overrides": {
     "postcss": "^8.5.10",
