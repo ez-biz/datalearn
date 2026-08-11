@@ -6,11 +6,11 @@
 
 SP3 merged to `main` as PR #185 (merge commit `0591564`). Three of seven sub-projects are done. **SP4, SP5 and SP7 are all unblocked**; SP6 now waits only on SP4 + SP5.
 
-**Before running anything: the machine's `node` is broken.** Homebrew moved simdjson from `.31` to `.33` and the `node` binary is still linked against the old one, so `node`, `npm`, the dev server and the build all fail with `dyld: Library not loaded`. Workaround and fix in [Environment](#environment).
+**Resolved 2026-08-11: `node` is fixed** (`brew reinstall node` → `v26.7.0`, npm `11.19.0`). It had been linked against a simdjson Homebrew moved from `.31` to `.33`. All five resume checks now pass on the real runtime — see [Environment](#environment).
 
-**Good news:** `.env.production.local` — the file that had e2e running against the production database with a blank `AUTH_SECRET` — is **gone**. That trap is closed.
+**Good news:** `.env.production.local` — the file that had e2e running against the production database with a blank `AUTH_SECRET` — is **gone** (renamed to `.env.production.local.disabled`). That trap is closed.
 
-**New finding:** SP3 added 44 tests that **do not run in CI** (`test:lesson-nav`, `test:reading-progress`). This is the second time this exact gap has occurred; see [Recurring patterns](#recurring-patterns-worth-internalising).
+**New finding:** SP3 added 44 tests that **do not run in CI** (`test:lesson-nav`, `test:reading-progress`). This is the second time this exact gap has occurred; see [Recurring patterns](#recurring-patterns-worth-internalising). **Being fixed on this branch** — and an audit of all 60 `test:`/`check:`/`audit:` scripts against `test.yml` found the gap is far wider than SP3; see follow-up 11.
 
 ---
 
@@ -40,22 +40,9 @@ Working tree clean. Contains SP1 + SP2 + SP3 plus dependabot merges (#180, #183)
 
 ## Environment
 
-**`node` is broken.** Every `npm`/`node` invocation dies with:
+**Resolved 2026-08-11: `node` was broken, and is now fixed.** Every `npm`/`node` invocation died with `dyld: Library not loaded: .../libsimdjson.31.dylib` referenced from `node/25.8.1_1` — Homebrew had moved simdjson to `.33`. `brew reinstall node` fixed it; local is now **`v26.7.0` / npm `11.19.0`**. The nvm workaround (`export PATH="$HOME/.nvm/versions/node/v22.21.0/bin:$PATH"`) is no longer needed.
 
-```
-dyld: Library not loaded: /opt/homebrew/opt/simdjson/lib/libsimdjson.31.dylib
-  Referenced from: /opt/homebrew/Cellar/node/25.8.1_1/bin/node
-```
-
-Homebrew's simdjson is now `libsimdjson.33.dylib`. **Fix: `brew reinstall node`.**
-
-Workaround used to verify this handoff — nvm has working runtimes (`v20.20.1`, `v22.21.0`):
-
-```bash
-export PATH="$HOME/.nvm/versions/node/v22.21.0/bin:$PATH"
-```
-
-⚠️ **Node 22 emits TAP (`# pass 51`); Node 25 emits `ℹ pass 51`.** Any script or agent that greps test output will silently report "no results" rather than a failure under the workaround. This wasted a cycle already.
+⚠️ **Still live, and now permanent: local is Node 26, CI is Node 20** (`.github/workflows/test.yml` pins `node-version: "20"`). The two emit different `node --test` output — Node 20/22 emit TAP (`# pass 51`), Node 25/26 emit `ℹ pass 51`. **Never grep test output to decide pass/fail; read the exit code.** A grep for `# pass` reports "no results" rather than a failure on the local runtime. This has already wasted a cycle once.
 
 **Resolved since the last handoff:** `.env.production.local` is gone. It previously outranked `.env` under `next start`, supplying a production `DATABASE_URL` and an empty `AUTH_SECRET` (empty still counts as set), so every session resolved null and signed-in e2e tests silently rendered signed-out pages.
 
@@ -77,7 +64,7 @@ Plus `lib/reader-progress-write-queue.ts` and `components/layout/console/focus-r
 
 **The focus-route contract is the load-bearing architectural change.** `ConsoleChrome` now owns `#app-scroll`, `<main id="main-content">` and `<Footer>` — moved out of `app/layout.tsx`. `isFocusRoute()` decides which routes opt out of the console shell; the reader is currently the only one. Focus routes get the scroll container only and **must supply their own `<header>` + `<main>` pair**, because ARIA forbids `banner` inside `main`. Anything SP4/SP5/SP7 add that wants full-bleed chrome goes through this predicate.
 
-### Test suites (all green, verified under the nvm workaround)
+### Test suites (all green — re-verified 2026-08-11 on the repaired Node 26 runtime, by exit code)
 
 | Script | Tests | In CI? |
 |---|---|---|
@@ -86,8 +73,8 @@ Plus `lib/reader-progress-write-queue.ts` and `components/layout/console/focus-r
 | `check:token-parity` | — | ✅ |
 | `check-no-palette-colors.sh` | — | ✅ |
 | `check-shadcn-token-definitions.sh` | — | ✅ |
-| **`test:lesson-nav`** | **27** | **❌ NO** |
-| **`test:reading-progress`** | **17** | **❌ NO** |
+| **`test:lesson-nav`** | **27** | **added on this branch** |
+| **`test:reading-progress`** | **17** | **added on this branch** |
 
 `test:reading-progress` runs two files (`test-reading-progress.ts` + `test-reader-progress-persistence.ts`).
 
@@ -124,8 +111,8 @@ Three failure shapes have now repeated across SP2 and SP3. Expect them in SP4/SP
 
 ## Open follow-ups (priority order)
 
-1. **Wire `test:lesson-nav` and `test:reading-progress` into CI.** 44 tests currently unprotected. Needs a web-UI merge (`workflow` scope).
-2. **`brew reinstall node`** — nothing can be built or tested locally until this is done.
+1. ~~**Wire `test:lesson-nav` and `test:reading-progress` into CI.**~~ **Done 2026-08-11 on `docs/sp3-merged-handoff`** — two steps added to `test.yml` after `test:console-nav`. Because it touches `.github/workflows/`, **the PR still needs a web-UI merge** (`gh` lacks `workflow` scope). Not protected until that merge lands.
+2. ~~**`brew reinstall node`**~~ **Done 2026-08-11** — local runtime is `v26.7.0` / npm `11.19.0`.
 3. **`check:token-parity` cannot catch a missing Tailwind utility.** It diffs `:root` against `.light` and never inspects `@theme inline`, where the variable→utility mapping lives. Two dead classes passed it cleanly during SP3. A guard asserting every `--color-<name>` used by a `text-`/`bg-`/`border-` utility exists in `@theme inline` would have caught both.
 4. **Publish `analyst-interview-prep`.** Deliberately not done — a human decision. Until then only ADMIN/MODERATOR see the reader, and the sidebar's track-progress block renders nothing.
 5. **Confirm or replace light `--icon-done` (`#3F7D68`) and light `--accent-violet` (`#6D28D9`).** Both proposed, unconfirmed; the handoff's light table omits those roles. SP7 owns the violet.
@@ -134,6 +121,7 @@ Three failure shapes have now repeated across SP2 and SP3. Expect them in SP4/SP
 8. **Decide on a `main → production` release.** 129 commits behind. `main` will keep drifting further as SP4/SP5/SP7 land one at a time.
 9. Smaller SP3 residue: mobile sign-in nudge lacks `print:hidden`; `LessonAsideRail`'s `activeSlug` prop is never passed so the TOC active-highlight branch is dead; two unlabelled `complementary` landmarks on the reader; the two rails gate responsiveness differently (one via a call-site `className`, one internally).
 10. **SP2 has no `docs/ROADMAP.md` entry** — SP3 sits directly above SP1 there. Fix before generating release notes from that file.
+11. **The CI gap is much wider than SP3 — 38 more orphaned scripts.** Auditing all 60 `test:`/`check:`/`audit:` scripts in `package.json` against `test.yml` (the only workflow file) shows **40 are not referenced**; the two SP3 suites were just the two anyone had noticed. The scripts exist on disk and are not stubs. Largest cluster is **~15 contest suites** (`test:contest-*`, `test:custom-contests`, `test:contest-leaderboard`, …), then **7 upload/asset suites** (`test:uploads`, `test:upload-quota-race`, `test:asset-gc`, `test:admin-asset-delete*`, …), plus `test:directive-renderer`, `test:mermaid-sanitization`, `test:admin-audit-log`, `test:topic-lane`, `test:discussion`, `test:sql-validator-json-time`, `test:sql-engine-result-cap`, `test:sql-engine-runtime-controls`, `test:dialect-audit`. Some exclusions are surely deliberate (`test:e2e:ui` is interactive; `audit:tags:prod` hits production) — but that has never been written down, so "not in CI" and "deliberately not in CI" are indistinguishable today. **Suggested fix: a guard script asserting every `test:*` script appears in `test.yml` or in an explicit, commented allowlist.** That converts recurring pattern 2 from a thing people must remember into a thing CI enforces. Deciding which of the 38 are deliberate is a human call and was not made here.
 
 ---
 
@@ -149,7 +137,6 @@ Three failure shapes have now repeated across SP2 and SP3. Expect them in SP4/SP
 ## To resume
 
 ```bash
-brew reinstall node                          # fix the broken runtime first
 git checkout main && git pull --ff-only      # expect 406ff42 or later
 npm run test:console-nav                     # 51 pass
 npm run test:lesson-nav                      # 27 pass
@@ -157,5 +144,7 @@ npm run test:reading-progress                # 17 pass
 npm run test:scroll-restoration              # 7 pass
 npm run check:token-parity                   # exit 0
 ```
+
+All five verified green on 2026-08-11 (Node 26). Judge them by exit code, not by grepping for `# pass`.
 
 For SP5, start with the brainstorming skill against the handoff README's workspace sections. Note that `4a` supersedes `3a` where they disagree — sidebar instead of top bar, no Schema tab, collapsible schema.
