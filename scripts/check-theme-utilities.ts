@@ -9,16 +9,19 @@
 import { readFileSync, readdirSync } from "node:fs"
 import { join, relative, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
+import * as ts from "typescript"
 
 const GLOBALS = "app/globals.css"
 const SOURCE_DIRS = ["app", "components", "lib"]
 const SOURCE_EXTENSIONS = [".ts", ".tsx"]
-const UTILITY_RE = /\b(bg|text|border|ring|fill|stroke)-([a-z][a-z0-9-]*)\b/g
+const UTILITY_TOKEN_RE = /^(bg|text|border|ring|fill|stroke)-([a-z][a-z0-9-]*)(?:\/\S+)?$/
+const CLASS_HELPERS = new Set(["cn", "clsx", "cva", "twMerge"])
+const CLASS_CONTAINER_NAME = /class|style|variant|color|tone/i
 
-// These are Tailwind primitives or CSS-property fragments that can occur in
-// arbitrary-value class strings. They do not require a project --color-*
-// mapping. Keep this list explicit: an unknown colour-looking name should be
-// noisy until it is either mapped or deliberately classified here.
+// These Tailwind primitives resemble colour utilities but do not require a
+// project --color-* mapping. Keep this list explicit: an unknown
+// colour-looking class should be noisy until it is mapped or deliberately
+// classified here.
 const BUILTIN_UTILITIES = new Set([
     "bg-auto",
     "bg-black",
@@ -51,9 +54,7 @@ const BUILTIN_UTILITIES = new Set([
     "bg-top",
     "bg-transparent",
     "bg-white",
-    "border-box",
     "border-collapse",
-    "border-color",
     "border-dashed",
     "border-dotted",
     "border-double",
@@ -61,7 +62,6 @@ const BUILTIN_UTILITIES = new Set([
     "border-inherit",
     "border-l",
     "border-none",
-    "border-radius",
     "border-r",
     "border-separate",
     "border-solid",
@@ -119,6 +119,120 @@ export interface ThemeUtilityResult {
     findings: string[]
 }
 
+interface ClassFragment {
+    line: number
+    text: string
+}
+
+interface UtilityToken {
+    index: number
+    prefix: string
+    suffix: string
+    utility: string
+}
+
+function utilityTokens(text: string): UtilityToken[] {
+    const tokens: UtilityToken[] = []
+    for (const match of text.matchAll(/\S+/g)) {
+        const raw = match[0]
+        const base = (raw.split(":").at(-1) ?? raw).replace(/^!/, "")
+        const utility = base.match(UTILITY_TOKEN_RE)
+        if (!utility?.[1] || !utility[2]) continue
+        tokens.push({
+            index: match.index,
+            prefix: utility[1],
+            suffix: utility[2],
+            utility: base,
+        })
+    }
+    return tokens
+}
+
+function literalText(node: ts.Node): string | null {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+        return node.text
+    }
+    if (
+        node.kind === ts.SyntaxKind.TemplateHead ||
+        node.kind === ts.SyntaxKind.TemplateMiddle ||
+        node.kind === ts.SyntaxKind.TemplateTail
+    ) {
+        return (node as ts.TemplateLiteralToken).text
+    }
+    return null
+}
+
+function expressionName(expression: ts.Expression): string | null {
+    if (ts.isIdentifier(expression)) return expression.text
+    if (ts.isPropertyAccessExpression(expression)) return expression.name.text
+    return null
+}
+
+function isClassContext(node: ts.Node, sourceFile: ts.SourceFile): boolean {
+    let parent = node.parent
+    while (parent) {
+        if (
+            ts.isJsxAttribute(parent) &&
+            parent.name.getText(sourceFile) === "className"
+        ) {
+            return true
+        }
+        if (
+            ts.isCallExpression(parent) &&
+            CLASS_HELPERS.has(expressionName(parent.expression) ?? "")
+        ) {
+            return true
+        }
+        if (
+            ts.isVariableDeclaration(parent) &&
+            ts.isIdentifier(parent.name) &&
+            CLASS_CONTAINER_NAME.test(parent.name.text)
+        ) {
+            return true
+        }
+        if (ts.isPropertyAssignment(parent)) {
+            const name = parent.name.getText(sourceFile).replace(/["']/g, "")
+            if (name === "class" || name === "className") return true
+        }
+        parent = parent.parent
+    }
+    return false
+}
+
+function classFragments(file: SourceFile): ClassFragment[] {
+    const sourceFile = ts.createSourceFile(
+        file.path,
+        file.source,
+        ts.ScriptTarget.Latest,
+        true,
+        file.path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    )
+    const fragments: ClassFragment[] = []
+
+    function visit(node: ts.Node): void {
+        const text = literalText(node)
+        if (text !== null) {
+            const candidates = utilityTokens(text)
+            const singleUtility =
+                candidates.length === 1 && text.trim() === candidates[0]?.utility
+            const classContext = isClassContext(node, sourceFile)
+            if (candidates.length > 0 && (singleUtility || classContext)) {
+                fragments.push({
+                    line:
+                        sourceFile.getLineAndCharacterOfPosition(
+                            node.getStart(sourceFile),
+                        ).line + 1,
+                    text,
+                })
+            }
+        }
+        ts.forEachChild(node, visit)
+    }
+
+    visit(sourceFile)
+    return fragments
+}
+
 // NB: do not reach for fs.globSync — it landed in Node 22 and CI pins
 // Node 20 (.github/workflows/test.yml `node-version: "20"`).
 function walk(dir: string, out: string[] = []): string[] {
@@ -164,17 +278,29 @@ export function findUnmappedUtilities(
     let candidateCount = 0
 
     for (const file of files) {
-        for (const match of file.source.matchAll(UTILITY_RE)) {
-            candidateCount += 1
-            const [utility, prefix, suffix] = match
-            if (!prefix || !suffix || BUILTIN_UTILITIES.has(utility)) continue
-            if (prefix === "border" && BORDER_DIRECTIONAL_SIZE.test(suffix)) continue
+        for (const fragment of classFragments(file)) {
+            for (const candidate of utilityTokens(fragment.text)) {
+                const { utility, prefix, suffix } = candidate
+                if (BUILTIN_UTILITIES.has(utility)) continue
+                if (
+                    prefix === "border" &&
+                    BORDER_DIRECTIONAL_SIZE.test(suffix)
+                ) {
+                    continue
+                }
 
-            const token = mappedToken(prefix, suffix)
-            if (BUILTIN_COLOR_TOKENS.has(token) || declared.has(token)) continue
+                const semanticToken = mappedToken(prefix, suffix)
+                if (BUILTIN_COLOR_TOKENS.has(semanticToken)) continue
 
-            const line = file.source.slice(0, match.index).split("\n").length
-            findings.add(`${file.path}:${line}  ${utility}`)
+                candidateCount += 1
+                if (declared.has(semanticToken)) continue
+
+                const line =
+                    fragment.line +
+                    fragment.text.slice(0, candidate.index).split("\n").length -
+                    1
+                findings.add(`${file.path}:${line}  ${utility}`)
+            }
         }
     }
 
@@ -184,16 +310,21 @@ export function findUnmappedUtilities(
     }
 }
 
-export function runThemeUtilityCheck(): number {
-    const declared = themeInlineNames(readFileSync(GLOBALS, "utf8"))
-    const files = SOURCE_DIRS.flatMap((dir) => walk(dir)).map((path) => ({
-        path: relative(process.cwd(), path),
-        source: readFileSync(path, "utf8"),
-    }))
+export function runThemeUtilityCheck(sourceRoot = process.cwd()): number {
+    const root = resolve(sourceRoot)
+    const declared = themeInlineNames(readFileSync(join(root, GLOBALS), "utf8"))
+    const files = SOURCE_DIRS.flatMap((dir) => walk(join(root, dir))).map(
+        (path) => ({
+            path: relative(root, path),
+            source: readFileSync(path, "utf8"),
+        }),
+    )
     const result = findUnmappedUtilities(declared, files)
 
     if (result.candidateCount === 0) {
-        console.error("No colour utility candidates found; the guard did not scan the source tree")
+        console.error(
+            "No colour utility candidates found; the guard did not scan the source tree",
+        )
         return 1
     }
     for (const finding of result.findings) console.error(finding)
@@ -202,5 +333,12 @@ export function runThemeUtilityCheck(): number {
 
 const entry = process.argv[1]
 if (entry && import.meta.url === pathToFileURL(resolve(entry)).href) {
-    process.exitCode = runThemeUtilityCheck()
+    const rootFlag = process.argv.indexOf("--root")
+    const sourceRoot = rootFlag === -1 ? process.cwd() : process.argv[rootFlag + 1]
+    if (!sourceRoot) {
+        console.error("--root requires a source directory")
+        process.exitCode = 2
+    } else {
+        process.exitCode = runThemeUtilityCheck(sourceRoot)
+    }
 }

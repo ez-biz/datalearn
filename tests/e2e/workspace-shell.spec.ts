@@ -20,12 +20,30 @@ test.describe("workspace shell", () => {
         await expect(page.getByRole("contentinfo")).toHaveCount(1)
     })
 
-    test("#app-scroll does not scroll at lg and above", async ({ page }) => {
-        await page.setViewportSize({ width: 1440, height: 900 })
+    test("#app-scroll scrolls below lg and clamps at lg", async ({ page }) => {
+        await page.setViewportSize({ width: 768, height: 900 })
         await page.goto("/practice/simple-select")
-        const overflow = await page
+        const mobile = await page
             .locator("#app-scroll")
-            .evaluate((el) => getComputedStyle(el).overflowY)
-        expect(overflow).toBe("hidden")
+            .evaluate((el) => {
+                const style = getComputedStyle(el)
+                return {
+                    overflowY: style.overflowY,
+                    paddingBottom: style.paddingBottom,
+                }
+            })
+        expect(mobile).toEqual({ overflowY: "auto", paddingBottom: "56px" })
+
+        await page.setViewportSize({ width: 1440, height: 900 })
+        const desktop = await page
+            .locator("#app-scroll")
+            .evaluate((el) => {
+                const style = getComputedStyle(el)
+                return {
+                    overflowY: style.overflowY,
+                    paddingBottom: style.paddingBottom,
+                }
+            })
+        expect(desktop).toEqual({ overflowY: "hidden", paddingBottom: "0px" })
     })
 })

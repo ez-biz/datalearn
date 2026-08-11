@@ -89,6 +89,8 @@ describe("isNavItemActive — isolation", () => {
         "/learn/sql-basics",
         "/learn/tracks",
         "/practice",
+        "/practice/tags",
+        "/practice/tags/joins",
         "/practice/two-sum",
         "/contests",
     ]
