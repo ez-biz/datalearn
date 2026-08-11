@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation"
 import { ConsoleRail } from "./ConsoleRail"
 import { ConsoleSidebar, type TrackProgress } from "./ConsoleSidebar"
-import { isFocusRoute } from "./focus-route"
+import { isAppRoute, isFocusRoute } from "./focus-route"
 import { MainScrollRestoration } from "./MainScrollRestoration"
 import { MobileTabBar } from "./MobileTabBar"
 import { useSidebarCollapse } from "./useSidebarCollapse"
@@ -48,6 +48,7 @@ export function ConsoleChrome({
     const { collapsed, toggle } = useSidebarCollapse(initialState)
     const pathname = usePathname()
     const focus = isFocusRoute(pathname)
+    const app = isAppRoute(pathname)
 
     return (
         <div className="flex h-dvh overflow-hidden print:block print:h-auto print:overflow-visible">
@@ -110,13 +111,19 @@ export function ConsoleChrome({
                 still scrolls away with the page.
 
                 pb-14 clears the 56px fixed MobileTabBar; focus routes render no
-                tab bar, so they must not carry it. */}
+                tab bar, so they must not carry it. App routes retain that
+                mobile clearance below `lg`, but clamp this outer container at
+                `lg` because the workspace panes own their scrolling. Their
+                footer is omitted at every width: inside a clamped application
+                view it would be unreachable, not merely out of the way. */}
             <div
                 id="app-scroll"
                 className={
                     focus
                         ? "flex flex-1 flex-col overflow-y-auto print:overflow-visible"
-                        : "flex flex-1 flex-col overflow-y-auto pb-14 lg:pb-0 print:overflow-visible print:pb-0"
+                        : app
+                          ? "flex flex-1 flex-col overflow-y-auto pb-14 lg:overflow-hidden lg:pb-0 print:overflow-visible print:pb-0"
+                          : "flex flex-1 flex-col overflow-y-auto pb-14 lg:pb-0 print:overflow-visible print:pb-0"
                 }
             >
                 {focus ? (
@@ -126,11 +133,15 @@ export function ConsoleChrome({
                         <main
                             id="main-content"
                             tabIndex={-1}
-                            className="flex flex-1 flex-col focus:outline-none"
+                            className={
+                                app
+                                    ? "flex flex-1 flex-col focus:outline-none lg:min-h-0"
+                                    : "flex flex-1 flex-col focus:outline-none"
+                            }
                         >
                             {children}
                         </main>
-                        {footerSlot}
+                        {!app && footerSlot}
                     </>
                 )}
             </div>
