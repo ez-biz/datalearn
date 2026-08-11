@@ -137,6 +137,12 @@ jobs:
       - name: Test console nav model
         run: npm run test:console-nav
 
+      - name: Test lesson nav model
+        run: npm run test:lesson-nav
+
+      - name: Test reading progress
+        run: npm run test:reading-progress
+
       - name: Test scroll restoration
         run: npm run test:scroll-restoration
 
