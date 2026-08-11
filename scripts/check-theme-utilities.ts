@@ -207,7 +207,61 @@ function classFragments(file: SourceFile): ClassFragment[] {
         true,
         file.path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
     )
-    const fragments: ClassFragment[] = []
+    const declarations = new Map<string, ts.VariableDeclaration[]>()
+    const fragments = new Map<number, ClassFragment>()
+
+    function indexDeclarations(node: ts.Node): void {
+        if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+            const entries = declarations.get(node.name.text) ?? []
+            entries.push(node)
+            declarations.set(node.name.text, entries)
+        }
+        ts.forEachChild(node, indexDeclarations)
+    }
+
+    function addFragment(node: ts.Node, text: string): void {
+        fragments.set(node.getStart(sourceFile), {
+            line:
+                sourceFile.getLineAndCharacterOfPosition(
+                    node.getStart(sourceFile),
+                ).line + 1,
+            text,
+        })
+    }
+
+    function resolveDeclaration(
+        identifier: ts.Identifier,
+    ): ts.VariableDeclaration | null {
+        const entries = declarations.get(identifier.text) ?? []
+        const identifierStart = identifier.getStart(sourceFile)
+        return entries.filter(
+            (entry) => entry.getStart(sourceFile) < identifierStart,
+        ).at(-1) ?? null
+    }
+
+    function collectReferencedClasses(node: ts.Node, seen: Set<number>): void {
+        const text = literalText(node)
+        if (text !== null && utilityTokens(text).length > 0) {
+            addFragment(node, text)
+        }
+
+        if (ts.isIdentifier(node)) {
+            const declaration = resolveDeclaration(node)
+            const declarationStart = declaration?.getStart(sourceFile)
+            if (
+                declaration?.initializer &&
+                declarationStart !== undefined &&
+                !seen.has(declarationStart)
+            ) {
+                const nextSeen = new Set(seen).add(declarationStart)
+                collectReferencedClasses(declaration.initializer, nextSeen)
+            }
+        }
+
+        ts.forEachChild(node, (child) => collectReferencedClasses(child, seen))
+    }
+
+    indexDeclarations(sourceFile)
 
     function visit(node: ts.Node): void {
         const text = literalText(node)
@@ -217,20 +271,17 @@ function classFragments(file: SourceFile): ClassFragment[] {
                 candidates.length === 1 && text.trim() === candidates[0]?.utility
             const classContext = isClassContext(node, sourceFile)
             if (candidates.length > 0 && (singleUtility || classContext)) {
-                fragments.push({
-                    line:
-                        sourceFile.getLineAndCharacterOfPosition(
-                            node.getStart(sourceFile),
-                        ).line + 1,
-                    text,
-                })
+                addFragment(node, text)
             }
+        }
+        if (ts.isIdentifier(node) && isClassContext(node, sourceFile)) {
+            collectReferencedClasses(node, new Set())
         }
         ts.forEachChild(node, visit)
     }
 
     visit(sourceFile)
-    return fragments
+    return [...fragments.values()]
 }
 
 // NB: do not reach for fs.globSync — it landed in Node 22 and CI pins

@@ -119,6 +119,27 @@ describe("theme utility mapping guard", () => {
         },
     )
 
+    it("resolves generic constants referenced by class expressions", () => {
+        const result = findUnmappedUtilities(
+            themeInlineNames(CSS),
+            [{
+                path: "identifiers.tsx",
+                source: [
+                    'const headerBg = "bg-primary border-primary"',
+                    'const base = "text-primary bg-identifier-missing"',
+                    "export const Node = () => (",
+                    '  <div className={`p-2 ${headerBg}`}><button className={cn(base)} /></div>',
+                    ")",
+                ].join("\n"),
+            }],
+        )
+
+        assert.equal(result.candidateCount, 4)
+        assert.deepEqual(result.findings, [
+            "identifiers.tsx:2  bg-identifier-missing",
+        ])
+    })
+
     it("rejects a stylesheet without an @theme inline block", () => {
         assert.throws(
             () => themeInlineNames(":root { --primary: 0 0% 0%; }"),
