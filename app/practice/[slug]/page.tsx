@@ -16,6 +16,10 @@ import { auth } from "@/lib/auth"
 import { ProblemClient } from "@/components/practice/ProblemClient"
 import { ReportDialog } from "@/components/practice/ReportDialog"
 import { AddToListButton } from "@/components/lists/AddToListButton"
+import {
+    getCheckpointContext,
+    getWorkspaceProblemsPanel,
+} from "@/lib/workspace/queries"
 import { parseSchema } from "@/lib/schema-parser"
 import { prisma } from "@/lib/prisma"
 import { getDiscussionSettings } from "@/lib/discussions/settings"
@@ -106,6 +110,15 @@ export default async function ProblemPage({ params }: Props) {
     ])
     const isSolved = solvedSlugs.includes(slug)
     const isSignedIn = Boolean(session?.user?.id)
+    // Staff see modules from DRAFT tracks so an unpublished curriculum can be
+    // reviewed; learners get those problems in the panel's "Not in a track"
+    // group instead. Same allowDraft rule the lesson reader uses.
+    const isStaff =
+        session?.user?.role === "ADMIN" || session?.user?.role === "MODERATOR"
+    const [panelProblems, checkpointContext] = await Promise.all([
+        getWorkspaceProblemsPanel(session?.user?.id ?? null, isStaff),
+        getCheckpointContext(problem.id, isStaff),
+    ])
     const lock = problem.contestLock
     const { columns: expectedColumns, rows: expectedRows } =
         parseExpectedOutput(problem.expectedOutput)
@@ -225,6 +238,8 @@ export default async function ProblemPage({ params }: Props) {
                 discussionEnabled={Boolean(discussionSettings?.globalEnabled)}
                 discussionMode={discussionState?.mode ?? "OPEN"}
                 initialTableInfos={parseSchema(problem.schema?.sql)}
+                panelProblems={panelProblems}
+                checkpointContext={checkpointContext}
                 relatedArticles={problem.relatedArticles ?? []}
                 submissionDisabledReason={
                     lock

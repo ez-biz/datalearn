@@ -140,6 +140,9 @@ jobs:
       - name: Test console nav model
         run: npm run test:console-nav
 
+      - name: Test problems panel model
+        run: npm run test:problems-panel
+
       - name: Test lesson nav model
         run: npm run test:lesson-nav
 
