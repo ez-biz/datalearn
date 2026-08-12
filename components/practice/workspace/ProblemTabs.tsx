@@ -9,10 +9,8 @@ import {
     TabsTrigger,
 } from "@/components/shadcn/tabs"
 import { HistoryPanel } from "@/components/practice/HistoryPanel"
-import {
-    DiscussionPanel,
-    type DiscussionMode,
-} from "@/components/practice/discussion/DiscussionPanel"
+import type { DiscussionMode } from "@/components/practice/discussion/DiscussionPanel"
+import type { Dialect } from "@/lib/sql-engine/types"
 import type { ProblemHistoryEntry } from "@/actions/submissions"
 import type {
     ProblemTab,
@@ -21,6 +19,8 @@ import type {
 } from "@/lib/workspace/types"
 import { DescriptionTab } from "./tabs/DescriptionTab"
 import { HintsTab } from "./tabs/HintsTab"
+import { SolutionsTab } from "./tabs/SolutionsTab"
+import { DiscussionTab } from "./tabs/DiscussionTab"
 
 interface ProblemTabsProps {
     number: number
@@ -49,6 +49,10 @@ interface ProblemTabsProps {
     comesFrom: React.ReactNode | null
     activeTab: ProblemTab
     onTabChange: (tab: ProblemTab) => void
+    /** Engines this problem allows, for the solution dialect toggle. */
+    dialects: readonly Dialect[]
+    /** Engine the learner is currently on. */
+    activeDialect: Dialect
 }
 
 /**
@@ -87,6 +91,8 @@ export function ProblemTabs({
     comesFrom,
     activeTab,
     onTabChange,
+    dialects,
+    activeDialect,
 }: ProblemTabsProps) {
     const hasHints = hints.length > 0
     const showDiscussion = discussionEnabled && discussionMode !== "HIDDEN"
@@ -150,6 +156,12 @@ export function ProblemTabs({
                             </TabsTrigger>
                         )}
                         <TabsTrigger
+                            value="solutions"
+                            className="px-3 py-2.5 text-[13px]"
+                        >
+                            Solutions
+                        </TabsTrigger>
+                        <TabsTrigger
                             value="history"
                             className="gap-1.5 px-3 py-2.5 text-[13px]"
                         >
@@ -197,6 +209,19 @@ export function ProblemTabs({
                 )}
 
                 <TabsContent
+                    value="solutions"
+                    className="scrollbar-thin min-h-0 overflow-y-auto"
+                >
+                    <SolutionsTab
+                        slug={slug}
+                        dialects={dialects}
+                        activeDialect={activeDialect}
+                        isSignedIn={isSignedIn}
+                        isSolved={isSolved}
+                    />
+                </TabsContent>
+
+                <TabsContent
                     value="history"
                     className="scrollbar-thin min-h-0 overflow-y-auto"
                 >
@@ -209,8 +234,8 @@ export function ProblemTabs({
 
                 {showDiscussion && (
                     <TabsContent value="discussion" className="min-h-0">
-                        <DiscussionPanel
-                            problemSlug={slug}
+                        <DiscussionTab
+                            slug={slug}
                             isSignedIn={isSignedIn}
                             viewerUserId={viewerUserId}
                             discussionMode={discussionMode}

@@ -343,6 +343,8 @@ export function ProblemClient({
                 <ProblemTabs
                     activeTab={activeTab}
                     onTabChange={setActiveTab}
+                    dialects={allowedDialects}
+                    activeDialect={dialect}
                     firstVisit={firstVisit}
                     comesFrom={
                         checkpointContext ? (
