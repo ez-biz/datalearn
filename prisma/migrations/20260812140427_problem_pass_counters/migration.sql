@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "SQLProblem" ADD COLUMN     "acceptedCount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "attemptCount" INTEGER NOT NULL DEFAULT 0;

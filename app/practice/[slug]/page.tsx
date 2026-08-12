@@ -238,6 +238,8 @@ export default async function ProblemPage({ params }: Props) {
                 discussionEnabled={Boolean(discussionSettings?.globalEnabled)}
                 discussionMode={discussionState?.mode ?? "OPEN"}
                 initialTableInfos={parseSchema(problem.schema?.sql)}
+                attemptCount={problem.attemptCount}
+                acceptedCount={problem.acceptedCount}
                 panelProblems={panelProblems}
                 checkpointContext={checkpointContext}
                 relatedArticles={problem.relatedArticles ?? []}

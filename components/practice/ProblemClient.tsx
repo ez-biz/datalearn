@@ -57,6 +57,8 @@ interface ProblemClientProps {
      * SELECT against DuckDB once `dbReady`.
      */
     initialTableInfos: TableInfo[] | null
+    attemptCount: number
+    acceptedCount: number
     /** Whole published catalog for the problems panel, already solved-marked. */
     panelProblems: PanelProblem[]
     /** Lesson this problem is a checkpoint of, or null when it is catalog-only. */
@@ -101,6 +103,8 @@ export function ProblemClient({
     relatedArticles,
     panelProblems,
     checkpointContext,
+    attemptCount,
+    acceptedCount,
 }: ProblemClientProps) {
     const [query, setQuery] = useState("")
     const [hydrated, setHydrated] = useState(false)
@@ -347,6 +351,8 @@ export function ProblemClient({
                     dialects={allowedDialects}
                     activeDialect={dialect}
                     firstVisit={firstVisit}
+                    attemptCount={attemptCount}
+                    acceptedCount={acceptedCount}
                     comesFrom={
                         checkpointContext ? (
                             <ComesFromCard context={checkpointContext} />

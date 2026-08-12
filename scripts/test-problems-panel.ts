@@ -22,6 +22,8 @@ function p(over: Partial<PanelProblem>): PanelProblem {
         modulePosition: null,
         moduleTitle: null,
         tags: [],
+        attemptCount: 0,
+        acceptedCount: 0,
         ...over,
     }
 }

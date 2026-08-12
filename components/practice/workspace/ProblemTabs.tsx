@@ -46,6 +46,8 @@ interface ProblemTabsProps {
     discussionPrefill: string | null
     onDiscussionPrefillConsumed: () => void
     firstVisit: boolean | null
+    attemptCount: number
+    acceptedCount: number
     comesFrom: React.ReactNode | null
     activeTab: ProblemTab
     onTabChange: (tab: ProblemTab) => void
@@ -89,6 +91,8 @@ export function ProblemTabs({
     onDiscussionPrefillConsumed,
     firstVisit,
     comesFrom,
+    attemptCount,
+    acceptedCount,
     activeTab,
     onTabChange,
     dialects,
@@ -196,6 +200,8 @@ export function ProblemTabs({
                         relatedArticles={relatedArticles}
                         firstVisit={firstVisit}
                         comesFrom={comesFrom}
+                        attemptCount={attemptCount}
+                        acceptedCount={acceptedCount}
                     />
                 </TabsContent>
 

@@ -89,6 +89,72 @@ test.describe("workspace description tab", () => {
     })
 })
 
+test.describe("workspace pass rate", () => {
+    const RATE_EMAIL = "e2e-sp5-passrate@example.test"
+
+    test("shows a rate when there are attempts and nothing when there are none", async ({
+        page,
+    }) => {
+        const user = await seedUser({ email: RATE_EMAIL })
+        const problem = await prisma.sQLProblem.findUnique({
+            where: { slug: SLUG },
+            select: { id: true, attemptCount: true, acceptedCount: true },
+        })
+        if (!problem) throw new Error(`${SLUG} is not seeded`)
+
+        // One accepted, two wrong -> 33%. Seeded here rather than relying on
+        // whatever submissions the environment happens to have.
+        for (const ok of [true, false, false]) {
+            await prisma.$transaction([
+                prisma.submission.create({
+                    data: {
+                        userId: user.id,
+                        problemId: problem.id,
+                        status: ok ? "ACCEPTED" : "WRONG_ANSWER",
+                        code: "SELECT 1;",
+                    },
+                }),
+                prisma.sQLProblem.update({
+                    where: { id: problem.id },
+                    data: {
+                        attemptCount: { increment: 1 },
+                        acceptedCount: { increment: ok ? 1 : 0 },
+                    },
+                }),
+            ])
+        }
+
+        try {
+            await page.goto(`/practice/${SLUG}`)
+            const expected = Math.round(
+                ((problem.acceptedCount + 1) / (problem.attemptCount + 3)) * 100
+            )
+            await expect(page.getByText(`${expected}% pass`)).toBeVisible()
+        } finally {
+            // Deleting the user cascades the submissions but does NOT
+            // decrement the counters, so restore them explicitly.
+            await deleteUser(RATE_EMAIL)
+            await prisma.sQLProblem.update({
+                where: { id: problem.id },
+                data: {
+                    attemptCount: problem.attemptCount,
+                    acceptedCount: problem.acceptedCount,
+                },
+            })
+        }
+    })
+
+    test("renders no chip for a problem nobody has attempted", async ({ page }) => {
+        const fresh = await prisma.sQLProblem.findFirst({
+            where: { status: "PUBLISHED", attemptCount: 0 },
+            select: { slug: true },
+        })
+        if (!fresh) throw new Error("no unattempted published problem to test")
+        await page.goto(`/practice/${fresh.slug}`)
+        await expect(page.getByText(/% pass/)).toHaveCount(0)
+    })
+})
+
 test.describe("workspace problems panel", () => {
     test("closing the panel survives a reload", async ({ page }) => {
         await page.setViewportSize({ width: 1440, height: 900 })
