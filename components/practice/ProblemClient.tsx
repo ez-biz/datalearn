@@ -6,7 +6,7 @@ import { validateSubmission } from "@/actions/submissions"
 import type { ValidationResult } from "@/lib/sql-validator"
 import type { ProblemHistoryEntry } from "@/actions/submissions"
 import { computeValidateRowCap } from "@/lib/sql-engine/result-cap"
-import { ProblemPanel, type TableInfo } from "./ProblemPanel"
+import type { ProblemTab, TableInfo } from "@/lib/workspace/types"
 import type { DiscussionMode } from "./discussion/DiscussionPanel"
 import {
     extractTableNames,
@@ -19,6 +19,8 @@ import { ProblemsPanel } from "./workspace/ProblemsPanel"
 import type { PanelProblem } from "@/lib/workspace/problems-panel-model"
 import type { CheckpointContext } from "@/lib/workspace/queries"
 import { LessonContextBar } from "./workspace/LessonContextBar"
+import { ProblemTabs } from "./workspace/ProblemTabs"
+import { ComesFromCard } from "./workspace/ComesFromCard"
 
 const SqlPlayground = dynamic(
     () =>
@@ -72,6 +74,7 @@ const DRAFT_PREFIX = "dl:draft:"
 const SAMPLE_LIMIT = 5
 const QUERY_TIMEOUT_OVERRIDE_KEY = "dl:query-timeout-ms"
 const PANEL_KEY = "dl:problems-panel"
+const SEEN_PREFIX = "dl:seen:"
 const MAX_QUERY_TIMEOUT_OVERRIDE_MS = 10_000
 
 export function ProblemClient({
@@ -130,6 +133,24 @@ export function ProblemClient({
             // Storage unavailable — keep the default.
         }
     }, [])
+
+    // Schema and Expected output are open on a first visit and collapsed
+    // after. Read before write, so the first render of a first visit still
+    // sees the key absent.
+    // null until resolved on mount — SSR cannot know, and the collapsibles
+    // must not latch a value before we do.
+    const [firstVisit, setFirstVisit] = useState<boolean | null>(null)
+    useEffect(() => {
+        const key = `${SEEN_PREFIX}${slug}`
+        try {
+            setFirstVisit(localStorage.getItem(key) === null)
+            localStorage.setItem(key, "1")
+        } catch {
+            // Storage unavailable — treat as a return visit and stay collapsed.
+        }
+    }, [slug])
+
+    const [activeTab, setActiveTab] = useState<ProblemTab>("description")
 
     const draftKey = `${DRAFT_PREFIX}${slug}`
     const dialectKey = `dl:dialect:${slug}`
@@ -319,7 +340,15 @@ export function ProblemClient({
                 />
             }
             problemPanel={
-                <ProblemPanel
+                <ProblemTabs
+                    activeTab={activeTab}
+                    onTabChange={setActiveTab}
+                    firstVisit={firstVisit}
+                    comesFrom={
+                        checkpointContext ? (
+                            <ComesFromCard context={checkpointContext} />
+                        ) : null
+                    }
                     number={number}
                     title={title}
                     difficulty={difficulty}
