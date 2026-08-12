@@ -16,7 +16,10 @@ import { auth } from "@/lib/auth"
 import { ProblemClient } from "@/components/practice/ProblemClient"
 import { ReportDialog } from "@/components/practice/ReportDialog"
 import { AddToListButton } from "@/components/lists/AddToListButton"
-import { getWorkspaceProblemsPanel } from "@/lib/workspace/queries"
+import {
+    getCheckpointContext,
+    getWorkspaceProblemsPanel,
+} from "@/lib/workspace/queries"
 import { parseSchema } from "@/lib/schema-parser"
 import { prisma } from "@/lib/prisma"
 import { getDiscussionSettings } from "@/lib/discussions/settings"
@@ -112,10 +115,10 @@ export default async function ProblemPage({ params }: Props) {
     // group instead. Same allowDraft rule the lesson reader uses.
     const isStaff =
         session?.user?.role === "ADMIN" || session?.user?.role === "MODERATOR"
-    const panelProblems = await getWorkspaceProblemsPanel(
-        session?.user?.id ?? null,
-        isStaff
-    )
+    const [panelProblems, checkpointContext] = await Promise.all([
+        getWorkspaceProblemsPanel(session?.user?.id ?? null, isStaff),
+        getCheckpointContext(problem.id, isStaff),
+    ])
     const lock = problem.contestLock
     const { columns: expectedColumns, rows: expectedRows } =
         parseExpectedOutput(problem.expectedOutput)
@@ -236,6 +239,7 @@ export default async function ProblemPage({ params }: Props) {
                 discussionMode={discussionState?.mode ?? "OPEN"}
                 initialTableInfos={parseSchema(problem.schema?.sql)}
                 panelProblems={panelProblems}
+                checkpointContext={checkpointContext}
                 relatedArticles={problem.relatedArticles ?? []}
                 submissionDisabledReason={
                     lock

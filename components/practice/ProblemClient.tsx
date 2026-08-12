@@ -17,6 +17,8 @@ import { SqlPlaygroundSkeleton } from "@/components/sql/SqlPlaygroundSkeleton"
 import { WorkspaceLayout } from "./workspace/WorkspaceLayout"
 import { ProblemsPanel } from "./workspace/ProblemsPanel"
 import type { PanelProblem } from "@/lib/workspace/problems-panel-model"
+import type { CheckpointContext } from "@/lib/workspace/queries"
+import { LessonContextBar } from "./workspace/LessonContextBar"
 
 const SqlPlayground = dynamic(
     () =>
@@ -54,6 +56,8 @@ interface ProblemClientProps {
     initialTableInfos: TableInfo[] | null
     /** Whole published catalog for the problems panel, already solved-marked. */
     panelProblems: PanelProblem[]
+    /** Lesson this problem is a checkpoint of, or null when it is catalog-only. */
+    checkpointContext: CheckpointContext | null
     relatedArticles: Array<{
         id: string
         slug: string
@@ -92,6 +96,7 @@ export function ProblemClient({
     initialTableInfos,
     relatedArticles,
     panelProblems,
+    checkpointContext,
 }: ProblemClientProps) {
     const [query, setQuery] = useState("")
     const [hydrated, setHydrated] = useState(false)
@@ -301,7 +306,11 @@ export function ProblemClient({
         <WorkspaceLayout
             panelOpen={panelOpen}
             onTogglePanel={togglePanel}
-            contextBar={null}
+            contextBar={
+                checkpointContext ? (
+                    <LessonContextBar context={checkpointContext} />
+                ) : null
+            }
             problemsPanel={
                 <ProblemsPanel
                     problems={panelProblems}
