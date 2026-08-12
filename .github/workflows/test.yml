@@ -143,6 +143,9 @@ jobs:
       - name: Test problems panel model
         run: npm run test:problems-panel
 
+      - name: Test pass rate
+        run: npm run test:pass-rate
+
       - name: Test lesson nav model
         run: npm run test:lesson-nav
 
