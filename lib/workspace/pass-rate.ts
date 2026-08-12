@@ -4,11 +4,15 @@
 // the same transaction that writes a Submission, so reading them is O(1) per
 // row. That matters: the problems panel renders the whole published catalog.
 //
-// Two honest limits, stated in the UI rather than hidden:
+// Three honest limits, stated in the UI or the docs rather than hidden:
 //   - validateSubmission refuses anonymous callers, so this measures
 //     signed-in attempts only.
 //   - It counts submissions, not people. One learner's ten tries move it ten
 //     times.
+//   - It drifts. Deleting a User cascades their Submissions away without
+//     decrementing the counters, so a removed account leaves every problem it
+//     attempted overcounted. scripts/verify-pass-rate-backfill.ts detects
+//     that and --fix repairs it.
 
 /**
  * Whole-percent pass rate, or null when there is nothing honest to show.

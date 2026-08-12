@@ -214,6 +214,16 @@ model SQLProblem {
   hiddenDataValidatedAt           DateTime?
   hiddenDataValidationFingerprint String?
   ordered                         Boolean                 @default(false)
+  /// Denormalized pass-rate counters, maintained in the same transaction
+  /// that writes a Submission (actions/submissions.ts). Reading them is
+  /// O(1) per row, which the problems panel needs — it renders the whole
+  /// published catalog. Counts signed-in submissions, not people.
+  ///
+  /// These drift: deleting a User cascades their Submissions away and
+  /// nothing decrements the counters. Repair with
+  /// `npm run verify:pass-rate -- --fix`.
+  attemptCount                    Int                     @default(0)
+  acceptedCount                   Int                     @default(0)
   /// Allowed engines for solving this problem. Most problems are
   /// portable (`[DUCKDB, POSTGRES]`); narrow only when the canonical
   /// solution uses dialect-specific syntax (e.g. JSONB, STRING_AGG,

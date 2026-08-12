@@ -77,6 +77,9 @@ jobs:
       - name: Seed visual lesson
         run: npm run seed:visual
 
+      - name: Verify pass-rate counters
+        run: npm run verify:pass-rate
+
       - name: Audit SQL dialect outputs
         run: npm run audit:dialects:ci
 
