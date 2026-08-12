@@ -5,6 +5,8 @@
 // Everything that decides what the panel's rows look like lives here;
 // ProblemsPanel only renders the result.
 
+import { modulePrefix } from "@/components/learn/reader/lesson-nav"
+
 export type PanelProblem = {
     number: number
     slug: string
@@ -33,9 +35,16 @@ export type PanelMode = "track" | "todo" | "tags"
 export const UNGROUPED = "__ungrouped__"
 const UNGROUPED_LABEL = "Not in a track"
 
-/** "04 · Window functions" — the module's own position, zero-padded. */
+/**
+ * "04 · Window functions".
+ *
+ * `modulePrefix` is imported rather than restated: Module.position is
+ * 0-indexed, so the displayed number is position + 1, and the reader's
+ * breadcrumb already encodes that. Two copies of the convention would let
+ * the panel and the breadcrumb disagree about the same module.
+ */
 function moduleLabel(position: number, title: string): string {
-    return `${String(position).padStart(2, "0")} · ${title}`
+    return `${modulePrefix(position)} · ${title}`
 }
 
 function matchesFilter(problem: PanelProblem, needle: string): boolean {

@@ -26,19 +26,31 @@ function p(over: Partial<PanelProblem>): PanelProblem {
 }
 
 describe("buildPanelGroups — track mode", () => {
+    it("labels a module with its 1-based display number", () => {
+        // Module.position is 0-indexed. The reader's breadcrumb shows
+        // position + 1, and the panel must agree with it — otherwise one
+        // module reads as 03 in the panel and 04 in the breadcrumb.
+        const groups = buildPanelGroups(
+            [p({ moduleId: "m", modulePosition: 0, moduleTitle: "Basics" })],
+            "track",
+            ""
+        )
+        assert.equal(groups[0].label, "01 · Basics")
+    })
+
     it("orders groups by module position", () => {
         const groups = buildPanelGroups(
             [
                 p({
                     number: 2,
                     moduleId: "m4",
-                    modulePosition: 4,
+                    modulePosition: 3,
                     moduleTitle: "Window functions",
                 }),
                 p({
                     number: 1,
                     moduleId: "m3",
-                    modulePosition: 3,
+                    modulePosition: 2,
                     moduleTitle: "Aggregation",
                 }),
             ],
