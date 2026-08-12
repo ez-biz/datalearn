@@ -341,10 +341,20 @@ test.describe("problem discussions", () => {
         await page.getByRole("button", { name: /accepted/i }).click()
         await page.getByRole("button", { name: /share approach/i }).click()
 
-        await expect(page.getByRole("tab", { name: "Discussion" })).toHaveAttribute(
+        // SP5 changed the destination: "share approach" now opens the
+        // Solutions composer, where it becomes a real APPROACH row instead of
+        // a comment that quotes SQL.
+        await expect(page.getByRole("tab", { name: "Solutions" })).toHaveAttribute(
             "aria-selected",
             "true"
         )
+        await expect(page.getByLabel("Your approach")).toHaveValue(
+            new RegExp(`${PREFIX} SELECT 1 AS id;`)
+        )
+
+        // The discussion composer is still prefilled — quoting your query
+        // into the thread remains possible, it is just no longer the default.
+        await page.getByRole("tab", { name: "Discussion" }).click()
         await expect(page.getByLabel("Discussion comment")).toHaveValue(
             new RegExp(`${PREFIX} SELECT 1 AS id;`)
         )

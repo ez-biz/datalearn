@@ -4,6 +4,8 @@ import Link from "next/link"
 import { ChevronRight, Lock, Sparkles } from "lucide-react"
 import { SolutionPanel } from "@/components/practice/SolutionPanel"
 import type { Dialect } from "@/lib/sql-engine/types"
+import type { DiscussionMode } from "@/components/practice/discussion/DiscussionPanel"
+import { ApproachList } from "../ApproachList"
 
 interface SolutionsTabProps {
     slug: string
@@ -11,6 +13,10 @@ interface SolutionsTabProps {
     activeDialect: Dialect
     isSignedIn: boolean
     isSolved: boolean
+    discussionMode: DiscussionMode
+    /** SQL to prefill the share composer with. */
+    approachPrefill: string | null
+    onApproachPrefillConsumed: () => void
 }
 
 /**
@@ -34,6 +40,9 @@ export function SolutionsTab({
     activeDialect,
     isSignedIn,
     isSolved,
+    discussionMode,
+    approachPrefill,
+    onApproachPrefillConsumed,
 }: SolutionsTabProps) {
     return (
         <div className="space-y-4 p-5">
@@ -94,6 +103,19 @@ export function SolutionsTab({
                     slug={slug}
                     dialects={dialects}
                     activeDialect={activeDialect}
+                />
+            )}
+
+            {/* Community approaches sit BELOW the canonical solution:
+                editorial content is never under user content. HIDDEN removes
+                the list entirely, which getApproaches enforces server-side. */}
+            {discussionMode !== "HIDDEN" && (
+                <ApproachList
+                    slug={slug}
+                    isSignedIn={isSignedIn}
+                    locked={discussionMode === "LOCKED"}
+                    prefill={approachPrefill}
+                    onPrefillConsumed={onApproachPrefillConsumed}
                 />
             )}
         </div>
