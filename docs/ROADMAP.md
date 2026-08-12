@@ -6,6 +6,28 @@
 
 ## Recently shipped
 
+### Workspace redesign (SP5 of the learning-platform redesign)
+
+The problem-solving workspace at `/practice/<slug>` rebuilt as a four-column console view — problems panel · lesson context bar · five-tab problem panel · editor — plus pass rate and community approaches. Shipped in four phases, each independently mergeable.
+
+- **A third shell mode** — `isAppRoute` joins `isFocusRoute` in `components/layout/console/focus-route.ts`. App routes keep the console sidebar but drop the footer and clamp `#app-scroll` at `lg`, because the workspace's panes own their own scrolling. A unit test asserts the two predicates are **mutually exclusive** over every real route; three shell modes is one more than anyone holds in their head reliably.
+- **Two oversized files retired** — `ProblemPanel.tsx` (525 lines) and `SqlPlayground.tsx` (451) became nine focused components, with the decision logic extracted to pure, unit-tested modules under `lib/workspace/`.
+- **Pass rate as denormalized counters** — `attemptCount`/`acceptedCount` on `SQLProblem`, incremented in the transaction that already writes the `Submission`. O(1) per row, which the panel needs since it renders the whole catalog. The backfill is verified by **recomputing the aggregate and comparing values**; `npm run verify:pass-rate` runs in CI and `--fix` repairs drift.
+- **Community approaches on the existing discussion model** — `DiscussionComment.kind = APPROACH`, so they inherit voting, reporting, moderation status and the per-problem OPEN/LOCKED/HIDDEN modes instead of growing a second pipeline. One per user per problem via a **partial** unique index in raw SQL; a plain composite would have capped ordinary comments at one per user.
+- **Posting is open to any signed-in user**, mitigated rather than gated: an author with an accepted submission is marked verified, verified sorts first only within an equal score, and every other approach says it is not verified against the expected output.
+- **Six new CI suites** — `test:problems-panel`, `test:pass-rate`, `test:approach-sort`, `test:approaches`, `check:theme-utilities`, `verify:pass-rate` — each wired into `test.yml` in the PR that added it.
+- **`check:theme-utilities` closes a long-standing gap** — `check:token-parity` diffs `:root` against `.light` and never inspects `@theme inline`, so a token could exist with no utility mapping and the class would silently do nothing. The new guard caught four such dead classes on its first real use.
+
+Known gaps carried forward: approaches render a score but have **no vote controls** yet; the light theme has not been reviewed against screenshot `19`; and the mobile workspace is SP6's.
+
+### Console shell and tokens (SP2 of the learning-platform redesign)
+
+The graphite Console token system and the sidebar/rail shell every later screen renders inside. Retired the top navbar for a collapsible sidebar with an icon-rail state persisted in a cookie and read server-side, plus a mobile tab bar below `lg`.
+
+- **Every pre-existing token aliased onto the new system**, so `--background`, `--surface`, `--border` and friends keep working while the graphite palette becomes the source of truth. `check:token-parity` enforces that every `:root` token also exists in `.light` — light is not an inversion.
+- **`ConsoleChrome` took ownership of `#app-scroll`, `<main id="main-content">` and `<Footer>`** from `app/layout.tsx`, which is what made SP3's focus route and SP5's app route expressible at all.
+- **A whole-branch review caught what per-task review could not** — deleting `Navbar.tsx` had silently removed the theme toggle, mobile sign-out and the only `banner` landmark. That failure shape ("capability lost in a deletion") has recurred in every sub-project since and is now checked deliberately.
+
 ### Lesson reader (SP3 of the learning-platform redesign)
 
 The first learner-facing screen rendered against SP1's spine: a full-bleed reading route at `/learn/tracks/<track>/<lesson>` with the curriculum on the left, the article in the middle, and contents + lesson state on the right.
