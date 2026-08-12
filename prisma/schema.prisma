@@ -753,6 +753,15 @@ enum DiscussionModerationActionKind {
   REVOKE_MODERATOR_PERMISSION
 }
 
+/// COMMENT is ordinary discussion; APPROACH is a shared solution shown in
+/// the workspace's Solutions tab. One model rather than two so approaches
+/// inherit voting, reporting, moderation status and the per-problem
+/// OPEN/LOCKED/HIDDEN modes instead of growing a second pipeline.
+enum DiscussionCommentKind {
+  COMMENT
+  APPROACH
+}
+
 model DiscussionComment {
   id           String                  @id @default(cuid())
   problemId    String
@@ -763,6 +772,11 @@ model DiscussionComment {
   parent       DiscussionComment?      @relation("DiscussionReplies", fields: [parentId], references: [id], onDelete: Restrict)
   replies      DiscussionComment[]     @relation("DiscussionReplies")
   bodyMarkdown String                  @db.Text
+  kind         DiscussionCommentKind   @default(COMMENT)
+  /// APPROACH only: the shared query. Null on ordinary comments.
+  sql          String?                 @db.Text
+  /// APPROACH only: short strategy label, e.g. "window function".
+  strategy     String?
   status       DiscussionCommentStatus @default(VISIBLE)
   upvotes      Int                     @default(0)
   downvotes    Int                     @default(0)
@@ -779,6 +793,7 @@ model DiscussionComment {
   hiddenById   String?
   hiddenBy     User?                   @relation("DiscussionCommentHiddenBy", fields: [hiddenById], references: [id], onDelete: SetNull)
 
+  @@index([problemId, kind, status, score, createdAt])
   @@index([problemId, parentId, status, score, createdAt])
   @@index([problemId, status, createdAt])
   @@index([userId, createdAt])

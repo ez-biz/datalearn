@@ -55,6 +55,8 @@ interface ProblemTabsProps {
     dialects: readonly Dialect[]
     /** Engine the learner is currently on. */
     activeDialect: Dialect
+    approachPrefill: string | null
+    onApproachPrefillConsumed: () => void
 }
 
 /**
@@ -97,6 +99,8 @@ export function ProblemTabs({
     onTabChange,
     dialects,
     activeDialect,
+    approachPrefill,
+    onApproachPrefillConsumed,
 }: ProblemTabsProps) {
     const hasHints = hints.length > 0
     const showDiscussion = discussionEnabled && discussionMode !== "HIDDEN"
@@ -105,7 +109,8 @@ export function ProblemTabs({
         activeTab === "discussion" && !showDiscussion ? "description" : activeTab
 
     const shareApproach = (code: string) => {
-        if (showDiscussion) onTabChange("discussion")
+        // Lands in the Solutions composer, not the discussion thread.
+        onTabChange("solutions")
         onShareApproach?.(code)
     }
 
@@ -224,6 +229,9 @@ export function ProblemTabs({
                         activeDialect={activeDialect}
                         isSignedIn={isSignedIn}
                         isSolved={isSolved}
+                        discussionMode={discussionMode}
+                        approachPrefill={approachPrefill}
+                        onApproachPrefillConsumed={onApproachPrefillConsumed}
                     />
                 </TabsContent>
 

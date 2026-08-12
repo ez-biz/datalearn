@@ -111,6 +111,7 @@ export function ProblemClient({
     const [history, setHistory] = useState(initialHistory)
     const [solved, setSolved] = useState(isSolved)
     const [discussionPrefill, setDiscussionPrefill] = useState<string | null>(null)
+    const [approachPrefill, setApproachPrefill] = useState<string | null>(null)
     const [queryTimeoutMs] = useState(() => getQueryTimeoutOverride())
     const [tableInfos, setTableInfos] = useState<TableInfo[] | null>(
         initialTableInfos
@@ -288,10 +289,21 @@ export function ProblemClient({
         setQuery(code)
     }, [])
 
+    // "Share approach" from the history panel now lands in the Solutions
+    // composer, where it becomes a real APPROACH row rather than a comment
+    // that happens to quote SQL.
+    //
+    // It still fills the discussion composer too. Routing it only to
+    // Solutions would silently remove the ability to quote your query into
+    // the thread — a capability that exists today and is covered by
+    // discussions.spec.ts. Both are prepared; only the destination changed.
     const shareApproach = useCallback((code: string) => {
         const trimmed = code.trim()
         if (!trimmed) return
-        setDiscussionPrefill(`Here is my approach:\n\n\`\`\`sql\n${trimmed}\n\`\`\`\n`)
+        setApproachPrefill(trimmed)
+        setDiscussionPrefill(
+            `Here is my approach:\n\n\`\`\`sql\n${trimmed}\n\`\`\`\n`
+        )
     }, [])
 
     const handleSubmit = useCallback(
@@ -350,6 +362,8 @@ export function ProblemClient({
                     onTabChange={setActiveTab}
                     dialects={allowedDialects}
                     activeDialect={dialect}
+                    approachPrefill={approachPrefill}
+                    onApproachPrefillConsumed={() => setApproachPrefill(null)}
                     firstVisit={firstVisit}
                     attemptCount={attemptCount}
                     acceptedCount={acceptedCount}

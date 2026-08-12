@@ -155,6 +155,71 @@ test.describe("workspace pass rate", () => {
     })
 })
 
+test.describe("workspace community approaches", () => {
+    const APPROACH_EMAIL = "e2e-sp5-approach@example.test"
+
+    test("any signed-in user can share one, and it is marked unverified", async ({
+        page,
+        context,
+        baseURL,
+    }) => {
+        const user = await seedUser({ email: APPROACH_EMAIL })
+        await context.addCookies([sessionCookie(user.sessionToken, baseURL!)])
+        await page.setViewportSize({ width: 1440, height: 900 })
+        await page.goto(`/practice/${SLUG}`)
+        await page.getByRole("tab", { name: "Solutions" }).click()
+
+        await expect(
+            page.getByText("Nobody has shared an approach yet.")
+        ).toBeVisible()
+
+        await page.getByLabel("Your approach").fill("SELECT id FROM users;")
+        await page.getByLabel("Strategy").fill("plain select")
+        await page.getByRole("button", { name: "Share" }).click()
+
+        // Posting is open to anyone signed in; the mitigation is that an
+        // author with no accepted submission is labelled, not blocked.
+        await expect(page.getByText("plain select")).toBeVisible({
+            timeout: 10_000,
+        })
+        await expect(
+            page.getByText("Not verified against the expected output.")
+        ).toBeVisible()
+
+        // One per user: the composer is replaced once you have one.
+        await expect(
+            page.getByText("You have shared an approach for this problem.")
+        ).toBeVisible()
+
+        await deleteUser(APPROACH_EMAIL)
+        await prisma.discussionComment.deleteMany({
+            where: { kind: "APPROACH", userId: null },
+        })
+    })
+
+    test("approaches never leak into the discussion thread", async ({
+        page,
+        context,
+        baseURL,
+    }) => {
+        const user = await seedUser({ email: APPROACH_EMAIL })
+        await context.addCookies([sessionCookie(user.sessionToken, baseURL!)])
+        await page.goto(`/practice/${SLUG}`)
+        await page.getByRole("tab", { name: "Solutions" }).click()
+        await page.getByLabel("Your approach").fill("SELECT 1;")
+        await page.getByRole("button", { name: "Share" }).click()
+        await expect(page.getByText("SELECT 1;")).toBeVisible({ timeout: 10_000 })
+
+        await page.getByRole("tab", { name: "Discussion" }).click()
+        await expect(page.getByRole("tabpanel")).not.toContainText("SELECT 1;")
+
+        await deleteUser(APPROACH_EMAIL)
+        await prisma.discussionComment.deleteMany({
+            where: { kind: "APPROACH", userId: null },
+        })
+    })
+})
+
 test.describe("workspace problems panel", () => {
     test("closing the panel survives a reload", async ({ page }) => {
         await page.setViewportSize({ width: 1440, height: 900 })
