@@ -77,12 +77,19 @@ export function publicCommentWhere(
     return {
         problemId,
         parentId: null,
+        // SP5 added APPROACH rows to this table. They are rendered by the
+        // workspace's Solutions tab, not the discussion thread — without this
+        // filter every shared solution would also appear as a comment.
+        kind: "COMMENT",
         status: { in: [...PUBLIC_COMMENT_STATUSES] },
     }
 }
 
 export function publicReplyWhere(): Prisma.DiscussionCommentWhereInput {
     return {
+        // Approaches are never replies, but filter anyway: a future write
+        // path that set parentId on one would otherwise leak it into a thread.
+        kind: "COMMENT",
         status: { in: [...PUBLIC_COMMENT_STATUSES] },
     }
 }

@@ -122,6 +122,9 @@ jobs:
       - name: Test curriculum actions
         run: npm run test:curriculum-actions
 
+      - name: Test approaches
+        run: npm run test:approaches
+
       - name: Test checkpoint backfill
         run: npm run test:checkpoint-backfill
 
@@ -148,6 +151,9 @@ jobs:
 
       - name: Test pass rate
         run: npm run test:pass-rate
+
+      - name: Test approach sort
+        run: npm run test:approach-sort
 
       - name: Test lesson nav model
         run: npm run test:lesson-nav
