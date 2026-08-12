@@ -9,6 +9,7 @@ import {
     buildPanelGroups,
     type PanelProblem,
 } from "../lib/workspace/problems-panel-model"
+import { resolveCheckpointPosition } from "../lib/workspace/checkpoint-context"
 
 function p(over: Partial<PanelProblem>): PanelProblem {
     return {
@@ -297,5 +298,62 @@ describe("buildPanelGroups — filter", () => {
         )
         assert.equal(groups[0].total, 1)
         assert.equal(groups[0].done, 1)
+    })
+})
+
+describe("resolveCheckpointPosition", () => {
+    const siblings = [
+        { problemSlug: "a", position: 0 },
+        { problemSlug: "b", position: 1 },
+        { problemSlug: "c", position: 2 },
+    ]
+
+    it("is 1-based for display", () => {
+        const r = resolveCheckpointPosition(siblings, "a")!
+        assert.equal(r.index, 1)
+        assert.equal(r.total, 3)
+    })
+
+    it("points at the next sibling by position", () => {
+        assert.equal(
+            resolveCheckpointPosition(siblings, "b")!.nextProblemSlug,
+            "c"
+        )
+    })
+
+    it("has no next on the last checkpoint", () => {
+        assert.equal(
+            resolveCheckpointPosition(siblings, "c")!.nextProblemSlug,
+            null
+        )
+    })
+
+    it("sorts by position, not by input order", () => {
+        const shuffled = [siblings[2], siblings[0], siblings[1]]
+        assert.equal(
+            resolveCheckpointPosition(shuffled, "a")!.nextProblemSlug,
+            "b"
+        )
+    })
+
+    it("returns null for a problem that is not a sibling", () => {
+        assert.equal(resolveCheckpointPosition(siblings, "zzz"), null)
+    })
+
+    it("handles a lone checkpoint", () => {
+        const r = resolveCheckpointPosition([{ problemSlug: "only", position: 0 }], "only")!
+        assert.equal(r.index, 1)
+        assert.equal(r.total, 1)
+        assert.equal(r.nextProblemSlug, null)
+    })
+
+    it("does not mutate the caller's array", () => {
+        const shuffled = [siblings[2], siblings[0], siblings[1]]
+        const before = shuffled.map((s) => s.problemSlug)
+        resolveCheckpointPosition(shuffled, "a")
+        assert.deepEqual(
+            shuffled.map((s) => s.problemSlug),
+            before
+        )
     })
 })
