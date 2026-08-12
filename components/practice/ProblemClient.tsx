@@ -22,9 +22,10 @@ import { LessonContextBar } from "./workspace/LessonContextBar"
 import { ProblemTabs } from "./workspace/ProblemTabs"
 import { ComesFromCard } from "./workspace/ComesFromCard"
 
-const SqlPlayground = dynamic(
-    () =>
-        import("@/components/sql/SqlPlayground").then((mod) => mod.SqlPlayground),
+// Monaco is client-only, so the pane stays a dynamic import with the same
+// skeleton the playground used.
+const EditorPane = dynamic(
+    () => import("./workspace/EditorPane").then((mod) => mod.EditorPane),
     { ssr: false, loading: () => <SqlPlaygroundSkeleton /> }
 )
 
@@ -377,7 +378,7 @@ export function ProblemClient({
             }
             editor={
                 <div className="min-h-0 flex-1 p-3 sm:p-4">
-                    <SqlPlayground
+                    <EditorPane
                     dbReady={dbReady}
                     dbError={dbError}
                     dbRecovering={dbRecovering}
@@ -394,6 +395,7 @@ export function ProblemClient({
                     dialect={dialect}
                     allowedDialects={allowedDialects}
                     onDialectChange={handleDialectChange}
+                    checkpointContext={checkpointContext}
                     />
                 </div>
             }
