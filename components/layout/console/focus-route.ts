@@ -17,3 +17,26 @@ export function isFocusRoute(pathname: string): boolean {
         segments[1] === "tracks"
     )
 }
+
+/**
+ * Whether a path is an "app mode" route — one that sits inside the console
+ * shell but behaves like an application view rather than a document: no
+ * footer, and no page scroll at `lg` and above, because its inner panes own
+ * their own scrolling.
+ *
+ * Today that is exactly the problem workspace: /practice/<slug>. The catalog
+ * one level up (/practice) and its static /practice/tags route are ordinary
+ * scrolling pages. Segment count narrows the match, then the static sibling
+ * exclusion distinguishes the dynamic workspace route.
+ *
+ * INVARIANT: no path may satisfy both isAppRoute and isFocusRoute. Enforced
+ * in scripts/test-console-nav.ts.
+ */
+export function isAppRoute(pathname: string): boolean {
+    const segments = pathname.split("/").filter(Boolean)
+    return (
+        segments.length === 2 &&
+        segments[0] === "practice" &&
+        segments[1] !== "tags"
+    )
+}

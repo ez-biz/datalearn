@@ -18,7 +18,10 @@ import {
     parseSidebarState,
     sidebarCookieString,
 } from "../components/layout/console/sidebar-cookie"
-import { isFocusRoute } from "../components/layout/console/focus-route"
+import {
+    isAppRoute,
+    isFocusRoute,
+} from "../components/layout/console/focus-route"
 
 function find(key: string): NavItem {
     const flat: NavItem[] = []
@@ -86,6 +89,8 @@ describe("isNavItemActive — isolation", () => {
         "/learn/sql-basics",
         "/learn/tracks",
         "/practice",
+        "/practice/tags",
+        "/practice/tags/joins",
         "/practice/two-sum",
         "/contests",
     ]
@@ -271,6 +276,75 @@ describe("isFocusRoute", () => {
 
     it("is false for the site root", () => {
         assert.equal(isFocusRoute("/"), false)
+    })
+})
+
+describe("isAppRoute", () => {
+    it("matches a problem workspace", () => {
+        assert.equal(isAppRoute("/practice/second-highest-salary"), true)
+    })
+
+    it("does not match the practice catalog one level up", () => {
+        // SP4's catalog is a normal scrolling page and keeps its footer.
+        assert.equal(isAppRoute("/practice"), false)
+    })
+
+    it("does not match the tag catalog's static route", () => {
+        assert.equal(isAppRoute("/practice/tags"), false)
+    })
+
+    it("does not match a deeper path under practice", () => {
+        assert.equal(isAppRoute("/practice/a/b"), false)
+    })
+
+    it("tolerates a trailing slash", () => {
+        assert.equal(isAppRoute("/practice/two-sum/"), true)
+    })
+
+    it("does not match the root", () => {
+        assert.equal(isAppRoute("/"), false)
+    })
+})
+
+describe("shell modes are mutually exclusive", () => {
+    // Three shell modes is one more than anyone holds in their head
+    // reliably. This is what makes the third one safe to add.
+    const ROUTES = [
+        "/",
+        "/practice",
+        "/practice/two-sum",
+        "/learn",
+        "/learn/tracks",
+        "/learn/tracks/analyst-interview-prep",
+        "/learn/tracks/analyst-interview-prep/sessionisation",
+        "/learn/sql-basics/joins",
+        "/profile",
+        "/lists",
+        "/admin",
+        "/admin/problems",
+    ]
+
+    it("never reports a path as both focus and app", () => {
+        for (const route of ROUTES) {
+            assert.equal(
+                isFocusRoute(route) && isAppRoute(route), false,
+                `${route} resolved to two shell modes`,
+            )
+        }
+    })
+
+    it("has no tab bar item pointing at an app route", () => {
+        // App routes suppress page scroll at lg, while the tab bar is the
+        // shell's only navigation below lg. Keep their direct links separate.
+        for (const item of TAB_BAR) {
+            for (const candidate of [item, ...(item.children ?? [])]) {
+                if (!candidate.href) continue
+                assert.equal(
+                    isAppRoute(candidate.href), false,
+                    `tab bar item "${candidate.key}" points at app route ${candidate.href}`,
+                )
+            }
+        }
     })
 })
 

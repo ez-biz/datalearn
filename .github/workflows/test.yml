@@ -134,6 +134,9 @@ jobs:
       - name: Check token theme parity
         run: npm run check:token-parity
 
+      - name: Check theme utility mapping
+        run: npm run check:theme-utilities
+
       - name: Test console nav model
         run: npm run test:console-nav
 
