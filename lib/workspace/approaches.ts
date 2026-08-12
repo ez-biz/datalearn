@@ -152,10 +152,14 @@ export async function createApproach(
                 kind: "APPROACH",
                 sql,
                 strategy,
-                // bodyMarkdown is non-null on the shared model. The SQL lives
-                // in its own column; this keeps the row readable in any
-                // moderation view that only knows about comment bodies.
-                bodyMarkdown: strategy ?? "Shared approach",
+                // bodyMarkdown carries the SQL as a fenced block, not just a
+                // label. Moderation queues render this field and know nothing
+                // about `sql`, so a reported approach whose body said only
+                // "Shared approach" would be judged with its actual content
+                // invisible to the moderator.
+                bodyMarkdown: strategy
+                    ? `**${strategy}**\n\n\`\`\`sql\n${sql}\n\`\`\``
+                    : `\`\`\`sql\n${sql}\n\`\`\``,
             },
         })
     } catch (e) {
@@ -192,6 +196,10 @@ export async function updateApproach(
         data: {
             sql,
             strategy: input.strategy?.trim().slice(0, MAX_STRATEGY_LENGTH) || null,
+            // Keep the moderation-visible body in step with the query.
+            bodyMarkdown: input.strategy?.trim()
+                ? `**${input.strategy.trim().slice(0, MAX_STRATEGY_LENGTH)}**\n\n\`\`\`sql\n${sql}\n\`\`\``
+                : `\`\`\`sql\n${sql}\n\`\`\``,
             editedAt: new Date(),
         },
     })
