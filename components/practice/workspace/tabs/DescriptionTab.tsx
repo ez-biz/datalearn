@@ -3,6 +3,7 @@
 import { ChevronRight, Loader2 } from "lucide-react"
 import { RelatedArticlesPanel } from "@/components/practice/RelatedArticlesPanel"
 import type { RelatedArticle, TableInfo } from "@/lib/workspace/types"
+import { formatPassRate, PASS_RATE_TITLE } from "@/lib/workspace/pass-rate"
 import { CollapsibleSection } from "../CollapsibleSection"
 import { ColumnSchemaTable, DataTable } from "../DataTable"
 
@@ -18,6 +19,8 @@ interface DescriptionTabProps {
     firstVisit: boolean | null
     /** "Comes from" card, or null when the problem has no lesson. */
     comesFrom: React.ReactNode | null
+    attemptCount: number
+    acceptedCount: number
 }
 
 export function DescriptionTab({
@@ -30,7 +33,10 @@ export function DescriptionTab({
     relatedArticles,
     firstVisit,
     comesFrom,
+    attemptCount,
+    acceptedCount,
 }: DescriptionTabProps) {
+    const passRate = formatPassRate(acceptedCount, attemptCount)
     const hasInputTables = tableInfos && tableInfos.length > 0
     const hasOutput =
         expectedColumns &&
@@ -45,6 +51,17 @@ export function DescriptionTab({
                 margin auto, which centers the text in a narrow column inside
                 the panel even with max-w-none. Inline code is styled by hand
                 instead. */}
+            {passRate && (
+                <div className="flex justify-end">
+                    <span
+                        title={PASS_RATE_TITLE}
+                        className="font-mono text-[11px] tabular-nums text-muted-foreground"
+                    >
+                        {passRate}
+                    </span>
+                </div>
+            )}
+
             {description && (
                 <section className="text-sm leading-relaxed text-foreground/90 [&_code]:font-mono [&_code]:text-[0.85em] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-surface-muted [&_code]:text-foreground">
                     <p className="whitespace-pre-wrap">{description}</p>

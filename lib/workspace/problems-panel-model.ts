@@ -18,6 +18,8 @@ export type PanelProblem = {
     modulePosition: number | null
     moduleTitle: string | null
     tags: string[]
+    attemptCount: number
+    acceptedCount: number
 }
 
 export type PanelGroup = {

@@ -123,6 +123,8 @@ export async function getProblem(slug: string) {
                 ordered: true,
                 hints: true,
                 dialects: true,
+                attemptCount: true,
+                acceptedCount: true,
                 createdAt: true,
                 updatedAt: true,
                 relatedArticles: {

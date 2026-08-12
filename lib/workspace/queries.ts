@@ -77,6 +77,8 @@ export const getWorkspaceProblemsPanel = cache(
                 slug: true,
                 title: true,
                 difficulty: true,
+                attemptCount: true,
+                acceptedCount: true,
                 tags: { select: { slug: true }, orderBy: { slug: "asc" } },
                 lessonCheckpoint: {
                     select: {
@@ -132,6 +134,8 @@ export const getWorkspaceProblemsPanel = cache(
                 modulePosition: module?.position ?? null,
                 moduleTitle: module?.name ?? null,
                 tags: p.tags.map((t) => t.slug),
+                attemptCount: p.attemptCount,
+                acceptedCount: p.acceptedCount,
             }
         })
     }
