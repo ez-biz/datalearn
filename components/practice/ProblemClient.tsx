@@ -14,6 +14,9 @@ import {
     type Dialect,
 } from "@/lib/use-problem-db"
 import { SqlPlaygroundSkeleton } from "@/components/sql/SqlPlaygroundSkeleton"
+import { WorkspaceLayout } from "./workspace/WorkspaceLayout"
+import { ProblemsPanel } from "./workspace/ProblemsPanel"
+import type { PanelProblem } from "@/lib/workspace/problems-panel-model"
 
 const SqlPlayground = dynamic(
     () =>
@@ -49,6 +52,8 @@ interface ProblemClientProps {
      * SELECT against DuckDB once `dbReady`.
      */
     initialTableInfos: TableInfo[] | null
+    /** Whole published catalog for the problems panel, already solved-marked. */
+    panelProblems: PanelProblem[]
     relatedArticles: Array<{
         id: string
         slug: string
@@ -62,6 +67,7 @@ interface ProblemClientProps {
 const DRAFT_PREFIX = "dl:draft:"
 const SAMPLE_LIMIT = 5
 const QUERY_TIMEOUT_OVERRIDE_KEY = "dl:query-timeout-ms"
+const PANEL_KEY = "dl:problems-panel"
 const MAX_QUERY_TIMEOUT_OVERRIDE_MS = 10_000
 
 export function ProblemClient({
@@ -85,6 +91,7 @@ export function ProblemClient({
     discussionMode,
     initialTableInfos,
     relatedArticles,
+    panelProblems,
 }: ProblemClientProps) {
     const [query, setQuery] = useState("")
     const [hydrated, setHydrated] = useState(false)
@@ -95,6 +102,30 @@ export function ProblemClient({
     const [tableInfos, setTableInfos] = useState<TableInfo[] | null>(
         initialTableInfos
     )
+    // Default open, then corrected from localStorage in an effect so SSR and
+    // the first client render agree. Reading during render would hydrate
+    // mismatched for anyone who had closed it.
+    const [panelOpen, setPanelOpen] = useState(true)
+    const togglePanel = useCallback(() => {
+        setPanelOpen((open) => {
+            try {
+                localStorage.setItem(PANEL_KEY, open ? "closed" : "open")
+            } catch {
+                // Private mode / storage disabled — the toggle still works,
+                // it just won't survive a reload.
+            }
+            return !open
+        })
+    }, [])
+
+    useEffect(() => {
+        try {
+            setPanelOpen(localStorage.getItem(PANEL_KEY) !== "closed")
+        } catch {
+            // Storage unavailable — keep the default.
+        }
+    }, [])
+
     const draftKey = `${DRAFT_PREFIX}${slug}`
     const dialectKey = `dl:dialect:${slug}`
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -267,8 +298,18 @@ export function ProblemClient({
     )
 
     return (
-        <div className="flex-1 flex flex-col lg:flex-row min-h-0">
-            <aside className="w-full lg:w-2/5 xl:w-1/3 border-b lg:border-b-0 lg:border-r border-border min-h-[40vh] lg:min-h-0">
+        <WorkspaceLayout
+            panelOpen={panelOpen}
+            onTogglePanel={togglePanel}
+            contextBar={null}
+            problemsPanel={
+                <ProblemsPanel
+                    problems={panelProblems}
+                    currentSlug={slug}
+                    onClose={togglePanel}
+                />
+            }
+            problemPanel={
                 <ProblemPanel
                     number={number}
                     title={title}
@@ -293,9 +334,10 @@ export function ProblemClient({
                     discussionPrefill={discussionPrefill}
                     onDiscussionPrefillConsumed={() => setDiscussionPrefill(null)}
                 />
-            </aside>
-            <section className="flex-1 min-h-0 p-3 sm:p-4 bg-background">
-                <SqlPlayground
+            }
+            editor={
+                <div className="min-h-0 flex-1 p-3 sm:p-4">
+                    <SqlPlayground
                     dbReady={dbReady}
                     dbError={dbError}
                     dbRecovering={dbRecovering}
@@ -312,9 +354,10 @@ export function ProblemClient({
                     dialect={dialect}
                     allowedDialects={allowedDialects}
                     onDialectChange={handleDialectChange}
-                />
-            </section>
-        </div>
+                    />
+                </div>
+            }
+        />
     )
 }
 
