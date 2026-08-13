@@ -18,6 +18,7 @@ function p(over: Partial<CatalogProblem>): CatalogProblem {
         number: 1,
         slug: "s",
         title: "T",
+        description: "",
         difficulty: "EASY",
         solved: false,
         attempted: false,
@@ -133,6 +134,28 @@ describe("filterCatalog — combining groups", () => {
         assert.deepEqual(
             filterCatalog(rows, withFilters({ search: "119" }), "curriculum").map((r) => r.slug),
             ["b"]
+        )
+    })
+
+    it("search also matches a phrase found only in the description, not the title", () => {
+        // The regression this guards: SP4's rebuild matched title-or-number
+        // only, so a learner searching for a phrase from a problem's body
+        // (not its title) got zero results. p()'s default description is
+        // "", so "employees" must match ONLY the row that overrides it.
+        const rows = [
+            p({
+                number: 1,
+                slug: "a",
+                title: "Second highest salary",
+                description: "Write a query to find employees earning above the median.",
+            }),
+            p({ number: 2, slug: "b", title: "Duplicate emails" }),
+        ]
+        assert.deepEqual(
+            filterCatalog(rows, withFilters({ search: "employees" }), "curriculum").map(
+                (r) => r.slug
+            ),
+            ["a"]
         )
     })
 })

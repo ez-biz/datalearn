@@ -19,20 +19,41 @@ type TrackSummaryCardProps = {
  * title/description, a mono lessons/problems/hrs line, and a progress row
  * of bar · percentage · Resume.
  *
- * Deliberately two separate links (title -> track detail, "Resume" ->
- * the resume lesson) rather than one Link wrapping the whole card like the
- * old TrackCard did — those two hrefs differ whenever `resume` is set, and
- * nesting an <a> inside an <a> is invalid HTML.
+ * Deliberately two separate links (title -> track detail, "Resume"/
+ * "Continue" -> the resume lesson or the track detail page) rather than one
+ * Link wrapping the whole card like the old TrackCard did — those hrefs
+ * differ whenever `resume` is set, and nesting an <a> inside an <a> is
+ * invalid HTML.
  *
- * `resume` is null in two different situations — no lessons at all, or
- * every lesson already complete — and the brief is explicit that neither
- * may render a dead "Resume ->". Both fall through to a plain-text status
- * instead of a link.
+ * `resume` is null in THREE different situations, and only one of them
+ * means "done":
+ *   1. No lessons at all (`rollup.lessonsTotal === 0`) — nothing to resume
+ *      or complete.
+ *   2. Every lesson is read but a checkpoint problem is still unsolved —
+ *      `findResume` (lib/learn/tracks-read.ts) only scans lessons, so it
+ *      reports null here even though `rollup.percent` (lessons + problems,
+ *      lib/curriculum-progress.ts) is under 100. This used to render "✓
+ *      Complete" next to a sub-100% number — the whole-branch review that
+ *      caught it found a learner who read every lesson but solved no
+ *      problems on `analyst-interview-prep`, where the track detail page
+ *      simultaneously said "Continue module 01". `isComplete` below is
+ *      `rollup.percent === 100`, not `resume === null`, specifically so
+ *      this case renders as "not complete" here too.
+ *   3. Every lesson AND every problem is done — genuinely complete.
+ * The brief is explicit that none of the three may render a dead
+ * "Resume ->", so (1) still reads "No lessons yet", (2) gets a working
+ * "Continue" link to the track detail page (the same place
+ * TrackProgressCard's "Continue module NN" button already sends this
+ * learner), and only (3) renders "Complete".
  */
 export function TrackSummaryCard({ track, index }: TrackSummaryCardProps) {
     const { rollup, resume } = track
     const hasLessons = rollup.lessonsTotal > 0
-    const isComplete = hasLessons && resume === null
+    // rollup.percent counts lessons AND problems in one denominator, so this
+    // agrees with the track detail page (TrackProgressCard shows the same
+    // rollup) and the module screen (a module's rollup is the same shape one
+    // level down) — `resume === null` alone does not, see the doc above.
+    const isComplete = rollup.percent === 100
 
     return (
         <Card className="grid grid-cols-[36px_1fr] gap-3 p-5">
@@ -92,6 +113,14 @@ export function TrackSummaryCard({ track, index }: TrackSummaryCardProps) {
                             />
                             Complete
                         </span>
+                    ) : hasLessons ? (
+                        <Link
+                            href={`/learn/tracks/${track.slug}`}
+                            className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-primary transition-colors hover:text-primary-hover"
+                        >
+                            Continue
+                            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                        </Link>
                     ) : (
                         <span className="shrink-0 text-sm text-text-dim">
                             No lessons yet

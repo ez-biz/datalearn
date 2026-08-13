@@ -1,5 +1,6 @@
 "use server"
 
+import type { TrackStatus } from "@prisma/client"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { excludeLockedProblems } from "@/lib/contest-locks"
@@ -22,7 +23,14 @@ export type PublicTrack = {
     updatedAt: Date
 }
 
-export type TrackDetail = Omit<PublicTrack, "itemCount"> & {
+export type TrackDetail = Omit<PublicTrack, "itemCount" | "status"> & {
+    /**
+     * Only ever anything but PUBLISHED for a staff viewer — getTrackBySlug's
+     * where-clause filters unpublished tracks out for everyone else, same
+     * as lib/curriculum-read.ts's TrackCurriculum.status. The page uses it
+     * to show its "Draft — not visible to learners" banner.
+     */
+    status: TrackStatus
     description: string
     items: Array<{
         id: string
@@ -81,11 +89,26 @@ export async function getPublishedTracks(): Promise<PublicTrack[]> {
     }))
 }
 
+/**
+ * `allowDraft` mirrors getTrackCurriculumForUser's (lib/curriculum-read.ts)
+ * and the module screen's ADMIN/MODERATOR staff gate: a DRAFT/ARCHIVED
+ * track is invisible to learners (404), but staff can preview it. Callers
+ * that don't pass it get the learner-only, PUBLISHED-only behavior this
+ * function always had.
+ *
+ * This gate exists specifically so the tracks index and the detail page
+ * agree on who can open a track: getTrackSummariesForUser
+ * (lib/learn/tracks-read.ts) renders a card for a DRAFT track to a staff
+ * viewer, and without this param that card's title link 404s here even
+ * though the lesson reader and module screen both honor staff preview for
+ * the same track.
+ */
 export async function getTrackBySlug(
     slug: string,
+    allowDraft = false,
 ): Promise<TrackDetail | null> {
     const track = await prisma.track.findFirst({
-        where: { slug, status: "PUBLISHED" },
+        where: { slug, ...(allowDraft ? {} : { status: "PUBLISHED" }) },
         select: {
             id: true,
             slug: true,
@@ -121,10 +144,7 @@ export async function getTrackBySlug(
     })
     if (!track) return null
 
-    return {
-        ...track,
-        status: "PUBLISHED",
-    }
+    return track
 }
 
 export async function getTrackProgress(trackId: string): Promise<TrackProgress> {

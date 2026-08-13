@@ -45,8 +45,10 @@ const moduleASlug = "module-a"
 const moduleBSlug = "module-b"
 
 const MODULE_A_NAME = "E2E Module Screen Foundations"
+const MODULE_B_NAME = "E2E Module Screen Advanced"
 const LESSON_A_TITLE = "E2E Module Screen Lesson A"
 const LESSON_B_TITLE = "E2E Module Screen Lesson B"
+const TRACK_NAME = "E2E Module Screen Track"
 
 /**
  * Order matters, same as lesson-reader.spec.ts: articles first (cascades
@@ -113,7 +115,7 @@ test.beforeAll(async () => {
     await prisma.track.create({
         data: {
             slug: trackSlug,
-            name: "E2E Module Screen Track",
+            name: TRACK_NAME,
             summary: "A published track that exists purely for module.spec.ts.",
             description: "Two modules: one always unlocked, one locked behind it.",
             status: "PUBLISHED",
@@ -129,7 +131,7 @@ test.beforeAll(async () => {
                     },
                     {
                         slug: moduleBSlug,
-                        name: "E2E Module Screen Advanced",
+                        name: MODULE_B_NAME,
                         description: "Locked until module A reaches 100%.",
                         position: 1,
                         lessons: { create: [{ articleId: lessonB.id, position: 0 }] },
@@ -202,5 +204,61 @@ test.describe("module screen", () => {
             new RegExp(`/learn/tracks/${trackSlug}/${lessonBSlug}$`),
         )
         await expect(page.getByText(/not found/i)).toHaveCount(0)
+    })
+})
+
+test.describe("track detail page — module branch", () => {
+    // Whole-branch review finding: ModuleRow, TrackProgressCard and
+    // RulesOfThePath (the module-based curriculum branch of
+    // app/learn/tracks/[slug]/page.tsx) had NO e2e coverage at all —
+    // tracks.spec.ts only ever seeds a TrackItem-based track, so it only
+    // ever exercises the item-based fallback (TrackItemRow, TrackProgressBar,
+    // the "Track rhythm" card). That gap is why a stale "resume === null
+    // means complete" bug on this same module branch shipped past four
+    // individual-task reviews. Reuses this file's own PUBLISHED
+    // two-module fixture rather than seeding a second one.
+    test("renders module rows, the progress card, and the rules-of-the-path copy", async ({
+        page,
+    }) => {
+        await page.goto(`/learn/tracks/${trackSlug}`)
+
+        await expect(
+            page.getByRole("heading", { name: TRACK_NAME }),
+        ).toBeVisible()
+
+        // ModuleRow: both modules render as working links to the module
+        // route, not the TrackItem fallback's problem-row list.
+        await expect(
+            page.getByRole("link", { name: new RegExp(MODULE_A_NAME) }),
+        ).toHaveAttribute(
+            "href",
+            `/learn/tracks/${trackSlug}/modules/${moduleASlug}`,
+        )
+        await expect(
+            page.getByRole("link", { name: new RegExp(MODULE_B_NAME) }),
+        ).toHaveAttribute(
+            "href",
+            `/learn/tracks/${trackSlug}/modules/${moduleBSlug}`,
+        )
+
+        // TrackProgressCard: module A is the only module under 100% (no
+        // LessonProgress rows exist for anyone in this fixture), so it's
+        // the "Continue module 01" target — module-rollup-driven, not the
+        // item-based Start/Continue/Review card.
+        await expect(page.getByText("Track progress")).toBeVisible()
+        await expect(
+            page.getByRole("link", { name: /continue module 01/i }),
+        ).toHaveAttribute(
+            "href",
+            `/learn/tracks/${trackSlug}/modules/${moduleASlug}`,
+        )
+
+        // RulesOfThePath: the user-facing statement of the advisory-unlock
+        // rule, replacing the item-based "Track rhythm" card.
+        await expect(
+            page.getByText(
+                /skipping ahead is always allowed — nothing is ever really locked/i,
+            ),
+        ).toBeVisible()
     })
 })

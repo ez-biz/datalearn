@@ -20,6 +20,7 @@ import {
     type ModuleRollup,
     type TrackRollup,
 } from "@/lib/curriculum-progress"
+import { findResume, type ResumeTarget } from "@/lib/learn/tracks-model"
 
 export type TrackSummary = {
     slug: string
@@ -30,35 +31,10 @@ export type TrackSummary = {
     lessonsTotal: number
     problemsTotal: number
     rollup: TrackRollup
-    /** Lesson to resume: first incomplete across modules in order, or null. */
-    resume: { moduleSlug: string; lessonSlug: string } | null
-}
-
-/**
- * First incomplete lesson, scanning modules in track order and then lessons
- * in module order.
- *
- * Deliberately NOT resumeLesson() from lib/learn/module-model.ts, even
- * though the traversal looks similar: that helper is for a single already-
- * chosen module, and falls back to the module's first lesson when every
- * lesson in it is complete, so the module screen's "Resume" button always
- * has somewhere to send a learner who finished it. At the track level that
- * fallback is wrong — once every lesson in the whole track is complete we
- * need null, not a target to re-read, and a per-module fallback would
- * incorrectly stop the cross-module scan at the first complete module
- * instead of continuing to the next one.
- */
-function findResume(
-    modules: Array<{
-        slug: string
-        lessons: Array<{ slug: string; completed: boolean }>
-    }>,
-): { moduleSlug: string; lessonSlug: string } | null {
-    for (const module of modules) {
-        const lesson = module.lessons.find((l) => !l.completed)
-        if (lesson) return { moduleSlug: module.slug, lessonSlug: lesson.slug }
-    }
-    return null
+    /** Lesson to resume: first incomplete across modules in order, or null.
+     *  NOT a completion signal by itself — see lib/learn/tracks-model.ts's
+     *  doc on findResume and TrackSummaryCard's `isComplete`. */
+    resume: ResumeTarget
 }
 
 /**

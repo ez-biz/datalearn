@@ -71,6 +71,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * carries `solved`. An unsolved checkpoint therefore always renders as
  * "not attempted" here, even if the viewer has actually tried and failed —
  * `attempted: checkpoint.solved` is the honest floor given the data we have.
+ *
+ * `description` is `""` for the same reason: `CurriculumCheckpoint` doesn't
+ * carry a problem's body text, and this module screen has no search box —
+ * `matchesSearch` (lib/practice/catalog-model.ts) is never run against
+ * these rows, and `CatalogRow` never renders the field either.
  */
 function toCatalogProblem(
     checkpoint: CurriculumCheckpoint,
@@ -80,6 +85,7 @@ function toCatalogProblem(
         number: checkpoint.number,
         slug: checkpoint.slug,
         title: checkpoint.title,
+        description: "",
         difficulty: checkpoint.difficulty,
         solved: checkpoint.solved,
         attempted: checkpoint.solved,

@@ -18,8 +18,12 @@ export const dynamic = "force-dynamic"
 export default async function TracksIndexPage() {
     const session = await auth().catch(() => null)
     const userId = session?.user?.id ?? null
-    // Same ADMIN/MODERATOR staff gate as app/practice/[slug]/page.tsx and the
-    // module screen: staff preview DRAFT tracks, learners never see them.
+    // Same ADMIN/MODERATOR staff gate as app/practice/[slug]/page.tsx, the
+    // lesson reader, the module screen, and (as of this fix) the track
+    // detail page itself: staff preview DRAFT/ARCHIVED tracks, learners
+    // never see them. Load-bearing that the detail page agrees — a card
+    // rendered here for a staff viewer must have a title link that resolves
+    // there instead of 404ing.
     const isStaff =
         session?.user?.role === "ADMIN" || session?.user?.role === "MODERATOR"
     const tracks = await getTrackSummariesForUser(userId, isStaff)

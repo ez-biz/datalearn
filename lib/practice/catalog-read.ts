@@ -17,6 +17,9 @@ export type CatalogProblem = {
     number: number
     slug: string
     title: string
+    /** Full problem body, searched (not rendered) by the catalog row — see
+     *  lib/practice/catalog-model.ts's matchesSearch. */
+    description: string
     difficulty: "EASY" | "MEDIUM" | "HARD"
     solved: boolean
     /** True when the viewer has any submission, accepted or not. */
@@ -84,6 +87,7 @@ export const getCatalogProblems = cache(
                 number: true,
                 slug: true,
                 title: true,
+                description: true,
                 difficulty: true,
                 dialects: true,
                 createdAt: true,
@@ -154,6 +158,7 @@ export const getCatalogProblems = cache(
                 number: p.number,
                 slug: p.slug,
                 title: p.title,
+                description: p.description,
                 difficulty: p.difficulty as CatalogProblem["difficulty"],
                 solved: solved.has(p.id),
                 attempted: attempted.has(p.id),

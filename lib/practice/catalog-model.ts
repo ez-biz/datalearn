@@ -93,10 +93,22 @@ function matchesCompanies(problem: CatalogProblem, selected: string[]): boolean 
     return problem.companyTags.some((c) => selected.includes(c.slug))
 }
 
+/**
+ * Matches the title or description text, or an exact problem number. The
+ * pre-SP4 PracticeList matched `title || description`; the SP4 rebuild
+ * dropped the description half when it moved to `getCatalogProblems`, which
+ * didn't select the field at all — a learner searching for a phrase from a
+ * problem's body (rather than its title) got zero results. Exact-number
+ * matching is a genuine SP4 addition, kept as-is.
+ */
 function matchesSearch(problem: CatalogProblem, search: string): boolean {
     const needle = search.trim().toLowerCase()
     if (!needle) return true
-    return problem.title.toLowerCase().includes(needle) || String(problem.number) === needle
+    return (
+        problem.title.toLowerCase().includes(needle) ||
+        problem.description.toLowerCase().includes(needle) ||
+        String(problem.number) === needle
+    )
 }
 
 /**

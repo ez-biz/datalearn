@@ -304,6 +304,21 @@ describe("getTrackBySlug", () => {
         assert.equal(await getTrackBySlug(DRAFT_SLUG), null)
         assert.equal(await getTrackBySlug(ARCHIVED_SLUG), null)
     })
+
+    it("allowDraft=true previews DRAFT and ARCHIVED tracks, still 404s unknown", async () => {
+        // The staff-preview gate that keeps the tracks index card's title
+        // link from 404ing when getTrackSummariesForUser (with allowDraft)
+        // rendered a card for a DRAFT/ARCHIVED track.
+        const draft = await getTrackBySlug(DRAFT_SLUG, true)
+        assert.equal(draft?.slug, DRAFT_SLUG)
+        assert.equal(draft?.status, "DRAFT")
+
+        const archived = await getTrackBySlug(ARCHIVED_SLUG, true)
+        assert.equal(archived?.slug, ARCHIVED_SLUG)
+        assert.equal(archived?.status, "ARCHIVED")
+
+        assert.equal(await getTrackBySlug(`${PREFIX}missing`, true), null)
+    })
 })
 
 describe("track progress", () => {
