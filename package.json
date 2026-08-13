@@ -79,6 +79,7 @@
     "test:console-nav": "node --import tsx --test scripts/test-console-nav.ts",
     "test:problems-panel": "node --import tsx --test scripts/test-problems-panel.ts",
     "test:catalog-model": "node --import tsx --test scripts/test-catalog-model.ts",
+    "test:module-model": "node --import tsx --test scripts/test-module-model.ts",
     "test:pass-rate": "node --import tsx --test scripts/test-pass-rate.ts",
     "verify:pass-rate": "tsx scripts/verify-pass-rate-backfill.ts",
     "test:approach-sort": "node --import tsx --test scripts/test-approach-sort.ts",

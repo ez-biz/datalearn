@@ -152,6 +152,9 @@ jobs:
       - name: Test catalog model
         run: npm run test:catalog-model
 
+      - name: Test module model
+        run: npm run test:module-model
+
       - name: Test pass rate
         run: npm run test:pass-rate
 
