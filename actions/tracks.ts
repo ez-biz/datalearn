@@ -1,13 +1,15 @@
 "use server"
 
-import type { TrackStatus } from "@prisma/client"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { excludeLockedProblems } from "@/lib/contest-locks"
+import { getTrackBySlugForViewer } from "@/lib/learn/tracks-read"
 import {
     getTrackProgressForUser,
     type TrackProgress,
 } from "@/lib/tracks"
+
+export type { TrackDetail } from "@/lib/learn/tracks-read"
 
 export type PublicTrack = {
     id: string
@@ -21,28 +23,6 @@ export type PublicTrack = {
     itemCount: number
     createdAt: Date
     updatedAt: Date
-}
-
-export type TrackDetail = Omit<PublicTrack, "itemCount" | "status"> & {
-    /**
-     * Only ever anything but PUBLISHED for a staff viewer — getTrackBySlug's
-     * where-clause filters unpublished tracks out for everyone else, same
-     * as lib/curriculum-read.ts's TrackCurriculum.status. The page uses it
-     * to show its "Draft — not visible to learners" banner.
-     */
-    status: TrackStatus
-    description: string
-    items: Array<{
-        id: string
-        position: number
-        problem: {
-            id: string
-            number: number
-            slug: string
-            title: string
-            difficulty: "EASY" | "MEDIUM" | "HARD"
-        }
-    }>
 }
 
 export async function getPublishedTracks(): Promise<PublicTrack[]> {
@@ -90,61 +70,33 @@ export async function getPublishedTracks(): Promise<PublicTrack[]> {
 }
 
 /**
- * `allowDraft` mirrors getTrackCurriculumForUser's (lib/curriculum-read.ts)
- * and the module screen's ADMIN/MODERATOR staff gate: a DRAFT/ARCHIVED
- * track is invisible to learners (404), but staff can preview it. Callers
- * that don't pass it get the learner-only, PUBLISHED-only behavior this
- * function always had.
+ * Same ADMIN/MODERATOR staff gate as the tracks index
+ * (getTrackSummariesForUser in lib/learn/tracks-read.ts), the lesson reader
+ * (actions/curriculum.ts's getTrackCurriculum) and the module screen — a
+ * card on the index for a DRAFT/ARCHIVED track only renders a working title
+ * link if this page honors the same preview gate those two screens do.
  *
- * This gate exists specifically so the tracks index and the detail page
- * agree on who can open a track: getTrackSummariesForUser
- * (lib/learn/tracks-read.ts) renders a card for a DRAFT track to a staff
- * viewer, and without this param that card's title link 404s here even
- * though the lesson reader and module screen both honor staff preview for
- * the same track.
+ * Thin session-resolving wrapper — the real logic lives in
+ * `lib/learn/tracks-read.ts` (not a server action, since it takes an
+ * explicit allowDraft).
  */
-export async function getTrackBySlug(
-    slug: string,
-    allowDraft = false,
-): Promise<TrackDetail | null> {
-    const track = await prisma.track.findFirst({
-        where: { slug, ...(allowDraft ? {} : { status: "PUBLISHED" }) },
-        select: {
-            id: true,
-            slug: true,
-            name: true,
-            summary: true,
-            description: true,
-            difficulty: true,
-            status: true,
-            estimatedMinutes: true,
-            coverImageUrl: true,
-            createdAt: true,
-            updatedAt: true,
-            items: {
-                where: {
-                    problem: excludeLockedProblems({ status: "PUBLISHED" }),
-                },
-                orderBy: { position: "asc" },
-                select: {
-                    id: true,
-                    position: true,
-                    problem: {
-                        select: {
-                            id: true,
-                            number: true,
-                            slug: true,
-                            title: true,
-                            difficulty: true,
-                        },
-                    },
-                },
-            },
-        },
-    })
-    if (!track) return null
-
-    return track
+export async function getTrackBySlug(slug: string) {
+    // `auth()` throws synchronously (not a rejected promise) when called
+    // outside a request scope — e.g. from a test harness — so this must be
+    // a try/catch, not a `.catch()` chained onto the call. Matches the
+    // established fail-closed pattern in actions/curriculum.ts's
+    // getTrackCurriculum.
+    let allowDraft = false
+    try {
+        const session = await auth()
+        const role = session?.user?.role
+        // Same staff gate as app/admin/layout.tsx, so draft preview and the
+        // admin portal agree on who is staff.
+        allowDraft = role === "ADMIN" || role === "MODERATOR"
+    } catch {
+        allowDraft = false
+    }
+    return getTrackBySlugForViewer(slug, allowDraft)
 }
 
 export async function getTrackProgress(trackId: string): Promise<TrackProgress> {

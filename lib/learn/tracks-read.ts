@@ -5,15 +5,24 @@
 // but batches across every track at once, so the index page doesn't run
 // that read once per card (N+1 by track count).
 //
+// Also owns getTrackBySlugForViewer below: the single-track detail read for
+// the track detail page, with the same allowDraft staff-preview gate as the
+// index read above.
+//
 // NOT a "use server" module, deliberately — same reasoning as
-// lib/curriculum-read.ts. This takes an explicit userId, and every export of
-// a "use server" file becomes a client-callable RPC endpoint, so exporting
-// this from one would let any client read any other user's per-lesson
-// completed state. Server components import it directly; nothing
-// client-side needs to call it.
+// lib/curriculum-read.ts. This takes an explicit userId/allowDraft, and
+// every export of a "use server" file becomes a client-callable RPC
+// endpoint, so exporting this from one would let any client read any other
+// user's per-lesson completed state, or pass allowDraft:true to read
+// DRAFT/ARCHIVED tracks. Server components import it directly; nothing
+// client-side needs to call it. actions/tracks.ts's getTrackBySlug is the
+// thin, session-resolving "use server" wrapper in front of
+// getTrackBySlugForViewer.
 
 import { cache } from "react"
+import type { TrackStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { excludeLockedProblems } from "@/lib/contest-locks"
 import {
     rollUpModule,
     rollUpTrack,
@@ -212,3 +221,94 @@ export const getTrackSummariesForUser = cache(
         })
     },
 )
+
+export type TrackDetail = {
+    id: string
+    slug: string
+    name: string
+    summary: string
+    difficulty: "EASY" | "MEDIUM" | "HARD" | "MIXED"
+    /**
+     * Only ever anything but PUBLISHED for a staff viewer — the where-clause
+     * in getTrackBySlugForViewer below filters unpublished tracks out for
+     * everyone else, same as lib/curriculum-read.ts's TrackCurriculum. The
+     * page uses it to show its "Draft — not visible to learners" banner.
+     */
+    status: TrackStatus
+    estimatedMinutes: number
+    coverImageUrl: string | null
+    description: string
+    items: Array<{
+        id: string
+        position: number
+        problem: {
+            id: string
+            number: number
+            slug: string
+            title: string
+            difficulty: "EASY" | "MEDIUM" | "HARD"
+        }
+    }>
+    createdAt: Date
+    updatedAt: Date
+}
+
+/**
+ * One track's full detail — description, cover image, and its legacy
+ * TrackItem list — for the track detail page.
+ *
+ * `allowDraft` mirrors getTrackCurriculumForUser's (lib/curriculum-read.ts)
+ * and getTrackSummariesForUser's (above) staff gate: a DRAFT/ARCHIVED track
+ * is invisible to learners (404), but staff can preview it. Callers that
+ * don't pass it get the learner-only, PUBLISHED-only behavior this function
+ * always had.
+ *
+ * This gate exists specifically so the tracks index and the detail page
+ * agree on who can open a track: getTrackSummariesForUser renders a card
+ * for a DRAFT track to a staff viewer, and without this param that card's
+ * title link 404s here even though the lesson reader and module screen both
+ * honor staff preview for the same track.
+ */
+export async function getTrackBySlugForViewer(
+    slug: string,
+    allowDraft = false,
+): Promise<TrackDetail | null> {
+    const track = await prisma.track.findFirst({
+        where: { slug, ...(allowDraft ? {} : { status: "PUBLISHED" }) },
+        select: {
+            id: true,
+            slug: true,
+            name: true,
+            summary: true,
+            description: true,
+            difficulty: true,
+            status: true,
+            estimatedMinutes: true,
+            coverImageUrl: true,
+            createdAt: true,
+            updatedAt: true,
+            items: {
+                where: {
+                    problem: excludeLockedProblems({ status: "PUBLISHED" }),
+                },
+                orderBy: { position: "asc" },
+                select: {
+                    id: true,
+                    position: true,
+                    problem: {
+                        select: {
+                            id: true,
+                            number: true,
+                            slug: true,
+                            title: true,
+                            difficulty: true,
+                        },
+                    },
+                },
+            },
+        },
+    })
+    if (!track) return null
+
+    return track
+}

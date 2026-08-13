@@ -5,7 +5,6 @@ import { notFound } from "next/navigation"
 import { ArrowLeft, Clock, ListChecks, Route } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { auth } from "@/lib/auth"
 import { getTrackCurriculum } from "@/actions/curriculum"
 import { getTrackBySlug, getTrackProgress } from "@/actions/tracks"
 import { TrackDifficultyBadge } from "@/components/learn/TrackCard"
@@ -29,25 +28,15 @@ export const dynamic = "force-dynamic"
 // correctly across generateMetadata and the page render — both run in the
 // same request and would otherwise hit the DB twice. Matches the module
 // screen's getCachedCurriculum (app/learn/tracks/[slug]/modules/[moduleSlug]/page.tsx).
-const getCachedTrack = cache((slug: string, allowDraft: boolean) =>
-    getTrackBySlug(slug, allowDraft),
-)
-
-/**
- * Same ADMIN/MODERATOR staff gate as the tracks index, the lesson reader
- * (actions/curriculum.ts's getTrackCurriculum) and the module screen — a
- * card on the index for a DRAFT/ARCHIVED track only renders a working title
- * link if this page honors the same preview gate those two screens do.
- */
-async function resolveStaff(): Promise<boolean> {
-    const session = await auth().catch(() => null)
-    return session?.user?.role === "ADMIN" || session?.user?.role === "MODERATOR"
-}
+//
+// No allowDraft param here — getTrackBySlug (actions/tracks.ts) resolves
+// that from the session itself now, so this page never computes or passes
+// a staff flag. See actions/tracks.ts's getTrackBySlug doc comment.
+const getCachedTrack = cache((slug: string) => getTrackBySlug(slug))
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { slug } = await params
-    const isStaff = await resolveStaff()
-    const track = await getCachedTrack(slug, isStaff)
+    const track = await getCachedTrack(slug)
     if (!track) return { title: "Track not found" }
 
     return {
@@ -58,8 +47,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function TrackDetailPage({ params }: Props) {
     const { slug } = await params
-    const isStaff = await resolveStaff()
-    const track = await getCachedTrack(slug, isStaff)
+    const track = await getCachedTrack(slug)
     if (!track) notFound()
 
     // TrackStatus is DRAFT | PUBLISHED | ARCHIVED, so "not PUBLISHED" covers

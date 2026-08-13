@@ -9,11 +9,14 @@ import {
 
 const PREFIX = "e2e-track-"
 const USER_EMAIL = `${PREFIX}learner@example.test`
+const ADMIN_EMAIL = `${PREFIX}admin@example.test`
+const DRAFT_TRACK_SLUG = `${PREFIX}draft`
 const BASE_URL =
     process.env.E2E_BASE_URL ??
     `http://localhost:${process.env.E2E_PORT ?? "3100"}`
 
 let learner: SeededUser
+let admin: SeededUser
 let schemaId: string
 let firstProblemSlug: string
 let secondProblemSlug: string
@@ -26,6 +29,11 @@ test.beforeAll(async () => {
     await cleanup()
 
     learner = await seedUser({ email: USER_EMAIL })
+    // For the RPC-safety regression below: actions/tracks.ts's getTrackBySlug
+    // resolves allowDraft from this session's role itself (an ADMIN or
+    // MODERATOR sees DRAFT/ARCHIVED tracks), rather than trusting a
+    // caller-supplied argument.
+    admin = await seedUser({ email: ADMIN_EMAIL, role: "ADMIN" })
 
     const schema = await prisma.sqlSchema.create({
         data: {
@@ -102,7 +110,7 @@ test.beforeAll(async () => {
 
     await prisma.track.create({
         data: {
-            slug: `${PREFIX}draft`,
+            slug: DRAFT_TRACK_SLUG,
             name: "E2E Draft Track",
             summary: "This track should stay hidden.",
             description: "Hidden draft body.",
@@ -213,6 +221,46 @@ test.describe("Tracks learner pages", () => {
     })
 })
 
+// RPC-safety regression for actions/tracks.ts's getTrackBySlug: it must
+// resolve allowDraft from the caller's own session (ADMIN/MODERATOR only),
+// never from a client-suppliable argument. Same behavior as before the fix,
+// proven end-to-end rather than just at the action-signature level.
+test.describe("Draft track staff preview", () => {
+    test("signed-out visitor gets not found on a DRAFT track's detail page", async ({
+        page,
+    }) => {
+        await page.goto(`/learn/tracks/${DRAFT_TRACK_SLUG}`)
+
+        await expect(
+            page.getByRole("heading", { name: /page not found/i }),
+        ).toBeVisible()
+    })
+
+    test("ADMIN previews a DRAFT track's detail page with the unpublished banner", async ({
+        browser,
+    }) => {
+        const context = await browser.newContext({
+            baseURL: BASE_URL,
+            storageState: {
+                cookies: [sessionCookie(admin.sessionToken, BASE_URL)],
+                origins: [],
+            },
+        })
+        const page = await context.newPage()
+
+        await page.goto(`/learn/tracks/${DRAFT_TRACK_SLUG}`)
+
+        await expect(
+            page.getByRole("heading", { name: "E2E Draft Track" }),
+        ).toBeVisible()
+        await expect(
+            page.getByText("Draft — not visible to learners."),
+        ).toBeVisible()
+
+        await context.close()
+    })
+})
+
 async function cleanup() {
     await prisma.submission.deleteMany({
         where: { user: { email: { startsWith: PREFIX } } },
@@ -227,4 +275,5 @@ async function cleanup() {
         where: { name: { startsWith: PREFIX } },
     })
     await deleteUser(USER_EMAIL)
+    await deleteUser(ADMIN_EMAIL)
 }

@@ -245,9 +245,15 @@ test.describe("track detail page — module branch", () => {
         // LessonProgress rows exist for anyone in this fixture), so it's
         // the "Continue module 01" target — module-rollup-driven, not the
         // item-based Start/Continue/Review card.
-        await expect(page.getByText("Track progress")).toBeVisible()
+        //
+        // `.first()` throughout: the App-Router hydration/streaming pass can
+        // briefly render a second copy of these elements, so an un-scoped
+        // locator strict-mode-violates on the transient duplicate. The
+        // settled DOM renders each once. Same guard as tracks.spec.ts's
+        // signed-in-learner test.
+        await expect(page.getByText("Track progress").first()).toBeVisible()
         await expect(
-            page.getByRole("link", { name: /continue module 01/i }),
+            page.getByRole("link", { name: /continue module 01/i }).first(),
         ).toHaveAttribute(
             "href",
             `/learn/tracks/${trackSlug}/modules/${moduleASlug}`,
@@ -256,9 +262,11 @@ test.describe("track detail page — module branch", () => {
         // RulesOfThePath: the user-facing statement of the advisory-unlock
         // rule, replacing the item-based "Track rhythm" card.
         await expect(
-            page.getByText(
-                /skipping ahead is always allowed — nothing is ever really locked/i,
-            ),
+            page
+                .getByText(
+                    /skipping ahead is always allowed — nothing is ever really locked/i,
+                )
+                .first(),
         ).toBeVisible()
     })
 })
