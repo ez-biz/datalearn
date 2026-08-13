@@ -81,12 +81,24 @@ function findResume(
  * which sends resume at the very first lesson of the first track that has
  * one, same as the signed-out reader.
  *
- * Unlike getTrackCurriculumForUser, this does NOT run the contest-lock
- * exclusion query (excludeLockedProblems) — that would make it a fourth
- * query per track-independent-of-count claim this function exists to prove.
- * The index only needs counts and completion state, not individual
- * checkpoint identities, so a locked problem still counts toward
- * problemsTotal/rollup here; only the single-track read enforces the lock.
+ * Two deliberate divergences from getTrackCurriculumForUser's notion of
+ * "visible problem," both worth stating in full since a partial account of
+ * a set of divergences reads as an exhaustive one:
+ *
+ *   - MATCHES it on publish status: checkpoints are filtered to
+ *     `problem.status === "PUBLISHED"` inside the same nested select (no
+ *     extra query), exactly like getTrackCurriculumForUser's
+ *     `visibleProblemIds` check. A DRAFT/BETA/ARCHIVED problem is excluded
+ *     from problemsTotal/rollup here exactly as it is there, so the tracks
+ *     index and the track detail page report the same percentage for the
+ *     same track and user.
+ *   - DIVERGES on contest locks: this does NOT run the contest-lock
+ *     exclusion query (excludeLockedProblems) — that queries SQLProblem
+ *     separately and would make this a fourth query, defeating the
+ *     bounded-query-count claim this function exists to prove. A
+ *     contest-locked (but otherwise published) problem still counts toward
+ *     problemsTotal/rollup here; only the single-track read enforces the
+ *     lock.
  */
 export const getTrackSummariesForUser = cache(
     async (
@@ -116,6 +128,7 @@ export const getTrackSummariesForUser = cache(
                                         id: true,
                                         slug: true,
                                         checkpoints: {
+                                            where: { problem: { status: "PUBLISHED" } },
                                             select: {
                                                 problem: { select: { id: true } },
                                             },
