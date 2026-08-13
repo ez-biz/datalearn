@@ -53,6 +53,12 @@ export default async function TrackDetailPage({ params }: Props) {
     // `activeCurriculum` to a non-null TrackCurriculum consistently.
     const activeCurriculum =
         curriculum && curriculum.modules.length > 0 ? curriculum : null
+    // The header badge must agree with TrackProgressCard below it: a
+    // module-based track has 0 TrackItem rows, so `track.items.length`
+    // reads 0 there even though the curriculum has real problems.
+    const problemsCount = activeCurriculum
+        ? activeCurriculum.rollup.problemsTotal
+        : track.items.length
     const completedItemIds = new Set(progress.completedItemIds)
     const nextItem = track.items.find((item) => item.id === progress.nextItemId)
     const reviewItem = track.items[0]
@@ -82,8 +88,8 @@ export default async function TrackDetailPage({ params }: Props) {
                         <TrackDifficultyBadge difficulty={track.difficulty} />
                         <span className="inline-flex items-center gap-1 text-sm text-muted-foreground tabular-nums">
                             <ListChecks className="h-4 w-4" />
-                            {track.items.length}{" "}
-                            {track.items.length === 1 ? "problem" : "problems"}
+                            {problemsCount}{" "}
+                            {problemsCount === 1 ? "problem" : "problems"}
                         </span>
                         <span className="inline-flex items-center gap-1 text-sm text-muted-foreground tabular-nums">
                             <Clock className="h-4 w-4" />
