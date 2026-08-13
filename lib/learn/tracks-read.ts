@@ -1,0 +1,225 @@
+// Bounded per-user read for the tracks index: every visible track with a
+// rolled-up progress summary and a resume target, in three queries total —
+// regardless of how many tracks, modules, lessons or problems exist. Mirrors
+// lib/curriculum-read.ts's getTrackCurriculumForUser (the single-track read)
+// but batches across every track at once, so the index page doesn't run
+// that read once per card (N+1 by track count).
+//
+// NOT a "use server" module, deliberately — same reasoning as
+// lib/curriculum-read.ts. This takes an explicit userId, and every export of
+// a "use server" file becomes a client-callable RPC endpoint, so exporting
+// this from one would let any client read any other user's per-lesson
+// completed state. Server components import it directly; nothing
+// client-side needs to call it.
+
+import { cache } from "react"
+import { prisma } from "@/lib/prisma"
+import {
+    rollUpModule,
+    rollUpTrack,
+    type ModuleRollup,
+    type TrackRollup,
+} from "@/lib/curriculum-progress"
+
+export type TrackSummary = {
+    slug: string
+    name: string
+    summary: string
+    difficulty: string
+    estimatedMinutes: number
+    lessonsTotal: number
+    problemsTotal: number
+    rollup: TrackRollup
+    /** Lesson to resume: first incomplete across modules in order, or null. */
+    resume: { moduleSlug: string; lessonSlug: string } | null
+}
+
+/**
+ * First incomplete lesson, scanning modules in track order and then lessons
+ * in module order.
+ *
+ * Deliberately NOT resumeLesson() from lib/learn/module-model.ts, even
+ * though the traversal looks similar: that helper is for a single already-
+ * chosen module, and falls back to the module's first lesson when every
+ * lesson in it is complete, so the module screen's "Resume" button always
+ * has somewhere to send a learner who finished it. At the track level that
+ * fallback is wrong — once every lesson in the whole track is complete we
+ * need null, not a target to re-read, and a per-module fallback would
+ * incorrectly stop the cross-module scan at the first complete module
+ * instead of continuing to the next one.
+ */
+function findResume(
+    modules: Array<{
+        slug: string
+        lessons: Array<{ slug: string; completed: boolean }>
+    }>,
+): { moduleSlug: string; lessonSlug: string } | null {
+    for (const module of modules) {
+        const lesson = module.lessons.find((l) => !l.completed)
+        if (lesson) return { moduleSlug: module.slug, lessonSlug: lesson.slug }
+    }
+    return null
+}
+
+/**
+ * Every visible track (PUBLISHED, plus DRAFT — and ARCHIVED — when
+ * allowDraft, matching getTrackCurriculumForUser's visibility rule) with
+ * this viewer's rolled-up progress and resume target, for the tracks index
+ * card grid.
+ *
+ * Three queries regardless of track count:
+ *   1. tracks -> modules -> lessons -> article -> checkpoints -> problem
+ *      (one query, arbitrarily deep via Prisma's nested `select`);
+ *   2. the viewer's completed LessonProgress rows for every article id
+ *      collected from (1), one batched `IN` query;
+ *   3. the viewer's ACCEPTED submissions for every problem id collected
+ *      from (1), one batched `IN` query, deduped with `distinct`.
+ * Rollup is then pure in-memory maths via rollUpModule/rollUpTrack — no
+ * further queries as track/module/lesson count grows.
+ *
+ * Pass userId: null for anonymous viewers — everything reports incomplete,
+ * which sends resume at the very first lesson of the first track that has
+ * one, same as the signed-out reader.
+ *
+ * Unlike getTrackCurriculumForUser, this does NOT run the contest-lock
+ * exclusion query (excludeLockedProblems) — that would make it a fourth
+ * query per track-independent-of-count claim this function exists to prove.
+ * The index only needs counts and completion state, not individual
+ * checkpoint identities, so a locked problem still counts toward
+ * problemsTotal/rollup here; only the single-track read enforces the lock.
+ */
+export const getTrackSummariesForUser = cache(
+    async (
+        userId: string | null,
+        allowDraft = false,
+    ): Promise<TrackSummary[]> => {
+        const tracks = await prisma.track.findMany({
+            where: allowDraft ? {} : { status: "PUBLISHED" },
+            orderBy: [{ createdAt: "desc" }, { name: "asc" }],
+            select: {
+                slug: true,
+                name: true,
+                summary: true,
+                difficulty: true,
+                estimatedMinutes: true,
+                modules: {
+                    orderBy: { position: "asc" },
+                    select: {
+                        id: true,
+                        slug: true,
+                        lessons: {
+                            where: { article: { status: "PUBLISHED" } },
+                            orderBy: { position: "asc" },
+                            select: {
+                                article: {
+                                    select: {
+                                        id: true,
+                                        slug: true,
+                                        checkpoints: {
+                                            select: {
+                                                problem: { select: { id: true } },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        })
+
+        const articleIds = tracks.flatMap((t) =>
+            t.modules.flatMap((m) => m.lessons.map((l) => l.article.id)),
+        )
+        const problemIds = tracks.flatMap((t) =>
+            t.modules.flatMap((m) =>
+                m.lessons.flatMap((l) =>
+                    l.article.checkpoints.map((c) => c.problem.id),
+                ),
+            ),
+        )
+
+        const completedArticleIds = new Set<string>()
+        const solvedProblemIds = new Set<string>()
+
+        if (userId) {
+            if (articleIds.length) {
+                const progress = await prisma.lessonProgress.findMany({
+                    where: {
+                        userId,
+                        articleId: { in: articleIds },
+                        completedAt: { not: null },
+                    },
+                    select: { articleId: true },
+                })
+                for (const row of progress) completedArticleIds.add(row.articleId)
+            }
+            if (problemIds.length) {
+                const accepted = await prisma.submission.findMany({
+                    where: {
+                        userId,
+                        status: "ACCEPTED",
+                        problemId: { in: problemIds },
+                    },
+                    select: { problemId: true },
+                    distinct: ["problemId"],
+                })
+                for (const row of accepted) solvedProblemIds.add(row.problemId)
+            }
+        }
+
+        return tracks.map((track) => {
+            const moduleRollups: ModuleRollup[] = []
+            const modulesForResume: Array<{
+                slug: string
+                lessons: Array<{ slug: string; completed: boolean }>
+            }> = []
+
+            for (const module of track.modules) {
+                const lessons = module.lessons.map((l) => ({
+                    articleId: l.article.id,
+                    slug: l.article.slug,
+                    completed: completedArticleIds.has(l.article.id),
+                    problems: l.article.checkpoints.map((c) => ({
+                        problemId: c.problem.id,
+                        solved: solvedProblemIds.has(c.problem.id),
+                    })),
+                }))
+
+                moduleRollups.push(
+                    rollUpModule({
+                        moduleId: module.id,
+                        lessons: lessons.map((l) => ({
+                            articleId: l.articleId,
+                            completed: l.completed,
+                        })),
+                        problems: lessons.flatMap((l) => l.problems),
+                    }),
+                )
+
+                modulesForResume.push({
+                    slug: module.slug,
+                    lessons: lessons.map((l) => ({
+                        slug: l.slug,
+                        completed: l.completed,
+                    })),
+                })
+            }
+
+            const rollup = rollUpTrack(moduleRollups)
+
+            return {
+                slug: track.slug,
+                name: track.name,
+                summary: track.summary,
+                difficulty: track.difficulty,
+                estimatedMinutes: track.estimatedMinutes,
+                lessonsTotal: rollup.lessonsTotal,
+                problemsTotal: rollup.problemsTotal,
+                rollup,
+                resume: findResume(modulesForResume),
+            }
+        })
+    },
+)
