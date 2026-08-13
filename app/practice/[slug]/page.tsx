@@ -16,10 +16,8 @@ import { auth } from "@/lib/auth"
 import { ProblemClient } from "@/components/practice/ProblemClient"
 import { ReportDialog } from "@/components/practice/ReportDialog"
 import { AddToListButton } from "@/components/lists/AddToListButton"
-import {
-    getCheckpointContext,
-    getWorkspaceProblemsPanel,
-} from "@/lib/workspace/queries"
+import { getCheckpointContext } from "@/lib/workspace/queries"
+import { getCatalogProblems } from "@/lib/practice/catalog-read"
 import { parseSchema } from "@/lib/schema-parser"
 import { prisma } from "@/lib/prisma"
 import { getDiscussionSettings } from "@/lib/discussions/settings"
@@ -116,7 +114,7 @@ export default async function ProblemPage({ params }: Props) {
     const isStaff =
         session?.user?.role === "ADMIN" || session?.user?.role === "MODERATOR"
     const [panelProblems, checkpointContext] = await Promise.all([
-        getWorkspaceProblemsPanel(session?.user?.id ?? null, isStaff),
+        getCatalogProblems(session?.user?.id ?? null, isStaff),
         getCheckpointContext(problem.id, isStaff),
     ])
     const lock = problem.contestLock

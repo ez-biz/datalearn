@@ -1,11 +1,9 @@
 import type { Metadata } from "next"
-import Link from "next/link"
-import { Route, Tag as TagIcon } from "lucide-react"
-import { getProblems } from "@/actions/problems"
-import { getSolvedSlugs } from "@/actions/submissions"
+import { auth } from "@/lib/auth"
+import { getCatalogProblems } from "@/lib/practice/catalog-read"
 import { Container } from "@/components/ui/Container"
 import { Eyebrow } from "@/components/ui/Eyebrow"
-import { PracticeList } from "@/components/practice/PracticeList"
+import { CatalogClient } from "@/components/practice/catalog/CatalogClient"
 import { cn } from "@/lib/utils"
 
 export const metadata: Metadata = {
@@ -15,21 +13,23 @@ export const metadata: Metadata = {
 }
 
 export default async function PracticePage() {
-    const [{ data: problems }, solvedSlugs] = await Promise.all([
-        getProblems(),
-        getSolvedSlugs(),
-    ])
-    const list = (problems ?? []) as any[]
-    const solvedCount = list.filter((p) => solvedSlugs.includes(p.slug)).length
-    const difficultyCounts = list.reduce(
-        (counts, problem) => {
-            if (problem.difficulty === "EASY") counts.easy += 1
-            if (problem.difficulty === "MEDIUM") counts.medium += 1
-            if (problem.difficulty === "HARD") counts.hard += 1
-            return counts
-        },
-        { easy: 0, medium: 0, hard: 0 }
-    )
+    const session = await auth()
+    // Staff see problems from DRAFT curriculum tracks so an unpublished
+    // module can be reviewed from the catalog; learners get those problems
+    // in the "not in a track" bucket instead. Same rule the workspace panel
+    // and the lesson reader use.
+    const isStaff =
+        session?.user?.role === "ADMIN" || session?.user?.role === "MODERATOR"
+    const problems = await getCatalogProblems(session?.user?.id ?? null, isStaff)
+
+    const solvedCount = problems.filter((p) => p.solved).length
+    // "Attempted" here means the facet rail's `attempted` status — tried,
+    // not yet accepted — not the raw `attempted` field, which stays true
+    // for a problem after it's solved. Keeps this stat and the Status
+    // facet's counts telling the same story.
+    const attemptedCount = problems.filter((p) => p.attempted && !p.solved).length
+    const pctOfCatalog =
+        problems.length > 0 ? Math.round((solvedCount / problems.length) * 100) : 0
 
     return (
         <Container width="2xl" className="py-10 sm:py-14">
@@ -41,60 +41,28 @@ export default async function PracticePage() {
                     <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
                         Practice
                     </h1>
-                    <p className="mt-2 text-muted-foreground max-w-2xl">
+                    <p className="mt-2 max-w-2xl text-text-muted">
                         Sharpen your SQL with curated problems across realistic
                         schemas. Each problem runs in your browser — no setup,
                         instant feedback.
                     </p>
-                    <div className="mt-5 grid grid-cols-2 gap-4 text-[12px] sm:grid-cols-4 sm:gap-6">
-                        <CatalogStat
-                            label="Solved"
-                            value={solvedCount}
-                            suffix={`/ ${list.length}`}
-                        />
-                        <CatalogStat
-                            label="Easy"
-                            value={difficultyCounts.easy}
-                            className="text-easy"
-                        />
-                        <CatalogStat
-                            label="Medium"
-                            value={difficultyCounts.medium}
-                            className="text-medium"
-                        />
-                        <CatalogStat
-                            label="Hard"
-                            value={difficultyCounts.hard}
-                            className="text-hard"
-                        />
-                    </div>
                 </div>
-                <div className="flex items-center gap-4">
-                    <Link
-                        href="/learn/tracks"
-                        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                        <Route className="h-3.5 w-3.5" />
-                        Tracks
-                    </Link>
-                    <Link
-                        href="/practice/tags"
-                        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                        <TagIcon className="h-3.5 w-3.5" />
-                        Browse by tag
-                    </Link>
-                    {list.length > 0 && (
-                        <div className="text-sm text-muted-foreground tabular-nums">
-                            <span className="text-foreground font-semibold">
-                                {solvedCount}
-                            </span>{" "}
-                            / {list.length} solved
-                        </div>
-                    )}
+                <div className="grid grid-cols-3 gap-6 text-[12px]">
+                    <CatalogStat
+                        label="Solved"
+                        value={solvedCount}
+                        suffix={`/ ${problems.length}`}
+                        className="text-primary"
+                    />
+                    <CatalogStat label="Attempted" value={attemptedCount} />
+                    <CatalogStat
+                        label="% of catalog"
+                        value={`${pctOfCatalog}%`}
+                        className="text-warning"
+                    />
                 </div>
             </header>
-            <PracticeList problems={list} solvedSlugs={solvedSlugs} />
+            <CatalogClient problems={problems} />
         </Container>
     )
 }
@@ -106,7 +74,7 @@ function CatalogStat({
     className,
 }: {
     label: string
-    value: number
+    value: number | string
     suffix?: string
     className?: string
 }) {
@@ -118,9 +86,7 @@ function CatalogStat({
                     {value}
                 </span>
                 {suffix && (
-                    <span className="font-mono text-[11px] text-muted-foreground">
-                        {suffix}
-                    </span>
+                    <span className="font-mono text-[11px] text-text-dim">{suffix}</span>
                 )}
             </div>
         </div>

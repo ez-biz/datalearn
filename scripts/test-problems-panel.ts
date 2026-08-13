@@ -10,20 +10,26 @@ import {
     type PanelProblem,
 } from "../lib/workspace/problems-panel-model"
 import { resolveCheckpointPosition } from "../lib/workspace/checkpoint-context"
+import type { CatalogProblem } from "../lib/practice/catalog-read"
 
 function p(over: Partial<PanelProblem>): PanelProblem {
     return {
         number: 1,
         slug: "s",
         title: "T",
+        description: "",
         difficulty: "EASY",
         solved: false,
+        attempted: false,
         moduleId: null,
         modulePosition: null,
         moduleTitle: null,
-        tags: [],
+        topicTags: [],
+        companyTags: [],
+        dialects: ["DUCKDB"],
         attemptCount: 0,
         acceptedCount: 0,
+        createdAt: new Date(1_700_000_000_000),
         ...over,
     }
 }
@@ -221,7 +227,16 @@ describe("buildPanelGroups — todo mode", () => {
 describe("buildPanelGroups — tags mode", () => {
     it("groups by tag and repeats a problem under each of its tags", () => {
         const groups = buildPanelGroups(
-            [p({ number: 1, slug: "both", tags: ["joins", "window-functions"] })],
+            [
+                p({
+                    number: 1,
+                    slug: "both",
+                    topicTags: [
+                        { slug: "joins", name: "Joins" },
+                        { slug: "window-functions", name: "Window functions" },
+                    ],
+                }),
+            ],
             "tags",
             ""
         )
@@ -235,7 +250,7 @@ describe("buildPanelGroups — tags mode", () => {
         const groups = buildPanelGroups(
             [
                 p({ number: 1, slug: "bare" }),
-                p({ number: 2, slug: "tagged", tags: ["joins"] }),
+                p({ number: 2, slug: "tagged", topicTags: [{ slug: "joins", name: "Joins" }] }),
             ],
             "tags",
             ""
@@ -357,5 +372,32 @@ describe("resolveCheckpointPosition", () => {
             shuffled.map((s) => s.problemSlug),
             before
         )
+    })
+})
+
+describe("CatalogProblem powers the panel model", () => {
+    it("is structurally usable as a PanelProblem", () => {
+        // A compile-time guarantee expressed as a runtime no-op: if the two
+        // types diverge, tsc fails before this test ever runs.
+        const row: CatalogProblem = {
+            number: 1,
+            slug: "s",
+            title: "T",
+            description: "",
+            difficulty: "EASY",
+            solved: false,
+            attempted: false,
+            moduleId: null,
+            modulePosition: null,
+            moduleTitle: null,
+            topicTags: [],
+            companyTags: [],
+            dialects: ["DUCKDB"],
+            attemptCount: 0,
+            acceptedCount: 0,
+            createdAt: new Date(1_700_000_000_000),
+        }
+        const groups = buildPanelGroups([row], "track", "")
+        assert.equal(groups[0].problems[0].slug, "s")
     })
 })

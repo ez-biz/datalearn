@@ -24,6 +24,7 @@ import {
     TrackItemAddInput,
     TrackReorderInput,
 } from "../lib/admin-validation"
+import { getTrackBySlugForViewer } from "../lib/learn/tracks-read"
 import { getTrackProgressForUser } from "../lib/tracks"
 
 const PREFIX = "tracktest-"
@@ -299,10 +300,42 @@ describe("getTrackBySlug", () => {
         )
     })
 
-    it("returns null for unknown, DRAFT, and ARCHIVED tracks", async () => {
+    it("returns null for unknown, DRAFT, and ARCHIVED tracks (no session in the test harness)", async () => {
         assert.equal(await getTrackBySlug(`${PREFIX}missing`), null)
         assert.equal(await getTrackBySlug(DRAFT_SLUG), null)
         assert.equal(await getTrackBySlug(ARCHIVED_SLUG), null)
+    })
+})
+
+// getTrackBySlug (actions/tracks.ts) resolves allowDraft from the session
+// itself and no longer accepts it as an argument — every export of a
+// "use server" file is a client-callable RPC endpoint, so a caller-supplied
+// allowDraft would let any client read DRAFT/ARCHIVED tracks. The staff-
+// preview behavior is exercised directly against the lib function it
+// delegates to, same split as getTrackCurriculumForUser in
+// scripts/test-curriculum-actions.ts.
+describe("getTrackBySlugForViewer", () => {
+    it("hides DRAFT and ARCHIVED tracks by default", async () => {
+        assert.equal(await getTrackBySlugForViewer(DRAFT_SLUG), null)
+        assert.equal(await getTrackBySlugForViewer(ARCHIVED_SLUG), null)
+    })
+
+    it("allowDraft=true previews DRAFT and ARCHIVED tracks, still 404s unknown", async () => {
+        // The staff-preview gate that keeps the tracks index card's title
+        // link from 404ing when getTrackSummariesForUser (with allowDraft)
+        // rendered a card for a DRAFT/ARCHIVED track.
+        const draft = await getTrackBySlugForViewer(DRAFT_SLUG, true)
+        assert.equal(draft?.slug, DRAFT_SLUG)
+        assert.equal(draft?.status, "DRAFT")
+
+        const archived = await getTrackBySlugForViewer(ARCHIVED_SLUG, true)
+        assert.equal(archived?.slug, ARCHIVED_SLUG)
+        assert.equal(archived?.status, "ARCHIVED")
+
+        assert.equal(
+            await getTrackBySlugForViewer(`${PREFIX}missing`, true),
+            null,
+        )
     })
 })
 
