@@ -6,21 +6,13 @@
 // ProblemsPanel only renders the result.
 
 import { modulePrefix } from "@/components/learn/reader/lesson-nav"
+import type { CatalogProblem } from "@/lib/practice/catalog-read"
 
-export type PanelProblem = {
-    number: number
-    slug: string
-    title: string
-    difficulty: "EASY" | "MEDIUM" | "HARD"
-    solved: boolean
-    /** Curriculum module this problem sits in, or null when it is catalog-only. */
-    moduleId: string | null
-    modulePosition: number | null
-    moduleTitle: string | null
-    tags: string[]
-    attemptCount: number
-    acceptedCount: number
-}
+/**
+ * The panel and the catalog render the same rows. One definition of "a
+ * problem in a list" means the two screens cannot drift.
+ */
+export type PanelProblem = CatalogProblem
 
 export type PanelGroup = {
     /** moduleId, tag slug, or UNGROUPED. */
@@ -140,13 +132,17 @@ function groupByTag(problems: PanelProblem[]): PanelGroup[] {
     const untagged: PanelProblem[] = []
 
     for (const problem of problems) {
-        if (problem.tags.length === 0) {
+        // The panel's Tags mode predates the topic/company facet split — it
+        // groups by both, same as it grouped by the single `tags` field
+        // before this type gained the split.
+        const tags = [...problem.topicTags, ...problem.companyTags]
+        if (tags.length === 0) {
             untagged.push(problem)
             continue
         }
         // A problem with two tags appears under both — the panel is a way to
         // find work, not a partition.
-        for (const tag of problem.tags) {
+        for (const tag of tags) {
             const bucket = byTag.get(tag)
             if (bucket) bucket.push(problem)
             else byTag.set(tag, [problem])
