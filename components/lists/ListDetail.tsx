@@ -422,7 +422,7 @@ export function ListDetail({
                                                         pending
                                                     }
                                                     aria-label="Move up"
-                                                    className="h-9 w-9 inline-flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-surface-muted disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                                                    className="h-9 w-9 inline-flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                                                 >
                                                     <ArrowUp className="h-4 w-4" />
                                                 </button>
@@ -438,7 +438,7 @@ export function ListDetail({
                                                         pending
                                                     }
                                                     aria-label="Move down"
-                                                    className="h-9 w-9 inline-flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-surface-muted disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                                                    className="h-9 w-9 inline-flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                                                 >
                                                     <ArrowDown className="h-4 w-4" />
                                                 </button>
@@ -675,7 +675,7 @@ function AddProblemsPicker({
                                             disabled={isAdding}
                                             className={cn(
                                                 "w-full grid grid-cols-[2.5rem_1fr_auto_1.25rem] items-center gap-2 px-2 py-2 text-sm rounded-md text-left cursor-pointer transition-colors",
-                                                "hover:bg-surface-muted disabled:opacity-60",
+                                                "hover:bg-surface-hover disabled:opacity-60",
                                                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                                             )}
                                         >
@@ -769,7 +769,7 @@ function SortMenu({
                                 setOpen(false)
                             }}
                             className={cn(
-                                "w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted transition-colors cursor-pointer flex items-center justify-between",
+                                "w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-hover transition-colors cursor-pointer flex items-center justify-between",
                                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                                 value === k && "bg-surface-muted"
                             )}

@@ -57,7 +57,7 @@ export default async function Home() {
     const featuredProblems = (problems ?? []).slice(0, 5)
 
     return (
-        <main className="flex-1">
+        <div className="flex-1">
             {/* Hero */}
             <section className="relative overflow-hidden border-b border-border">
                 <div
@@ -104,7 +104,7 @@ export default async function Home() {
                         {/* Editor preview */}
                         <div className="relative">
                             <div className="absolute -inset-4 -z-10 rounded-2xl bg-gradient-to-br from-primary/15 via-transparent to-accent/10 blur-2xl" />
-                            <Card className="overflow-hidden shadow-2xl shadow-primary/5">
+                            <Card className="overflow-hidden shadow-2xl">
                                 <div className="flex items-center gap-2 border-b border-border bg-surface-muted px-4 py-2.5">
                                     <span className="h-2.5 w-2.5 rounded-full bg-hard/70" />
                                     <span className="h-2.5 w-2.5 rounded-full bg-medium/70" />
@@ -233,7 +233,7 @@ export default async function Home() {
                                 <Link
                                     key={p.id}
                                     href={`/practice/${p.slug}`}
-                                    className="flex items-center gap-4 p-4 sm:px-6 hover:bg-surface-muted/60 transition-colors group"
+                                    className="flex items-center gap-4 p-4 sm:px-6 hover:bg-surface-hover transition-colors group"
                                 >
                                     <span className="hidden sm:inline-block w-8 text-xs tabular-nums text-muted-foreground">
                                         {String(i + 1).padStart(2, "0")}
@@ -285,7 +285,7 @@ export default async function Home() {
                     </Card>
                 </Container>
             </section>
-        </main>
+        </div>
     )
 }
 

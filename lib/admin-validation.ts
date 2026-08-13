@@ -625,6 +625,60 @@ export const TrackItemAddInput = z.object({
     position: z.coerce.number().int().min(0).optional(),
 })
 
+// ---------------------------------------------------------------------------
+// Curriculum spine — modules, lessons, checkpoints.
+//
+// Positions are NEVER accepted on update paths. A module's position moves
+// only through its track's reorder endpoint, inside a transaction; the same
+// rule applies to lesson and checkpoint positions.
+// ---------------------------------------------------------------------------
+
+export const ModuleCreateInput = z.object({
+    name: z.string().min(1).max(120),
+    slug: SlugSchema.optional(),
+    description: z.string().min(1).max(20_000),
+    position: z.coerce.number().int().min(0).optional(),
+})
+
+/**
+ * Strict on purpose: a caller that sends `position` gets a 400 rather than
+ * having it silently stripped, so the "reorder only" rule is discoverable.
+ * WARNING: `.strict()` is carried by this schema object itself, not by its
+ * fields. `ModuleUpdateInput.partial()` keeps the guarantee, but building a
+ * new schema by spreading `{ ...ModuleUpdateInput.shape }` silently drops the
+ * catchall and re-admits `position`. If you need a variant, derive it with
+ * `.partial()` / `.extend()` on this schema — never by spreading its shape.
+ */
+export const ModuleUpdateInput = z
+    .object({
+        name: z.string().min(1).max(120).optional(),
+        slug: SlugSchema.optional(),
+        description: z.string().min(1).max(20_000).optional(),
+    })
+    .strict()
+
+export const ModuleReorderInput = z.object({
+    moduleSlugs: z.array(SlugSchema).min(1).max(200),
+})
+
+export const ModuleLessonAddInput = z.object({
+    articleSlug: SlugSchema,
+    position: z.coerce.number().int().min(0).optional(),
+})
+
+export const ModuleLessonReorderInput = z.object({
+    articleSlugs: z.array(SlugSchema).min(1).max(200),
+})
+
+export const CheckpointAddInput = z.object({
+    problemSlug: SlugSchema,
+    position: z.coerce.number().int().min(0).optional(),
+})
+
+export const CheckpointReorderInput = z.object({
+    problemSlugs: z.array(SlugSchema).min(1).max(200),
+})
+
 const ContestKindAdmin = z.enum(["WEEKLY", "BIWEEKLY", "SPECIAL"])
 const ContestDate = z.coerce.date()
 export const MIN_CONTEST_MINUTES = 5

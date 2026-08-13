@@ -1,8 +1,12 @@
 import type { Metadata } from "next"
 import { cache } from "react"
 import Link from "next/link"
-import { ChevronLeft, LockKeyhole } from "lucide-react"
-import { getProblem, getSlugByNumber } from "@/actions/problems"
+import { ChevronLeft, ChevronRight, LockKeyhole } from "lucide-react"
+import {
+    getAdjacentProblems,
+    getProblem,
+    getSlugByNumber,
+} from "@/actions/problems"
 import {
     getProblemHistory,
     getSolvedSlugs,
@@ -12,6 +16,8 @@ import { auth } from "@/lib/auth"
 import { ProblemClient } from "@/components/practice/ProblemClient"
 import { ReportDialog } from "@/components/practice/ReportDialog"
 import { AddToListButton } from "@/components/lists/AddToListButton"
+import { getCheckpointContext } from "@/lib/workspace/queries"
+import { getCatalogProblems } from "@/lib/practice/catalog-read"
 import { parseSchema } from "@/lib/schema-parser"
 import { prisma } from "@/lib/prisma"
 import { getDiscussionSettings } from "@/lib/discussions/settings"
@@ -82,33 +88,108 @@ export default async function ProblemPage({ params }: Props) {
         notFound()
     }
 
-    const [history, solvedSlugs, session, discussionSettings, discussionState] =
-        await Promise.all([
-            getProblemHistory(slug),
-            getSolvedSlugs(),
-            auth(),
-            getDiscussionSettings(),
-            prisma.problemDiscussionState.findUnique({
-                where: { problemId: problem.id },
-                select: { mode: true },
-            }),
-        ])
+    const [
+        history,
+        solvedSlugs,
+        session,
+        discussionSettings,
+        discussionState,
+        adjacent,
+    ] = await Promise.all([
+        getProblemHistory(slug),
+        getSolvedSlugs(),
+        auth(),
+        getDiscussionSettings(),
+        prisma.problemDiscussionState.findUnique({
+            where: { problemId: problem.id },
+            select: { mode: true },
+        }),
+        getAdjacentProblems(problem.number),
+    ])
     const isSolved = solvedSlugs.includes(slug)
     const isSignedIn = Boolean(session?.user?.id)
+    // Staff see modules from DRAFT tracks so an unpublished curriculum can be
+    // reviewed; learners get those problems in the panel's "Not in a track"
+    // group instead. Same allowDraft rule the lesson reader uses.
+    const isStaff =
+        session?.user?.role === "ADMIN" || session?.user?.role === "MODERATOR"
+    const [panelProblems, checkpointContext] = await Promise.all([
+        getCatalogProblems(session?.user?.id ?? null, isStaff),
+        getCheckpointContext(problem.id, isStaff),
+    ])
     const lock = problem.contestLock
     const { columns: expectedColumns, rows: expectedRows } =
         parseExpectedOutput(problem.expectedOutput)
 
     return (
-        <div className="flex flex-col h-[calc(100vh-4rem)] bg-background">
+        <div className="flex flex-col h-full bg-background">
             <div className="border-b border-border bg-surface px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3">
-                <Link
-                    href="/practice"
-                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                    All problems
-                </Link>
+                <div className="flex items-center gap-2 sm:gap-3">
+                    <Link
+                        href="/practice"
+                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">All problems</span>
+                    </Link>
+                    {(adjacent.prev || adjacent.next) && (
+                        <>
+                            <div
+                                className="h-4 w-px bg-border"
+                                aria-hidden="true"
+                            />
+                            <nav
+                                aria-label="Problem navigation"
+                                className="flex items-center gap-1"
+                            >
+                                {adjacent.prev ? (
+                                    <Link
+                                        href={`/practice/${adjacent.prev.slug}`}
+                                        title={`#${adjacent.prev.number}. ${adjacent.prev.title}`}
+                                        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+                                    >
+                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                        <span className="hidden sm:inline">
+                                            Prev
+                                        </span>
+                                    </Link>
+                                ) : (
+                                    <span
+                                        aria-disabled="true"
+                                        className="inline-flex cursor-not-allowed items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground/40"
+                                    >
+                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                        <span className="hidden sm:inline">
+                                            Prev
+                                        </span>
+                                    </span>
+                                )}
+                                {adjacent.next ? (
+                                    <Link
+                                        href={`/practice/${adjacent.next.slug}`}
+                                        title={`#${adjacent.next.number}. ${adjacent.next.title}`}
+                                        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+                                    >
+                                        <span className="hidden sm:inline">
+                                            Next
+                                        </span>
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                    </Link>
+                                ) : (
+                                    <span
+                                        aria-disabled="true"
+                                        className="inline-flex cursor-not-allowed items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground/40"
+                                    >
+                                        <span className="hidden sm:inline">
+                                            Next
+                                        </span>
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                    </span>
+                                )}
+                            </nav>
+                        </>
+                    )}
+                </div>
                 <div className="flex items-center gap-4">
                     {lock ? (
                         <span className="text-xs text-muted-foreground">
@@ -155,6 +236,10 @@ export default async function ProblemPage({ params }: Props) {
                 discussionEnabled={Boolean(discussionSettings?.globalEnabled)}
                 discussionMode={discussionState?.mode ?? "OPEN"}
                 initialTableInfos={parseSchema(problem.schema?.sql)}
+                attemptCount={problem.attemptCount}
+                acceptedCount={problem.acceptedCount}
+                panelProblems={panelProblems}
+                checkpointContext={checkpointContext}
                 relatedArticles={problem.relatedArticles ?? []}
                 submissionDisabledReason={
                     lock

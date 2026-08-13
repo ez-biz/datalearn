@@ -36,6 +36,97 @@ export type JudgeRequest = {
 
 const DEFAULT_TIMEOUT_MS = 10_000
 
+// Warm-up budget. The throwaway no-op only runs `SELECT 1`, so steady-state it
+// finishes in well under a second — but on a cold serverless instance the fork
+// has to load the worker bundle plus the native DuckDB / PGlite binaries off a
+// cold disk before the query runs, which is exactly the cost we want to absorb.
+// Keep the timeout generous so that cold load is allowed to complete instead of
+// being killed mid-flight (which would leave the instance only half-warm).
+const DEFAULT_WARM_TIMEOUT_MS = 60_000
+// How long a successful warm is trusted before another trigger re-warms. The
+// win (file cache + native init) lasts the lifetime of the serverless instance,
+// so this mainly debounces the burst of triggers from page loads / polling.
+const DEFAULT_WARM_TTL_MS = 5 * 60_000
+
+function warmTimeoutMs(): number {
+    const raw = Number(process.env.CONTEST_JUDGE_WARM_TIMEOUT_MS)
+    return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_WARM_TIMEOUT_MS
+}
+
+function warmTtlMs(): number {
+    const raw = Number(process.env.CONTEST_JUDGE_WARM_TTL_MS)
+    return Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_WARM_TTL_MS
+}
+
+type WarmEntry = { inFlight: Promise<void> | null; warmedAt: number }
+const warmByDialect = new Map<ContestDialect, WarmEntry>()
+
+/**
+ * Pre-pay the judge's cold start. {@link submitToJudge} forks a fresh worker
+ * process per submission (see `runInChild`); on a cold serverless instance the
+ * very first fork loads the worker bundle and the native DuckDB / PGlite
+ * binaries from a cold disk and boots the engine — tens of seconds, which the
+ * first contestant to submit each problem would otherwise wait through. Running
+ * one throwaway no-op judge run early warms the instance's file cache and native
+ * init so the first *real* submission lands at steady-state latency.
+ *
+ * Idempotent and debounced per dialect: concurrent callers share a single
+ * in-flight warm, and a successful warm is skipped for `CONTEST_JUDGE_WARM_TTL_MS`.
+ * Never throws — warm-up is best-effort and must not break the request (page
+ * load or warm ping) that triggers it.
+ */
+export function warmUpJudge(dialect: ContestDialect = "DUCKDB"): Promise<void> {
+    const existing = warmByDialect.get(dialect)
+    if (existing?.inFlight) return existing.inFlight
+    if (existing && Date.now() - existing.warmedAt < warmTtlMs()) {
+        return Promise.resolve()
+    }
+
+    const inFlight = (async () => {
+        let warmed = false
+        try {
+            // Run through the same queue as real submissions so the warm fork
+            // counts against CONTEST_JUDGE_CONCURRENCY instead of slipping in as
+            // an invisible extra child process.
+            const result = await enqueue(() =>
+                runInChild({
+                    dialect,
+                    userSql: "SELECT 1",
+                    hiddenSchemaSql: "SELECT 1;",
+                    hiddenExpected: [],
+                    ordered: false,
+                    timeoutMs: warmTimeoutMs(),
+                })
+            )
+            // Only a clean run means the worker actually forked and the engine
+            // initialized. On failure (missing artifact, or a cold load killed
+            // by the warm timeout) leave `warmedAt` stale so the next trigger
+            // retries instead of waiting out the full TTL.
+            warmed = result.kind === "ok"
+        } catch (error) {
+            // A full queue means the judge is already busy serving real
+            // submissions — i.e. already warm — so treat that as success.
+            warmed = error instanceof JudgeBusyError
+        } finally {
+            warmByDialect.set(dialect, {
+                inFlight: null,
+                warmedAt: warmed ? Date.now() : 0,
+            })
+        }
+    })()
+
+    warmByDialect.set(dialect, {
+        inFlight,
+        warmedAt: existing?.warmedAt ?? 0,
+    })
+    return inFlight
+}
+
+/** Test seam: forget every dialect's warm state so a fresh warm runs. */
+export function _resetJudgeWarmStateForTests(): void {
+    warmByDialect.clear()
+}
+
 export async function submitToJudge(
     request: JudgeRequest
 ): Promise<JudgeOutcome> {

@@ -4,7 +4,11 @@ import { cn } from "@/lib/utils"
 type Variant = "default" | "secondary" | "outline" | "easy" | "medium" | "hard" | "primary" | "accent"
 
 const variants: Record<Variant, string> = {
-    default: "bg-muted text-foreground",
+    // A flat --muted fill (aliased to --panel-sunken) is 1% darker than the
+    // --panel-raised cards these badges sit on in dark, which reads as no
+    // badge at all. A translucent tint of the muted foreground separates
+    // from any surface in both themes.
+    default: "bg-muted-foreground/15 text-foreground",
     secondary: "bg-surface-muted text-muted-foreground border border-border",
     outline: "border border-border text-muted-foreground",
     primary: "bg-primary/10 text-primary border border-primary/20",

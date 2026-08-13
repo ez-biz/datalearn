@@ -5,8 +5,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { headers } from "next/headers";
 import "./globals.css";
-import { Navbar } from "@/components/layout/Navbar";
-import { Footer } from "@/components/layout/Footer";
+import { ConsoleShell } from "@/components/layout/console/ConsoleShell";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
 
 const googleAnalyticsId =
@@ -71,24 +70,21 @@ export default async function RootLayout({
     return (
         <html lang="en" suppressHydrationWarning>
             <body
-                className={`${inter.variable} ${jetbrainsMono.variable} antialiased min-h-screen flex flex-col bg-background text-foreground`}
+                className={`${inter.variable} ${jetbrainsMono.variable} antialiased h-dvh overflow-hidden bg-background text-foreground print:h-auto print:overflow-visible`}
             >
                 <ThemeProvider nonce={nonce}>
                     <a
                         href="#main-content"
-                        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
                         Skip to main content
                     </a>
-                    <Navbar />
-                    <div
-                        id="main-content"
-                        tabIndex={-1}
-                        className="flex-1 flex flex-col focus:outline-none"
-                    >
-                        {children}
-                    </div>
-                    <Footer />
+                    {/* The scroll column, <main> and <Footer> live inside
+                        ConsoleChrome now — it is the only component that can
+                        see the pathname, and focus routes (the lesson reader)
+                        need to supply their own <header>/<main> pair to keep
+                        the `banner` landmark legal. See ConsoleChrome. */}
+                    <ConsoleShell>{children}</ConsoleShell>
                 </ThemeProvider>
                 <Analytics />
                 <SpeedInsights />

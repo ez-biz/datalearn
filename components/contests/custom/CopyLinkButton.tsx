@@ -25,7 +25,7 @@ export function CopyLinkButton({ url }: { url: string }) {
         <button
             type="button"
             onClick={copy}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
         >
             {copied ? (
                 <Check className="h-3.5 w-3.5 text-easy-fg" />

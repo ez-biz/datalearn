@@ -35,7 +35,7 @@ export function TagPill({
             href={`/practice/tags/${slug}`}
             onClick={stopPropagation ? (e) => e.stopPropagation() : undefined}
             className={cn(
-                "inline-flex items-center rounded-full border border-border bg-surface-muted/60 font-mono font-medium text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground hover:border-border-strong",
+                "inline-flex items-center rounded-full border border-border bg-surface-muted/60 font-mono font-medium text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground hover:border-border-strong",
                 !isCompany && "lowercase",
                 isCompany &&
                     "border-primary/20 bg-primary/5 text-foreground hover:border-primary/30 hover:bg-primary/10 hover:text-foreground",

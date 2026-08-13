@@ -19,7 +19,12 @@ export function TableOfContents({ entries }: { entries: TocEntry[] }) {
                     setActiveSlug(visible[0].target.id)
                 }
             },
-            { rootMargin: "-80px 0px -70% 0px", threshold: 0 }
+            // The top inset used to be -80px to clear the 64px sticky navbar.
+            // The console shell has no top chrome — the sidebar is a left
+            // column — so nothing overlays the top of the scroll port any
+            // more. -24px matches this aside's own `top-6` offset, which is
+            // where a heading visually reads as "current".
+            { rootMargin: "-24px 0px -70% 0px", threshold: 0 }
         )
         for (const e of entries) {
             const el = document.getElementById(e.slug)
@@ -33,7 +38,7 @@ export function TableOfContents({ entries }: { entries: TocEntry[] }) {
     return (
         <aside
             aria-label="Table of contents"
-            className="hidden lg:block sticky top-24 self-start ml-8 w-56 shrink-0"
+            className="hidden lg:block sticky top-6 self-start ml-8 w-56 shrink-0"
         >
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
                 On this page

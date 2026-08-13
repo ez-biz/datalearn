@@ -39,6 +39,7 @@ model User {
   contestProblemSolves        ContestProblemSolve[]
   contestLeaderboardRows      ContestLeaderboardEntry[]
   adminAuditLogs              AdminAuditLog[]
+  lessonProgress              LessonProgress[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -106,26 +107,29 @@ enum TopicLane {
 }
 
 model Article {
-  id              String           @id @default(cuid())
+  id              String             @id @default(cuid())
   title           String
-  slug            String           @unique
-  content         String           @db.Text
-  status          ArticleStatus    @default(DRAFT)
-  hasVisualBlocks Boolean          @default(false)
-  summary         String?          @db.Text
+  slug            String             @unique
+  content         String             @db.Text
+  status          ArticleStatus      @default(DRAFT)
+  hasVisualBlocks Boolean            @default(false)
+  summary         String?            @db.Text
   readingMinutes  Int?
-  reviewNotes     String?          @db.Text
+  reviewNotes     String?            @db.Text
   reviewedAt      DateTime?
   reviewedBy      String?
   topicId         String
-  topic           Topic            @relation(fields: [topicId], references: [id])
+  topic           Topic              @relation(fields: [topicId], references: [id])
   authorId        String
-  author          User             @relation(fields: [authorId], references: [id], onDelete: Restrict)
-  tags            Tag[]            @relation("ArticleTags")
-  relatedProblems SQLProblem[]     @relation("ArticleProblems")
+  author          User               @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  tags            Tag[]              @relation("ArticleTags")
+  relatedProblems SQLProblem[]       @relation("ArticleProblems")
   versions        ArticleVersion[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  moduleLessons   ModuleLesson[]
+  checkpoints     LessonCheckpoint[]
+  lessonProgress  LessonProgress[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   @@index([status])
   @@index([hasVisualBlocks])
@@ -210,6 +214,16 @@ model SQLProblem {
   hiddenDataValidatedAt           DateTime?
   hiddenDataValidationFingerprint String?
   ordered                         Boolean                 @default(false)
+  /// Denormalized pass-rate counters, maintained in the same transaction
+  /// that writes a Submission (actions/submissions.ts). Reading them is
+  /// O(1) per row, which the problems panel needs — it renders the whole
+  /// published catalog. Counts signed-in submissions, not people.
+  ///
+  /// These drift: deleting a User cascades their Submissions away and
+  /// nothing decrements the counters. Repair with
+  /// `npm run verify:pass-rate -- --fix`.
+  attemptCount                    Int                     @default(0)
+  acceptedCount                   Int                     @default(0)
   /// Allowed engines for solving this problem. Most problems are
   /// portable (`[DUCKDB, POSTGRES]`); narrow only when the canonical
   /// solution uses dialect-specific syntax (e.g. JSONB, STRING_AGG,
@@ -223,6 +237,7 @@ model SQLProblem {
   relatedArticles                 Article[]               @relation("ArticleProblems")
   listItems                       ProblemListItem[]
   trackItems                      TrackItem[]
+  lessonCheckpoint                LessonCheckpoint?
   dailyProblems                   DailyProblem[]
   contestProblems                 ContestProblem[]
   contestLock                     ContestProblemLock?
@@ -269,6 +284,7 @@ model Track {
   estimatedMinutes Int             @default(60)
   coverImageUrl    String?
   items            TrackItem[]
+  modules          Module[]
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
@@ -286,6 +302,78 @@ model TrackItem {
   @@unique([trackId, problemId])
   @@unique([trackId, position])
   @@index([trackId])
+}
+
+/// A named, ordered stage of a Track. Modules group lessons; lessons
+/// carry checkpoint problems. `slug` is unique per track and does NOT
+/// contain the display number — the "04-" prefix in breadcrumbs is
+/// derived from `position` at render time so reordering never breaks
+/// a URL.
+model Module {
+  id          String         @id @default(cuid())
+  trackId     String
+  track       Track          @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  slug        String
+  name        String
+  description String         @db.Text
+  /// 0-indexed. Mutable ONLY inside reorderModules' transaction.
+  position    Int
+  lessons     ModuleLesson[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([trackId, slug])
+  @@unique([trackId, position])
+  @@index([trackId])
+}
+
+/// An Article placed in a Module, in order. An Article MAY appear in more
+/// than one Module — reuse across tracks is intentional, and read progress
+/// is keyed on the article so it counts everywhere the lesson appears.
+model ModuleLesson {
+  moduleId  String
+  module    Module  @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  articleId String
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  /// 0-indexed. Mutable ONLY inside reorderModuleLessons' transaction.
+  position  Int
+
+  @@id([moduleId, articleId])
+  @@unique([moduleId, position])
+  @@index([articleId])
+}
+
+/// A problem that checks a lesson. `@@unique([problemId])` enforces the
+/// product rule from the design handoff: a problem belongs to exactly one
+/// lesson. Relaxing to many-to-many later means dropping this constraint,
+/// not migrating SQLProblem.
+model LessonCheckpoint {
+  articleId String
+  article   Article    @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  problemId String
+  problem   SQLProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  /// 0-indexed. Mutable ONLY inside reorderCheckpoints' transaction.
+  position  Int
+
+  @@id([articleId, problemId])
+  @@unique([problemId])
+  @@unique([articleId, position])
+}
+
+/// Per-user lesson read state. `percent` is monotonic — writes take
+/// max(existing, incoming) and never decrease. `completedAt` is set once,
+/// when percent first reaches 100, and is never unset.
+model LessonProgress {
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articleId   String
+  article     Article   @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  percent     Int       @default(0)
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@id([userId, articleId])
+  @@index([userId, completedAt])
 }
 
 enum TrackDifficulty {
@@ -665,6 +753,15 @@ enum DiscussionModerationActionKind {
   REVOKE_MODERATOR_PERMISSION
 }
 
+/// COMMENT is ordinary discussion; APPROACH is a shared solution shown in
+/// the workspace's Solutions tab. One model rather than two so approaches
+/// inherit voting, reporting, moderation status and the per-problem
+/// OPEN/LOCKED/HIDDEN modes instead of growing a second pipeline.
+enum DiscussionCommentKind {
+  COMMENT
+  APPROACH
+}
+
 model DiscussionComment {
   id           String                  @id @default(cuid())
   problemId    String
@@ -675,6 +772,11 @@ model DiscussionComment {
   parent       DiscussionComment?      @relation("DiscussionReplies", fields: [parentId], references: [id], onDelete: Restrict)
   replies      DiscussionComment[]     @relation("DiscussionReplies")
   bodyMarkdown String                  @db.Text
+  kind         DiscussionCommentKind   @default(COMMENT)
+  /// APPROACH only: the shared query. Null on ordinary comments.
+  sql          String?                 @db.Text
+  /// APPROACH only: short strategy label, e.g. "window function".
+  strategy     String?
   status       DiscussionCommentStatus @default(VISIBLE)
   upvotes      Int                     @default(0)
   downvotes    Int                     @default(0)
@@ -691,6 +793,7 @@ model DiscussionComment {
   hiddenById   String?
   hiddenBy     User?                   @relation("DiscussionCommentHiddenBy", fields: [hiddenById], references: [id], onDelete: SetNull)
 
+  @@index([problemId, kind, status, score, createdAt])
   @@index([problemId, parentId, status, score, createdAt])
   @@index([problemId, status, createdAt])
   @@index([userId, createdAt])

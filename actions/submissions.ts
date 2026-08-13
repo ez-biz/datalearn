@@ -113,15 +113,28 @@ export async function validateSubmission(input: unknown): Promise<ValidationResu
 
     if (session?.user?.id) {
         try {
-            await prisma.submission.create({
-                data: {
-                    userId: session.user.id,
-                    problemId: problem.id,
-                    status: result.ok ? "ACCEPTED" : "WRONG_ANSWER",
-                    code: code ?? "",
-                    reason: result.ok ? null : result.reason ?? null,
-                },
-            })
+            // The counters and the Submission move together. Outside a
+            // transaction a crash between them skews the pass rate
+            // permanently, and nothing would ever notice — the numbers are
+            // denormalized precisely so they are never recomputed.
+            await prisma.$transaction([
+                prisma.submission.create({
+                    data: {
+                        userId: session.user.id,
+                        problemId: problem.id,
+                        status: result.ok ? "ACCEPTED" : "WRONG_ANSWER",
+                        code: code ?? "",
+                        reason: result.ok ? null : result.reason ?? null,
+                    },
+                }),
+                prisma.sQLProblem.update({
+                    where: { id: problem.id },
+                    data: {
+                        attemptCount: { increment: 1 },
+                        acceptedCount: { increment: result.ok ? 1 : 0 },
+                    },
+                }),
+            ])
 
             if (result.ok) {
                 await prisma.userReputationEvent.upsert({

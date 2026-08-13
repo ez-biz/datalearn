@@ -1,8 +1,9 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { ArrowLeft, Route } from "lucide-react"
-import { getPublishedTracks } from "@/actions/tracks"
-import { TrackCard } from "@/components/learn/TrackCard"
+import { auth } from "@/lib/auth"
+import { getTrackSummariesForUser } from "@/lib/learn/tracks-read"
+import { TrackSummaryCard } from "@/components/learn/tracks/TrackSummaryCard"
 import { Container } from "@/components/ui/Container"
 import { Eyebrow } from "@/components/ui/Eyebrow"
 import { EmptyState } from "@/components/ui/EmptyState"
@@ -15,7 +16,17 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic"
 
 export default async function TracksIndexPage() {
-    const tracks = await getPublishedTracks()
+    const session = await auth().catch(() => null)
+    const userId = session?.user?.id ?? null
+    // Same ADMIN/MODERATOR staff gate as app/practice/[slug]/page.tsx, the
+    // lesson reader, the module screen, and (as of this fix) the track
+    // detail page itself: staff preview DRAFT/ARCHIVED tracks, learners
+    // never see them. Load-bearing that the detail page agrees — a card
+    // rendered here for a staff viewer must have a title link that resolves
+    // there instead of 404ing.
+    const isStaff =
+        session?.user?.role === "ADMIN" || session?.user?.role === "MODERATOR"
+    const tracks = await getTrackSummariesForUser(userId, isStaff)
 
     return (
         <Container width="2xl" className="py-10 sm:py-14">
@@ -58,9 +69,13 @@ export default async function TracksIndexPage() {
                     description="Curated SQL study plans will appear here once they are published."
                 />
             ) : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {tracks.map((track) => (
-                        <TrackCard key={track.id} track={track} />
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {tracks.map((track, index) => (
+                        <TrackSummaryCard
+                            key={track.slug}
+                            track={track}
+                            index={index}
+                        />
                     ))}
                 </div>
             )}

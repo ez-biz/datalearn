@@ -6,7 +6,10 @@ const KIND_STYLE: Record<string, string> = {
     pitfall: "border-l-accent bg-accent/5 [&_.dl-callout-tag]:text-accent",
     warning:
         "border-l-destructive bg-destructive/5 [&_.dl-callout-tag]:text-destructive",
-    note: "border-l-muted-foreground bg-muted [&_.dl-callout-tag]:text-muted-foreground",
+    // A translucent tint, like the three kinds above it. A flat --muted fill
+    // (aliased to --panel-sunken) is within 1% lightness of both --canvas and
+    // --panel-raised in dark, so the callout box disappeared entirely.
+    note: "border-l-muted-foreground bg-muted-foreground/10 [&_.dl-callout-tag]:text-muted-foreground",
 }
 
 const KIND_LABEL: Record<string, string> = {

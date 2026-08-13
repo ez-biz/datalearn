@@ -126,6 +126,25 @@ function logResult(label, result) {
     return true
 }
 
+// Tool-level failures (a thrown ApiError/McpError inside a `server.tool`
+// handler) do NOT surface as a JSON-RPC `result.error` — the MCP SDK's
+// CallToolRequestSchema handler catches them and returns a normal-looking
+// result shaped `{ content: [...], isError: true }` instead. `result.error`
+// is reserved for protocol-level failures. Verified empirically against
+// the installed @modelcontextprotocol/sdk version.
+function isToolError(result) {
+    return result.result?.isError === true
+}
+
+// Text content of a tool result. On the error path this is a plain error
+// string (e.g. "MCP error -32603: ..."), NOT JSON — callers must check
+// isToolError() before JSON.parse()-ing this, or a genuine (non-404) tool
+// error throws a SyntaxError that aborts the whole enclosing try/finally,
+// skipping cleanup.
+function textOf(result) {
+    return result.result?.content?.[0]?.text
+}
+
 async function main() {
     console.log("[harness] seeding API key...")
     const { plaintext, keyId } = await seedKey()
@@ -169,8 +188,29 @@ async function main() {
         const tools = await mcp.request("tools/list")
         const names = tools.result?.tools?.map((t) => t.name).sort() ?? []
         console.log(`  ✓ tools: ${names.join(", ")}`)
-        if (names.length !== 15) {
-            throw new Error(`expected 15 tools, got ${names.length}`)
+        // A previous exact-equality count (9 → 11 → 15 …) drifted out of
+        // sync for several releases while the surface silently grew to 42
+        // (v0.8.0) — the harness was unrunnable and nobody noticed. Use a
+        // lower bound instead (so the next tool addition doesn't re-break
+        // this) plus an explicit presence check for the tools this task
+        // (Task 11 — curriculum) actually depends on.
+        if (names.length < 56) {
+            throw new Error(`Expected at least 56 tools, got ${names.length}`)
+        }
+        const requiredCurriculumTools = [
+            "list_modules", "get_module", "create_module", "update_module",
+            "delete_module", "reorder_modules", "add_lesson_to_module",
+            "remove_lesson_from_module", "reorder_module_lessons", "list_checkpoints",
+            "add_checkpoint", "remove_checkpoint", "reorder_checkpoints",
+            "get_curriculum",
+        ]
+        const missingCurriculumTools = requiredCurriculumTools.filter(
+            (t) => !names.includes(t)
+        )
+        if (missingCurriculumTools.length) {
+            throw new Error(
+                `Missing curriculum tools: ${missingCurriculumTools.join(", ")}`
+            )
         }
 
         console.log("\n[harness] read-only tools...")
@@ -546,13 +586,632 @@ async function main() {
             id: newKeyPayload.id,
         })
         passes.push(logResult("revoke_api_key", revokeKeyResult))
-        // Only release the safety net when revoke_api_key actually
-        // succeeded. JSON-RPC tool errors come back as `result.error`
-        // (not thrown), so a logged-failure here would otherwise leak a
-        // 90-day full-admin key. The finally block's direct DB revoke is
-        // the backstop.
-        if (!revokeKeyResult.error) {
+        // Only release the safety net when revoke_api_key actually succeeded.
+        // Tool-level failures arrive as `result.result.isError` (see
+        // `isToolError` above) — `result.error` is reserved for
+        // transport/JSON-RPC-level failures and is never set for a business
+        // logic error thrown inside a `server.tool` handler. Checking
+        // `.error` here would always be falsy and null out the safety net
+        // even on a genuinely failed revoke, leaking a 90-day full-admin
+        // key with only the `finally` block's direct DB revoke as backstop.
+        if (!isToolError(revokeKeyResult)) {
             testCreatedApiKeyId = null
+        }
+
+        // ── Curriculum: modules, lessons, checkpoints (Task 11) ─────────
+        // Self-contained fixtures under a distinct `mcpe2e-` prefix (rather
+        // than the `mcp-` prefix used above) so a failed run's leftovers are
+        // easy to spot and hand-clean without confusing them with the
+        // sections above. Everything created here is torn down at the end
+        // of this section — nothing is deferred to the final cleanup block.
+        console.log("\n[harness] curriculum (modules, lessons, checkpoints)...")
+
+        const curModuleCountBefore = await prisma.module.count()
+        const curLessonCountBefore = await prisma.moduleLesson.count()
+        const curCheckpointCountBefore = await prisma.lessonCheckpoint.count()
+        const curTrackCountBefore = await prisma.track.count()
+        const curArticleCountBefore = await prisma.article.count()
+        const curTopicCountBefore = await prisma.topic.count()
+        const curProblemCountBefore = await prisma.sQLProblem.count()
+        const curSchemaCountBefore = await prisma.sqlSchema.count()
+
+        const curTrackSlug = `mcpe2e-track-${stamp}`
+        const curTopicSlug = `mcpe2e-topic-${stamp}`
+        const curArticleSlug = `mcpe2e-article-${stamp}`
+        const curArticleSlug2 = `mcpe2e-article2-${stamp}`
+        const curProblemSlug = `mcpe2e-problem-${stamp}`
+        const curProblemSlug2 = `mcpe2e-problem2-${stamp}`
+
+        const curSchema = await mcp.callTool("create_schema", {
+            name: `MCP E2E Curriculum Schema ${stamp}`,
+            sql: "CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1);",
+        })
+        passes.push(logResult("create_schema (curriculum fixture)", curSchema))
+        // Setup step, not just an assertion: curSchemaId feeds the
+        // create_problem calls right below and the cleanup delete at the
+        // end of this section, so it must survive an error without
+        // throwing — left undefined on the error path rather than crashing.
+        let curSchemaId
+        if (isToolError(curSchema)) {
+            console.log(
+                `  ✗ create_schema (curriculum fixture) failed: ${textOf(curSchema)}`
+            )
+            passes.push(false)
+        } else {
+            curSchemaId = JSON.parse(textOf(curSchema) ?? "{}").id
+        }
+
+        const curProblem = await mcp.callTool("create_problem", {
+            title: `MCP E2E Curriculum Problem ${stamp}`,
+            slug: curProblemSlug,
+            difficulty: "EASY",
+            description: "Created by e2e harness; safe to delete.",
+            schemaId: curSchemaId,
+            expectedOutput: '[{"id":1}]',
+            solutionSql: "SELECT id FROM t;",
+        })
+        passes.push(logResult("create_problem (curriculum fixture 1)", curProblem))
+
+        const curProblem2 = await mcp.callTool("create_problem", {
+            title: `MCP E2E Curriculum Problem 2 ${stamp}`,
+            slug: curProblemSlug2,
+            difficulty: "EASY",
+            description: "Created by e2e harness; safe to delete.",
+            schemaId: curSchemaId,
+            expectedOutput: '[{"id":1}]',
+            solutionSql: "SELECT id FROM t;",
+        })
+        passes.push(logResult("create_problem (curriculum fixture 2)", curProblem2))
+
+        await mcp.callTool("create_topic", {
+            name: `MCP E2E Curriculum Topic ${stamp}`,
+            slug: curTopicSlug,
+            description: "e2e harness — safe to delete.",
+        })
+        const curArticle = await mcp.callTool("create_article", {
+            title: `MCP E2E Curriculum Article ${stamp}`,
+            slug: curArticleSlug,
+            topicSlug: curTopicSlug,
+            content: "Plain markdown body for curriculum harness fixture 1.",
+            summary: "e2e harness — safe to delete.",
+        })
+        passes.push(logResult("create_article (curriculum fixture 1)", curArticle))
+        const curArticle2 = await mcp.callTool("create_article", {
+            title: `MCP E2E Curriculum Article 2 ${stamp}`,
+            slug: curArticleSlug2,
+            topicSlug: curTopicSlug,
+            content: "Plain markdown body for curriculum harness fixture 2.",
+            summary: "e2e harness — safe to delete.",
+        })
+        passes.push(logResult("create_article (curriculum fixture 2)", curArticle2))
+
+        const curTrack = await mcp.callTool("create_track", {
+            name: `MCP E2E Curriculum Track ${stamp}`,
+            slug: curTrackSlug,
+            summary: "e2e harness — safe to delete.",
+            description: "e2e harness — safe to delete.",
+        })
+        passes.push(logResult("create_track (curriculum fixture)", curTrack))
+
+        await mcp.callTool("create_module", {
+            trackSlug: curTrackSlug,
+            name: "Foundations",
+            description: "d",
+        })
+        await mcp.callTool("create_module", {
+            trackSlug: curTrackSlug,
+            name: "Joins",
+            description: "d",
+        })
+
+        // reorder_modules with a complete slug list must succeed
+        const reorderedModules = await mcp.callTool("reorder_modules", {
+            trackSlug: curTrackSlug,
+            moduleSlugs: ["joins", "foundations"],
+        })
+        if (!isToolError(reorderedModules)) {
+            console.log(`  ✓ reorder_modules (complete list) succeeded`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ reorder_modules (complete list) failed: ${reorderedModules.result?.content?.[0]?.text}`
+            )
+            passes.push(false)
+        }
+
+        // reorder_modules with a partial slug list must be rejected
+        const partialReorderModules = await mcp.callTool("reorder_modules", {
+            trackSlug: curTrackSlug,
+            moduleSlugs: ["joins"],
+        })
+        if (isToolError(partialReorderModules)) {
+            console.log(
+                `  ✓ reorder_modules (partial list) rejected: ${partialReorderModules.result?.content?.[0]?.text}`
+            )
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ reorder_modules (partial list) should have been rejected, got: ${JSON.stringify(partialReorderModules.result)}`
+            )
+            passes.push(false)
+        }
+
+        // get_curriculum must reflect the new order: joins before foundations
+        const tree = await mcp.callTool("get_curriculum", { trackSlug: curTrackSlug })
+        passes.push(logResult("get_curriculum", tree))
+        if (isToolError(tree)) {
+            console.log(`  ✗ get_curriculum (order check) failed: ${textOf(tree)}`)
+            passes.push(false)
+        } else {
+            const treePayload = JSON.parse(textOf(tree) ?? "{}")
+            const treeModuleSlugs = (treePayload.modules ?? []).map((m) => m.slug)
+            if (
+                treeModuleSlugs[0] === "joins" &&
+                treeModuleSlugs[1] === "foundations"
+            ) {
+                console.log(`  ✓ get_curriculum reflects reordered modules: ${treeModuleSlugs.join(" -> ")}`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ get_curriculum expected [joins, foundations], got ${JSON.stringify(treeModuleSlugs)}`
+                )
+                passes.push(false)
+            }
+        }
+
+        // unknown track must return {found:false}, not throw
+        const missingTrackModules = await mcp.callTool("list_modules", {
+            trackSlug: "mcpe2e-no-such-track",
+        })
+        passes.push(logResult("list_modules(unknown track)", missingTrackModules))
+        if (isToolError(missingTrackModules)) {
+            console.log(
+                `  ✗ list_modules(unknown track) failed: ${textOf(missingTrackModules)}`
+            )
+            passes.push(false)
+        } else {
+            const missingTrackPayload = JSON.parse(textOf(missingTrackModules) ?? "{}")
+            if (missingTrackPayload.found === false) {
+                console.log(`  ✓ list_modules(unknown track) returns {found:false}`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ list_modules(unknown track) expected {found:false}, got: ${JSON.stringify(missingTrackPayload)}`
+                )
+                passes.push(false)
+            }
+        }
+
+        // unknown module must also return {found:false}
+        const missingModule = await mcp.callTool("get_module", {
+            trackSlug: curTrackSlug,
+            moduleSlug: "no-such-module",
+        })
+        if (isToolError(missingModule)) {
+            console.log(
+                `  ✗ get_module(unknown module) failed: ${textOf(missingModule)}`
+            )
+            passes.push(false)
+        } else {
+            const missingModulePayload = JSON.parse(textOf(missingModule) ?? "{}")
+            if (missingModulePayload.found === false) {
+                console.log(`  ✓ get_module(unknown module) returns {found:false}`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ get_module(unknown module) expected {found:false}, got: ${JSON.stringify(missingModulePayload)}`
+                )
+                passes.push(false)
+            }
+        }
+
+        // Attach both articles as lessons in "joins" — article2 first so the
+        // lesson-reorder check below has something to do.
+        const addLesson2 = await mcp.callTool("add_lesson_to_module", {
+            trackSlug: curTrackSlug,
+            moduleSlug: "joins",
+            articleSlug: curArticleSlug2,
+        })
+        passes.push(logResult("add_lesson_to_module (article 2)", addLesson2))
+        if (isToolError(addLesson2)) {
+            console.log(
+                `  ✗ add_lesson_to_module (article 2) failed: ${textOf(addLesson2)}`
+            )
+            passes.push(false)
+        } else {
+            const addLesson2Payload = JSON.parse(textOf(addLesson2) ?? "{}")
+            if (addLesson2Payload.position !== 0) {
+                console.log(
+                    `  ✗ add_lesson_to_module (article 2) expected position 0, got: ${JSON.stringify(addLesson2Payload)}`
+                )
+                passes.push(false)
+            } else {
+                console.log(`  ✓ add_lesson_to_module (article 2) succeeded at position 0`)
+                passes.push(true)
+            }
+        }
+
+        const addLesson1 = await mcp.callTool("add_lesson_to_module", {
+            trackSlug: curTrackSlug,
+            moduleSlug: "joins",
+            articleSlug: curArticleSlug,
+        })
+        passes.push(logResult("add_lesson_to_module (article 1)", addLesson1))
+        if (isToolError(addLesson1)) {
+            console.log(
+                `  ✗ add_lesson_to_module (article 1) failed: ${textOf(addLesson1)}`
+            )
+            passes.push(false)
+        } else {
+            const addLesson1Payload = JSON.parse(textOf(addLesson1) ?? "{}")
+            if (addLesson1Payload.position !== 1) {
+                console.log(
+                    `  ✗ add_lesson_to_module (article 1) expected position 1, got: ${JSON.stringify(addLesson1Payload)}`
+                )
+                passes.push(false)
+            } else {
+                console.log(`  ✓ add_lesson_to_module (article 1) succeeded at position 1`)
+                passes.push(true)
+            }
+        }
+
+        // reorder_module_lessons: partial payload rejected, complete payload
+        // succeeds, and the new order round-trips through get_module.
+        const partialReorderLessons = await mcp.callTool("reorder_module_lessons", {
+            trackSlug: curTrackSlug,
+            moduleSlug: "joins",
+            articleSlugs: [curArticleSlug],
+        })
+        if (isToolError(partialReorderLessons)) {
+            console.log(`  ✓ reorder_module_lessons (partial list) rejected`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ reorder_module_lessons (partial list) should have been rejected, got: ${JSON.stringify(partialReorderLessons.result)}`
+            )
+            passes.push(false)
+        }
+        const reorderedLessons = await mcp.callTool("reorder_module_lessons", {
+            trackSlug: curTrackSlug,
+            moduleSlug: "joins",
+            articleSlugs: [curArticleSlug, curArticleSlug2],
+        })
+        passes.push(logResult("reorder_module_lessons (complete list)", reorderedLessons))
+        if (!isToolError(reorderedLessons)) {
+            console.log(`  ✓ reorder_module_lessons (complete list) succeeded`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ reorder_module_lessons (complete list) should have succeeded, got: ${reorderedLessons.result?.content?.[0]?.text}`
+            )
+            passes.push(false)
+        }
+
+        const joinsModule = await mcp.callTool("get_module", {
+            trackSlug: curTrackSlug,
+            moduleSlug: "joins",
+        })
+        if (isToolError(joinsModule)) {
+            console.log(
+                `  ✗ get_module (reordered lessons) failed: ${textOf(joinsModule)}`
+            )
+            passes.push(false)
+        } else {
+            const joinsPayload = JSON.parse(textOf(joinsModule) ?? "{}")
+            const joinsLessonSlugs = (joinsPayload.lessons ?? []).map(
+                (l) => l.article.slug
+            )
+            if (
+                joinsLessonSlugs[0] === curArticleSlug &&
+                joinsLessonSlugs[1] === curArticleSlug2
+            ) {
+                console.log(`  ✓ get_module reflects reordered lessons`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ get_module expected [${curArticleSlug}, ${curArticleSlug2}], got ${JSON.stringify(joinsLessonSlugs)}`
+                )
+                passes.push(false)
+            }
+        }
+
+        // add_checkpoint: attach problem 1 to article 1, then problem 2 to
+        // article 1 as well (two checkpoints on the same lesson).
+        const addCheckpoint1 = await mcp.callTool("add_checkpoint", {
+            articleSlug: curArticleSlug,
+            problemSlug: curProblemSlug,
+        })
+        passes.push(logResult("add_checkpoint (problem 1 -> article 1)", addCheckpoint1))
+        if (isToolError(addCheckpoint1)) {
+            console.log(
+                `  ✗ add_checkpoint (problem 1 -> article 1) failed: ${textOf(addCheckpoint1)}`
+            )
+            passes.push(false)
+        } else {
+            const addCheckpoint1Payload = JSON.parse(textOf(addCheckpoint1) ?? "{}")
+            if (addCheckpoint1Payload.position !== 0) {
+                console.log(
+                    `  ✗ add_checkpoint (problem 1 -> article 1) expected position 0, got: ${JSON.stringify(addCheckpoint1Payload)}`
+                )
+                passes.push(false)
+            } else {
+                console.log(`  ✓ add_checkpoint (problem 1 -> article 1) succeeded at position 0`)
+                passes.push(true)
+            }
+        }
+
+        const addCheckpoint2 = await mcp.callTool("add_checkpoint", {
+            articleSlug: curArticleSlug,
+            problemSlug: curProblemSlug2,
+        })
+        passes.push(logResult("add_checkpoint (problem 2 -> article 1)", addCheckpoint2))
+        if (isToolError(addCheckpoint2)) {
+            console.log(
+                `  ✗ add_checkpoint (problem 2 -> article 1) failed: ${textOf(addCheckpoint2)}`
+            )
+            passes.push(false)
+        } else {
+            const addCheckpoint2Payload = JSON.parse(textOf(addCheckpoint2) ?? "{}")
+            if (addCheckpoint2Payload.position !== 1) {
+                console.log(
+                    `  ✗ add_checkpoint (problem 2 -> article 1) expected position 1, got: ${JSON.stringify(addCheckpoint2Payload)}`
+                )
+                passes.push(false)
+            } else {
+                console.log(`  ✓ add_checkpoint (problem 2 -> article 1) succeeded at position 1`)
+                passes.push(true)
+            }
+        }
+
+        // Rule: a problem checks exactly ONE lesson. Attaching problem 1 to
+        // article 2 (a different lesson) must 409.
+        const dupeCheckpoint = await mcp.callTool("add_checkpoint", {
+            articleSlug: curArticleSlug2,
+            problemSlug: curProblemSlug,
+        })
+        if (isToolError(dupeCheckpoint)) {
+            console.log(
+                `  ✓ add_checkpoint (problem already checks another lesson) rejected: ${dupeCheckpoint.result?.content?.[0]?.text}`
+            )
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ add_checkpoint (problem already checks another lesson) should 409, got: ${JSON.stringify(dupeCheckpoint.result)}`
+            )
+            passes.push(false)
+        }
+
+        // reorder_checkpoints: partial rejected, complete succeeds and
+        // round-trips through list_checkpoints.
+        const partialReorderCheckpoints = await mcp.callTool("reorder_checkpoints", {
+            articleSlug: curArticleSlug,
+            problemSlugs: [curProblemSlug],
+        })
+        if (isToolError(partialReorderCheckpoints)) {
+            console.log(`  ✓ reorder_checkpoints (partial list) rejected`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ reorder_checkpoints (partial list) should have been rejected, got: ${JSON.stringify(partialReorderCheckpoints.result)}`
+            )
+            passes.push(false)
+        }
+        const reorderedCheckpoints = await mcp.callTool("reorder_checkpoints", {
+            articleSlug: curArticleSlug,
+            problemSlugs: [curProblemSlug2, curProblemSlug],
+        })
+        passes.push(logResult("reorder_checkpoints (complete list)", reorderedCheckpoints))
+        if (!isToolError(reorderedCheckpoints)) {
+            console.log(`  ✓ reorder_checkpoints (complete list) succeeded`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ reorder_checkpoints (complete list) should have succeeded, got: ${reorderedCheckpoints.result?.content?.[0]?.text}`
+            )
+            passes.push(false)
+        }
+
+        const checkpointsList = await mcp.callTool("list_checkpoints", {
+            articleSlug: curArticleSlug,
+        })
+        if (isToolError(checkpointsList)) {
+            console.log(
+                `  ✗ list_checkpoints (order check) failed: ${textOf(checkpointsList)}`
+            )
+            passes.push(false)
+        } else {
+            const checkpointsPayload = JSON.parse(textOf(checkpointsList) ?? "[]")
+            const checkpointSlugs = checkpointsPayload.map((c) => c.problem.slug)
+            if (
+                checkpointSlugs[0] === curProblemSlug2 &&
+                checkpointSlugs[1] === curProblemSlug
+            ) {
+                console.log(`  ✓ list_checkpoints reflects reordered checkpoints`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ list_checkpoints expected [${curProblemSlug2}, ${curProblemSlug}], got ${JSON.stringify(checkpointSlugs)}`
+                )
+                passes.push(false)
+            }
+        }
+
+        // unknown lesson must return {found:false}
+        const missingLessonCheckpoints = await mcp.callTool("list_checkpoints", {
+            articleSlug: "mcpe2e-no-such-article",
+        })
+        if (isToolError(missingLessonCheckpoints)) {
+            console.log(
+                `  ✗ list_checkpoints(unknown lesson) failed: ${textOf(missingLessonCheckpoints)}`
+            )
+            passes.push(false)
+        } else {
+            const missingLessonPayload = JSON.parse(
+                textOf(missingLessonCheckpoints) ?? "{}"
+            )
+            if (missingLessonPayload.found === false) {
+                console.log(`  ✓ list_checkpoints(unknown lesson) returns {found:false}`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ list_checkpoints(unknown lesson) expected {found:false}, got: ${JSON.stringify(missingLessonPayload)}`
+                )
+                passes.push(false)
+            }
+        }
+
+        // Rule: attaching curriculum never publishes the track — it must
+        // still be DRAFT after every module/lesson/checkpoint write above.
+        const curTrackCheck = await mcp.callTool("get_track", { slug: curTrackSlug })
+        if (isToolError(curTrackCheck)) {
+            console.log(
+                `  ✗ get_track (DRAFT-status check) failed: ${textOf(curTrackCheck)}`
+            )
+            passes.push(false)
+        } else {
+            const curTrackPayload = JSON.parse(textOf(curTrackCheck) ?? "{}")
+            if (curTrackPayload.status === "DRAFT") {
+                console.log(`  ✓ track remains DRAFT after curriculum writes`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ track expected to remain DRAFT, got status=${curTrackPayload.status}`
+                )
+                passes.push(false)
+            }
+        }
+
+        // ── Curriculum teardown ──────────────────────────────────────────
+        const removeCheckpointResult = await mcp.callTool("remove_checkpoint", {
+            articleSlug: curArticleSlug,
+            problemSlug: curProblemSlug2,
+        })
+        passes.push(logResult("remove_checkpoint", removeCheckpointResult))
+        if (!isToolError(removeCheckpointResult)) {
+            console.log(`  ✓ remove_checkpoint succeeded`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ remove_checkpoint should have succeeded, got: ${removeCheckpointResult.result?.content?.[0]?.text}`
+            )
+            passes.push(false)
+        }
+
+        const removeLessonResult = await mcp.callTool("remove_lesson_from_module", {
+            trackSlug: curTrackSlug,
+            moduleSlug: "joins",
+            articleSlug: curArticleSlug2,
+        })
+        passes.push(logResult("remove_lesson_from_module", removeLessonResult))
+        if (!isToolError(removeLessonResult)) {
+            console.log(`  ✓ remove_lesson_from_module succeeded`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ remove_lesson_from_module should have succeeded, got: ${removeLessonResult.result?.content?.[0]?.text}`
+            )
+            passes.push(false)
+        }
+
+        const deleteJoinsResult = await mcp.callTool("delete_module", {
+            trackSlug: curTrackSlug,
+            moduleSlug: "joins",
+        })
+        passes.push(logResult("delete_module(joins)", deleteJoinsResult))
+        if (!isToolError(deleteJoinsResult)) {
+            console.log(`  ✓ delete_module(joins) succeeded`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ delete_module(joins) should have succeeded, got: ${deleteJoinsResult.result?.content?.[0]?.text}`
+            )
+            passes.push(false)
+        }
+
+        const deleteFoundationsResult = await mcp.callTool("delete_module", {
+            trackSlug: curTrackSlug,
+            moduleSlug: "foundations",
+        })
+        passes.push(logResult("delete_module(foundations)", deleteFoundationsResult))
+        if (!isToolError(deleteFoundationsResult)) {
+            console.log(`  ✓ delete_module(foundations) succeeded`)
+            passes.push(true)
+        } else {
+            console.log(
+                `  ✗ delete_module(foundations) should have succeeded, got: ${deleteFoundationsResult.result?.content?.[0]?.text}`
+            )
+            passes.push(false)
+        }
+
+        const deleteCurTrackResult = await mcp.callTool("delete_track", {
+            slug: curTrackSlug,
+        })
+        passes.push(logResult("delete_track (curriculum fixture)", deleteCurTrackResult))
+        // Cleanup site: log a failure but never abort — the prisma cleanup
+        // below (problems, schema, articles, topic) must still run even if
+        // this tool call errored or its result can't be parsed.
+        if (isToolError(deleteCurTrackResult)) {
+            console.log(
+                `  ✗ delete_track (curriculum fixture) failed: ${textOf(deleteCurTrackResult)}`
+            )
+            passes.push(false)
+        } else {
+            const deleteCurTrackPayload = JSON.parse(textOf(deleteCurTrackResult) ?? "{}")
+            if (deleteCurTrackPayload.deleted === true) {
+                console.log(`  ✓ delete_track hard-deleted (was DRAFT, zero legacy items)`)
+                passes.push(true)
+            } else {
+                console.log(
+                    `  ✗ delete_track expected deleted:true, got ${JSON.stringify(deleteCurTrackPayload)}`
+                )
+                passes.push(false)
+            }
+        }
+
+        await prisma.sQLProblem.deleteMany({
+            where: { slug: { in: [curProblemSlug, curProblemSlug2] } },
+        })
+        await prisma.sqlSchema.delete({ where: { id: curSchemaId } })
+        await prisma.article.deleteMany({
+            where: { slug: { in: [curArticleSlug, curArticleSlug2] } },
+        })
+        const deleteCurTopicResult = await mcp.callTool("delete_topic", {
+            slug: curTopicSlug,
+        })
+        passes.push(logResult("delete_topic (curriculum fixture)", deleteCurTopicResult))
+        console.log("  ✓ curriculum fixtures deleted")
+
+        const curModuleCountAfter = await prisma.module.count()
+        const curLessonCountAfter = await prisma.moduleLesson.count()
+        const curCheckpointCountAfter = await prisma.lessonCheckpoint.count()
+        const curTrackCountAfter = await prisma.track.count()
+        const curArticleCountAfter = await prisma.article.count()
+        const curTopicCountAfter = await prisma.topic.count()
+        const curProblemCountAfter = await prisma.sQLProblem.count()
+        const curSchemaCountAfter = await prisma.sqlSchema.count()
+
+        const countChecks = [
+            ["Module", curModuleCountBefore, curModuleCountAfter],
+            ["ModuleLesson", curLessonCountBefore, curLessonCountAfter],
+            ["LessonCheckpoint", curCheckpointCountBefore, curCheckpointCountAfter],
+            ["Track", curTrackCountBefore, curTrackCountAfter],
+            ["Article", curArticleCountBefore, curArticleCountAfter],
+            ["Topic", curTopicCountBefore, curTopicCountAfter],
+            ["SQLProblem", curProblemCountBefore, curProblemCountAfter],
+            ["SqlSchema", curSchemaCountBefore, curSchemaCountAfter],
+        ]
+        let countsClean = true
+        for (const [label, before, after] of countChecks) {
+            if (before !== after) {
+                console.log(`  ✗ ${label} count changed: ${before} -> ${after}`)
+                countsClean = false
+            }
+        }
+        if (countsClean) {
+            console.log(`  ✓ curriculum fixture cleanup confirmed — all row counts back to baseline`)
+            passes.push(true)
+        } else {
+            passes.push(false)
         }
 
         // ── Lifecycle deletes (v0.7.0) — replaces direct Prisma cleanup ─

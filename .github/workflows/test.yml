@@ -57,7 +57,10 @@ jobs:
       - name: Palette guard
         run: ./scripts/check-no-palette-colors.sh
 
-      - uses: actions/setup-node@v6
+      - name: Shadcn token definition guard
+        run: ./scripts/check-shadcn-token-definitions.sh
+
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: "npm"
@@ -73,6 +76,9 @@ jobs:
 
       - name: Seed visual lesson
         run: npm run seed:visual
+
+      - name: Verify pass-rate counters
+        run: npm run verify:pass-rate
 
       - name: Audit SQL dialect outputs
         run: npm run audit:dialects:ci
@@ -104,6 +110,24 @@ jobs:
       - name: Test tracks actions
         run: npm run test:tracks
 
+      - name: Test curriculum progress
+        run: npm run test:curriculum-progress
+
+      - name: Test curriculum admin validation
+        run: npm run test:curriculum-admin-validation
+
+      - name: Test curriculum admin
+        run: npm run test:curriculum-admin
+
+      - name: Test curriculum actions
+        run: npm run test:curriculum-actions
+
+      - name: Test approaches
+        run: npm run test:approaches
+
+      - name: Test checkpoint backfill
+        run: npm run test:checkpoint-backfill
+
       - name: Test article publish validation
         run: npm run test:article-publish-validation
 
@@ -113,8 +137,44 @@ jobs:
       - name: Test MCP e2e log redaction
         run: npm run test:mcp-e2e-log-redaction
 
+      - name: Check token theme parity
+        run: npm run check:token-parity
+
+      - name: Check theme utility mapping
+        run: npm run check:theme-utilities
+
+      - name: Test console nav model
+        run: npm run test:console-nav
+
+      - name: Test problems panel model
+        run: npm run test:problems-panel
+
+      - name: Test catalog model
+        run: npm run test:catalog-model
+
+      - name: Test module model
+        run: npm run test:module-model
+
+      - name: Test tracks model
+        run: npm run test:tracks-model
+
+      - name: Test pass rate
+        run: npm run test:pass-rate
+
+      - name: Test approach sort
+        run: npm run test:approach-sort
+
+      - name: Test lesson nav model
+        run: npm run test:lesson-nav
+
+      - name: Test reading progress
+        run: npm run test:reading-progress
+
+      - name: Test scroll restoration
+        run: npm run test:scroll-restoration
+
       - name: Cache Playwright browsers
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}

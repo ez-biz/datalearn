@@ -98,7 +98,7 @@ export function InsertMenu({
                                 onInsert(`\n:::figure{src="${url}" alt=""}\n\n:::\n`)
                             }
                         }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-muted"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-hover"
                     >
                         <ImageUp className="h-3.5 w-3.5" />
                         Upload image
@@ -113,7 +113,7 @@ export function InsertMenu({
                                     setOpen(false)
                                     onInsert(item.snippet)
                                 }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-muted"
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-hover"
                             >
                                 <Icon className="h-3.5 w-3.5" />
                                 {item.label}

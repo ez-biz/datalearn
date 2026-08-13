@@ -118,7 +118,7 @@ export function TopicEditForm({
                             >
                                 <label
                                     htmlFor="topic-lane-sql"
-                                    className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-surface-muted"
+                                    className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-surface-hover"
                                 >
                                     <RadioGroupItem
                                         id="topic-lane-sql"
@@ -128,7 +128,7 @@ export function TopicEditForm({
                                 </label>
                                 <label
                                     htmlFor="topic-lane-de"
-                                    className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-surface-muted"
+                                    className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-surface-hover"
                                 >
                                     <RadioGroupItem
                                         id="topic-lane-de"

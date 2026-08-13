@@ -67,7 +67,7 @@ export default async function MyListsPage() {
                             <li key={l.id}>
                                 <Link
                                     href={`/me/lists/${l.id}`}
-                                    className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_6rem_6rem_2rem] items-center gap-4 px-5 py-4 hover:bg-surface-muted/60 transition-colors group"
+                                    className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_6rem_6rem_2rem] items-center gap-4 px-5 py-4 hover:bg-surface-hover transition-colors group"
                                 >
                                     <div className="min-w-0">
                                         <h3 className="font-medium truncate group-hover:text-primary transition-colors">

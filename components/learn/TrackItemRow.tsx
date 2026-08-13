@@ -21,7 +21,7 @@ export function TrackItemRow({ item, isCompleted, isNext }: TrackItemRowProps) {
             href={`/practice/${item.problem.slug}`}
             data-testid="track-item"
             className={cn(
-                "group grid grid-cols-[auto_1fr] gap-4 border-b border-border p-4 transition-colors last:border-b-0 hover:bg-surface-muted/60 sm:grid-cols-[auto_1fr_auto]",
+                "group grid grid-cols-[auto_1fr] gap-4 border-b border-border p-4 transition-colors last:border-b-0 hover:bg-surface-hover sm:grid-cols-[auto_1fr_auto]",
                 isNext && "bg-primary/5",
             )}
         >

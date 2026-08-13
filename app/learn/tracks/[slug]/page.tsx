@@ -5,10 +5,14 @@ import { notFound } from "next/navigation"
 import { ArrowLeft, Clock, ListChecks, Route } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { getTrackCurriculum } from "@/actions/curriculum"
 import { getTrackBySlug, getTrackProgress } from "@/actions/tracks"
 import { TrackDifficultyBadge } from "@/components/learn/TrackCard"
 import { TrackItemRow } from "@/components/learn/TrackItemRow"
 import { TrackProgressBar } from "@/components/learn/TrackProgressBar"
+import { ModuleRow } from "@/components/learn/tracks/ModuleRow"
+import { RulesOfThePath } from "@/components/learn/tracks/RulesOfThePath"
+import { TrackProgressCard } from "@/components/learn/tracks/TrackProgressCard"
 import { LinkButton } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 import { Container } from "@/components/ui/Container"
@@ -20,9 +24,15 @@ type Props = {
 
 export const dynamic = "force-dynamic"
 
-// Dedup the track fetch across generateMetadata and the page render —
-// both run in the same request and would otherwise hit the DB twice.
-const getCachedTrack = cache(getTrackBySlug)
+// All-primitive args (no options object) so React's cache() memoizes
+// correctly across generateMetadata and the page render — both run in the
+// same request and would otherwise hit the DB twice. Matches the module
+// screen's getCachedCurriculum (app/learn/tracks/[slug]/modules/[moduleSlug]/page.tsx).
+//
+// No allowDraft param here — getTrackBySlug (actions/tracks.ts) resolves
+// that from the session itself now, so this page never computes or passes
+// a staff flag. See actions/tracks.ts's getTrackBySlug doc comment.
+const getCachedTrack = cache((slug: string) => getTrackBySlug(slug))
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { slug } = await params
@@ -40,7 +50,26 @@ export default async function TrackDetailPage({ params }: Props) {
     const track = await getCachedTrack(slug)
     if (!track) notFound()
 
+    // TrackStatus is DRAFT | PUBLISHED | ARCHIVED, so "not PUBLISHED" covers
+    // two states — matches the lesson reader's isUnpublished/unpublishedLabel.
+    const isUnpublished = track.status !== "PUBLISHED"
+    const unpublishedLabel = track.status === "ARCHIVED" ? "Archived" : "Draft"
+
     const progress = await getTrackProgress(track.id)
+    const curriculum = await getTrackCurriculum(slug)
+    // A track authored under the pre-SP1 model (TrackItem rows, no
+    // Module rows) must fall back to the study sequence below rather than
+    // render an empty "Curriculum" section — production still runs that
+    // old tracks feature. Checked once here so every branch below narrows
+    // `activeCurriculum` to a non-null TrackCurriculum consistently.
+    const activeCurriculum =
+        curriculum && curriculum.modules.length > 0 ? curriculum : null
+    // The header badge must agree with TrackProgressCard below it: a
+    // module-based track has 0 TrackItem rows, so `track.items.length`
+    // reads 0 there even though the curriculum has real problems.
+    const problemsCount = activeCurriculum
+        ? activeCurriculum.rollup.problemsTotal
+        : track.items.length
     const completedItemIds = new Set(progress.completedItemIds)
     const nextItem = track.items.find((item) => item.id === progress.nextItemId)
     const reviewItem = track.items[0]
@@ -64,14 +93,20 @@ export default async function TrackDetailPage({ params }: Props) {
                 All tracks
             </Link>
 
+            {isUnpublished && (
+                <p className="mt-4 rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning-text">
+                    {unpublishedLabel} — not visible to learners.
+                </p>
+            )}
+
             <header className="mt-6 grid gap-6 lg:grid-cols-[1fr_20rem] lg:items-start">
                 <div>
                     <div className="mb-4 flex flex-wrap items-center gap-2">
                         <TrackDifficultyBadge difficulty={track.difficulty} />
                         <span className="inline-flex items-center gap-1 text-sm text-muted-foreground tabular-nums">
                             <ListChecks className="h-4 w-4" />
-                            {track.items.length}{" "}
-                            {track.items.length === 1 ? "problem" : "problems"}
+                            {problemsCount}{" "}
+                            {problemsCount === 1 ? "problem" : "problems"}
                         </span>
                         <span className="inline-flex items-center gap-1 text-sm text-muted-foreground tabular-nums">
                             <Clock className="h-4 w-4" />
@@ -86,25 +121,32 @@ export default async function TrackDetailPage({ params }: Props) {
                     </p>
                 </div>
 
-                <Card className="p-5">
-                    <TrackProgressBar
-                        completedCount={progress.completedCount}
-                        totalCount={progress.totalCount}
+                {activeCurriculum ? (
+                    <TrackProgressCard
+                        trackSlug={slug}
+                        curriculum={activeCurriculum}
                     />
-                    {ctaItem ? (
-                        <LinkButton
-                            href={`/practice/${ctaItem.problem.slug}`}
-                            className="mt-5 w-full"
-                        >
-                            <Route className="h-4 w-4" />
-                            {ctaLabel}
-                        </LinkButton>
-                    ) : (
-                        <div className="mt-5 rounded-md border border-border bg-surface-muted px-3 py-2 text-center text-sm text-muted-foreground">
-                            {ctaLabel}
-                        </div>
-                    )}
-                </Card>
+                ) : (
+                    <Card className="p-5">
+                        <TrackProgressBar
+                            completedCount={progress.completedCount}
+                            totalCount={progress.totalCount}
+                        />
+                        {ctaItem ? (
+                            <LinkButton
+                                href={`/practice/${ctaItem.problem.slug}`}
+                                className="mt-5 w-full"
+                            >
+                                <Route className="h-4 w-4" />
+                                {ctaLabel}
+                            </LinkButton>
+                        ) : (
+                            <div className="mt-5 rounded-md border border-border bg-surface-muted px-3 py-2 text-center text-sm text-muted-foreground">
+                                {ctaLabel}
+                            </div>
+                        )}
+                    </Card>
+                )}
             </header>
 
             {track.coverImageUrl && (
@@ -118,63 +160,98 @@ export default async function TrackDetailPage({ params }: Props) {
             )}
 
             <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_20rem] lg:items-start">
-                <main className="min-w-0">
+                <div className="min-w-0">
                     <section className="prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-headings:tracking-tight prose-a:text-primary hover:prose-a:text-primary-hover">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                             {track.description}
                         </ReactMarkdown>
                     </section>
 
-                    <section className="mt-8" aria-labelledby="track-items">
-                        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-                            <div>
+                    {activeCurriculum ? (
+                        <section className="mt-8" aria-labelledby="track-modules">
+                            <div className="mb-4">
                                 <h2
-                                    id="track-items"
+                                    id="track-modules"
                                     className="text-xl font-semibold tracking-tight"
                                 >
-                                    Study sequence
+                                    Curriculum
                                 </h2>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                    Work through the list in order, or jump into
-                                    any problem when you want a specific drill.
+                                    Work through the modules in order, or jump
+                                    into any one for a specific lesson or
+                                    problem.
                                 </p>
                             </div>
-                        </div>
+                            <div className="overflow-x-auto rounded-lg border border-line">
+                                <div className="min-w-[600px] divide-y divide-line-faint">
+                                    {activeCurriculum.modules.map((mod) => (
+                                        <ModuleRow
+                                            key={mod.id}
+                                            mod={mod}
+                                            trackSlug={slug}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        </section>
+                    ) : (
+                        <section className="mt-8" aria-labelledby="track-items">
+                            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                                <div>
+                                    <h2
+                                        id="track-items"
+                                        className="text-xl font-semibold tracking-tight"
+                                    >
+                                        Study sequence
+                                    </h2>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        Work through the list in order, or jump into
+                                        any problem when you want a specific drill.
+                                    </p>
+                                </div>
+                            </div>
 
-                        {track.items.length === 0 ? (
-                            <EmptyState
-                                icon={<ListChecks className="h-5 w-5" />}
-                                title="No problems in this track yet"
-                                description="The track is published, but its item list is still being curated."
-                            />
-                        ) : (
-                            <Card className="overflow-hidden">
-                                {track.items.map((item) => (
-                                    <TrackItemRow
-                                        key={item.id}
-                                        item={item}
-                                        isCompleted={completedItemIds.has(
-                                            item.id,
-                                        )}
-                                        isNext={item.id === progress.nextItemId}
-                                    />
-                                ))}
-                            </Card>
-                        )}
-                    </section>
-                </main>
+                            {track.items.length === 0 ? (
+                                <EmptyState
+                                    icon={<ListChecks className="h-5 w-5" />}
+                                    title="No problems in this track yet"
+                                    description="The track is published, but its item list is still being curated."
+                                />
+                            ) : (
+                                <Card className="overflow-hidden">
+                                    {track.items.map((item) => (
+                                        <TrackItemRow
+                                            key={item.id}
+                                            item={item}
+                                            isCompleted={completedItemIds.has(
+                                                item.id,
+                                            )}
+                                            isNext={
+                                                item.id === progress.nextItemId
+                                            }
+                                        />
+                                    ))}
+                                </Card>
+                            )}
+                        </section>
+                    )}
+                </div>
 
-                <aside className="lg:sticky lg:top-24">
-                    <Card className="p-5">
-                        <h2 className="font-semibold tracking-tight">
-                            Track rhythm
-                        </h2>
-                        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                            Complete accepted submissions to advance progress.
-                            The next step always points to the first unsolved
-                            item in the sequence.
-                        </p>
-                    </Card>
+                <aside className="lg:sticky lg:top-6">
+                    {activeCurriculum ? (
+                        <RulesOfThePath />
+                    ) : (
+                        <Card className="p-5">
+                            <h2 className="font-semibold tracking-tight">
+                                Track rhythm
+                            </h2>
+                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                                Complete accepted submissions to advance
+                                progress. The next step always points to the
+                                first unsolved item in the sequence.
+                            </p>
+                        </Card>
+                    )}
                 </aside>
             </div>
         </Container>

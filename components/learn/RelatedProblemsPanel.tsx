@@ -28,7 +28,7 @@ export function RelatedProblemsPanel({
                     <Link
                         key={p.id}
                         href={`/practice/${p.slug}`}
-                        className="flex items-center gap-4 p-4 hover:bg-surface-muted/60 transition-colors group"
+                        className="flex items-center gap-4 p-4 hover:bg-surface-hover transition-colors group"
                     >
                         <div className="flex-1 min-w-0">
                             <h3 className="font-medium text-foreground group-hover:text-primary transition-colors truncate">

@@ -179,7 +179,7 @@ export function CreateCustomContestForm({
                                                     onClick={() =>
                                                         addProblem(problem.id)
                                                     }
-                                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-muted"
+                                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-hover"
                                                 >
                                                     <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                                                     <span className="tabular-nums text-muted-foreground">

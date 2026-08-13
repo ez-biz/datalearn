@@ -6,7 +6,7 @@ import { validateSubmission } from "@/actions/submissions"
 import type { ValidationResult } from "@/lib/sql-validator"
 import type { ProblemHistoryEntry } from "@/actions/submissions"
 import { computeValidateRowCap } from "@/lib/sql-engine/result-cap"
-import { ProblemPanel, type TableInfo } from "./ProblemPanel"
+import type { ProblemTab, TableInfo } from "@/lib/workspace/types"
 import type { DiscussionMode } from "./discussion/DiscussionPanel"
 import {
     extractTableNames,
@@ -14,10 +14,18 @@ import {
     type Dialect,
 } from "@/lib/use-problem-db"
 import { SqlPlaygroundSkeleton } from "@/components/sql/SqlPlaygroundSkeleton"
+import { WorkspaceLayout } from "./workspace/WorkspaceLayout"
+import { ProblemsPanel } from "./workspace/ProblemsPanel"
+import type { PanelProblem } from "@/lib/workspace/problems-panel-model"
+import type { CheckpointContext } from "@/lib/workspace/queries"
+import { LessonContextBar } from "./workspace/LessonContextBar"
+import { ProblemTabs } from "./workspace/ProblemTabs"
+import { ComesFromCard } from "./workspace/ComesFromCard"
 
-const SqlPlayground = dynamic(
-    () =>
-        import("@/components/sql/SqlPlayground").then((mod) => mod.SqlPlayground),
+// Monaco is client-only, so the pane stays a dynamic import with the same
+// skeleton the playground used.
+const EditorPane = dynamic(
+    () => import("./workspace/EditorPane").then((mod) => mod.EditorPane),
     { ssr: false, loading: () => <SqlPlaygroundSkeleton /> }
 )
 
@@ -49,6 +57,12 @@ interface ProblemClientProps {
      * SELECT against DuckDB once `dbReady`.
      */
     initialTableInfos: TableInfo[] | null
+    attemptCount: number
+    acceptedCount: number
+    /** Whole published catalog for the problems panel, already solved-marked. */
+    panelProblems: PanelProblem[]
+    /** Lesson this problem is a checkpoint of, or null when it is catalog-only. */
+    checkpointContext: CheckpointContext | null
     relatedArticles: Array<{
         id: string
         slug: string
@@ -62,6 +76,8 @@ interface ProblemClientProps {
 const DRAFT_PREFIX = "dl:draft:"
 const SAMPLE_LIMIT = 5
 const QUERY_TIMEOUT_OVERRIDE_KEY = "dl:query-timeout-ms"
+const PANEL_KEY = "dl:problems-panel"
+const SEEN_PREFIX = "dl:seen:"
 const MAX_QUERY_TIMEOUT_OVERRIDE_MS = 10_000
 
 export function ProblemClient({
@@ -85,16 +101,63 @@ export function ProblemClient({
     discussionMode,
     initialTableInfos,
     relatedArticles,
+    panelProblems,
+    checkpointContext,
+    attemptCount,
+    acceptedCount,
 }: ProblemClientProps) {
     const [query, setQuery] = useState("")
     const [hydrated, setHydrated] = useState(false)
     const [history, setHistory] = useState(initialHistory)
     const [solved, setSolved] = useState(isSolved)
     const [discussionPrefill, setDiscussionPrefill] = useState<string | null>(null)
+    const [approachPrefill, setApproachPrefill] = useState<string | null>(null)
     const [queryTimeoutMs] = useState(() => getQueryTimeoutOverride())
     const [tableInfos, setTableInfos] = useState<TableInfo[] | null>(
         initialTableInfos
     )
+    // Default open, then corrected from localStorage in an effect so SSR and
+    // the first client render agree. Reading during render would hydrate
+    // mismatched for anyone who had closed it.
+    const [panelOpen, setPanelOpen] = useState(true)
+    const togglePanel = useCallback(() => {
+        setPanelOpen((open) => {
+            try {
+                localStorage.setItem(PANEL_KEY, open ? "closed" : "open")
+            } catch {
+                // Private mode / storage disabled — the toggle still works,
+                // it just won't survive a reload.
+            }
+            return !open
+        })
+    }, [])
+
+    useEffect(() => {
+        try {
+            setPanelOpen(localStorage.getItem(PANEL_KEY) !== "closed")
+        } catch {
+            // Storage unavailable — keep the default.
+        }
+    }, [])
+
+    // Schema and Expected output are open on a first visit and collapsed
+    // after. Read before write, so the first render of a first visit still
+    // sees the key absent.
+    // null until resolved on mount — SSR cannot know, and the collapsibles
+    // must not latch a value before we do.
+    const [firstVisit, setFirstVisit] = useState<boolean | null>(null)
+    useEffect(() => {
+        const key = `${SEEN_PREFIX}${slug}`
+        try {
+            setFirstVisit(localStorage.getItem(key) === null)
+            localStorage.setItem(key, "1")
+        } catch {
+            // Storage unavailable — treat as a return visit and stay collapsed.
+        }
+    }, [slug])
+
+    const [activeTab, setActiveTab] = useState<ProblemTab>("description")
+
     const draftKey = `${DRAFT_PREFIX}${slug}`
     const dialectKey = `dl:dialect:${slug}`
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -226,10 +289,21 @@ export function ProblemClient({
         setQuery(code)
     }, [])
 
+    // "Share approach" from the history panel now lands in the Solutions
+    // composer, where it becomes a real APPROACH row rather than a comment
+    // that happens to quote SQL.
+    //
+    // It still fills the discussion composer too. Routing it only to
+    // Solutions would silently remove the ability to quote your query into
+    // the thread — a capability that exists today and is covered by
+    // discussions.spec.ts. Both are prepared; only the destination changed.
     const shareApproach = useCallback((code: string) => {
         const trimmed = code.trim()
         if (!trimmed) return
-        setDiscussionPrefill(`Here is my approach:\n\n\`\`\`sql\n${trimmed}\n\`\`\`\n`)
+        setApproachPrefill(trimmed)
+        setDiscussionPrefill(
+            `Here is my approach:\n\n\`\`\`sql\n${trimmed}\n\`\`\`\n`
+        )
     }, [])
 
     const handleSubmit = useCallback(
@@ -267,9 +341,37 @@ export function ProblemClient({
     )
 
     return (
-        <div className="flex-1 flex flex-col lg:flex-row min-h-0">
-            <aside className="w-full lg:w-2/5 xl:w-1/3 border-b lg:border-b-0 lg:border-r border-border min-h-[40vh] lg:min-h-0">
-                <ProblemPanel
+        <WorkspaceLayout
+            panelOpen={panelOpen}
+            onTogglePanel={togglePanel}
+            contextBar={
+                checkpointContext ? (
+                    <LessonContextBar context={checkpointContext} />
+                ) : null
+            }
+            problemsPanel={
+                <ProblemsPanel
+                    problems={panelProblems}
+                    currentSlug={slug}
+                    onClose={togglePanel}
+                />
+            }
+            problemPanel={
+                <ProblemTabs
+                    activeTab={activeTab}
+                    onTabChange={setActiveTab}
+                    dialects={allowedDialects}
+                    activeDialect={dialect}
+                    approachPrefill={approachPrefill}
+                    onApproachPrefillConsumed={() => setApproachPrefill(null)}
+                    firstVisit={firstVisit}
+                    attemptCount={attemptCount}
+                    acceptedCount={acceptedCount}
+                    comesFrom={
+                        checkpointContext ? (
+                            <ComesFromCard context={checkpointContext} />
+                        ) : null
+                    }
                     number={number}
                     title={title}
                     difficulty={difficulty}
@@ -293,9 +395,10 @@ export function ProblemClient({
                     discussionPrefill={discussionPrefill}
                     onDiscussionPrefillConsumed={() => setDiscussionPrefill(null)}
                 />
-            </aside>
-            <section className="flex-1 min-h-0 p-3 sm:p-4 bg-background">
-                <SqlPlayground
+            }
+            editor={
+                <div className="min-h-0 flex-1 p-3 sm:p-4">
+                    <EditorPane
                     dbReady={dbReady}
                     dbError={dbError}
                     dbRecovering={dbRecovering}
@@ -312,9 +415,11 @@ export function ProblemClient({
                     dialect={dialect}
                     allowedDialects={allowedDialects}
                     onDialectChange={handleDialectChange}
-                />
-            </section>
-        </div>
+                    checkpointContext={checkpointContext}
+                    />
+                </div>
+            }
+        />
     )
 }
 

@@ -1,10 +1,70 @@
 # 🚀 Antigravity Data Learning Platform — Long-Term Roadmap
 
-> **Last updated:** 2026-06-15
+> **Last updated:** 2026-08-09
 > **Status:** Live — <https://www.learndatanow.com>
 > **Version:** 0.8.0 (current)
 
 ## Recently shipped
+
+### Index screens (SP4 of the learning-platform redesign)
+
+The three screens a learner uses to find work — Practice catalog, Tracks, Module — rebuilt to the design handoff's sections 3–5, plus the Module screen that did not previously exist. **Zero schema changes**, which is what made each of the four phases revertible by reverting one PR.
+
+- **One read for one concept** — `getCatalogProblems` (`lib/practice/catalog-read.ts`) now serves both the practice catalog and the workspace problems panel. They were always the same list viewed differently; one definition of "a problem in a list" means the two screens cannot drift.
+- **Facets that tell the truth** — a facet group's counts are computed against every *other* group's selections but not its own, so selecting EASY never makes the MEDIUM count read 0. That rule is the reason `lib/practice/catalog-model.ts` exists as a pure module, and it is the first thing its 19 tests assert.
+- **The module route is 5 segments on purpose** — `isFocusRoute` matches *any* 4-segment path under `learn/tracks`, so a module index at `/learn/tracks/<track>/modules` would silently lose the console shell. There is no module index, and `test:console-nav` now pins that invariant with the real URL.
+- **`TrackItem` kept as a fallback** — the older study sequence still renders for a track with no modules. It has 0 rows locally but a full admin + MCP authoring surface, and production still runs the old tracks feature, so a track authored under the old model must not render an empty page after the release.
+- **Everything with no backing data was omitted, not faked** — `Track` has no `kind` field, so the Career/Skill filter and chips are absent; `Module` has no authored outcomes or interview-weight, so three of the design's four right-rail cards are gone. Two that looked unbacked turned out derivable: Prerequisites from earlier modules' rollups, and Module facts from `readingMinutes` and checkpoint counts.
+
+Known gaps carried forward: a production track with `TrackItem` rows and no `Module` rows would show "No lessons yet" on the index and a full study sequence on its own page — the index deliberately does not fall back to item counts; on module rows `attempted` is derived from `solved`, because `CurriculumCheckpoint` carries no attempted signal; and the tracks-index number chip is array position rather than a stable field.
+
+### Workspace redesign (SP5 of the learning-platform redesign)
+
+The problem-solving workspace at `/practice/<slug>` rebuilt as a four-column console view — problems panel · lesson context bar · five-tab problem panel · editor — plus pass rate and community approaches. Shipped in four phases, each independently mergeable.
+
+- **A third shell mode** — `isAppRoute` joins `isFocusRoute` in `components/layout/console/focus-route.ts`. App routes keep the console sidebar but drop the footer and clamp `#app-scroll` at `lg`, because the workspace's panes own their own scrolling. A unit test asserts the two predicates are **mutually exclusive** over every real route; three shell modes is one more than anyone holds in their head reliably.
+- **Two oversized files retired** — `ProblemPanel.tsx` (525 lines) and `SqlPlayground.tsx` (451) became nine focused components, with the decision logic extracted to pure, unit-tested modules under `lib/workspace/`.
+- **Pass rate as denormalized counters** — `attemptCount`/`acceptedCount` on `SQLProblem`, incremented in the transaction that already writes the `Submission`. O(1) per row, which the panel needs since it renders the whole catalog. The backfill is verified by **recomputing the aggregate and comparing values**; `npm run verify:pass-rate` runs in CI and `--fix` repairs drift.
+- **Community approaches on the existing discussion model** — `DiscussionComment.kind = APPROACH`, so they inherit voting, reporting, moderation status and the per-problem OPEN/LOCKED/HIDDEN modes instead of growing a second pipeline. One per user per problem via a **partial** unique index in raw SQL; a plain composite would have capped ordinary comments at one per user.
+- **Posting is open to any signed-in user**, mitigated rather than gated: an author with an accepted submission is marked verified, verified sorts first only within an equal score, and every other approach says it is not verified against the expected output.
+- **Six new CI suites** — `test:problems-panel`, `test:pass-rate`, `test:approach-sort`, `test:approaches`, `check:theme-utilities`, `verify:pass-rate` — each wired into `test.yml` in the PR that added it.
+- **`check:theme-utilities` closes a long-standing gap** — `check:token-parity` diffs `:root` against `.light` and never inspects `@theme inline`, so a token could exist with no utility mapping and the class would silently do nothing. The new guard caught four such dead classes on its first real use.
+
+Known gaps carried forward: approaches render a score but have **no vote controls** yet; the light theme has not been reviewed against screenshot `19`; and the mobile workspace is SP6's.
+
+### Console shell and tokens (SP2 of the learning-platform redesign)
+
+The graphite Console token system and the sidebar/rail shell every later screen renders inside. Retired the top navbar for a collapsible sidebar with an icon-rail state persisted in a cookie and read server-side, plus a mobile tab bar below `lg`.
+
+- **Every pre-existing token aliased onto the new system**, so `--background`, `--surface`, `--border` and friends keep working while the graphite palette becomes the source of truth. `check:token-parity` enforces that every `:root` token also exists in `.light` — light is not an inversion.
+- **`ConsoleChrome` took ownership of `#app-scroll`, `<main id="main-content">` and `<Footer>`** from `app/layout.tsx`, which is what made SP3's focus route and SP5's app route expressible at all.
+- **A whole-branch review caught what per-task review could not** — deleting `Navbar.tsx` had silently removed the theme toggle, mobile sign-out and the only `banner` landmark. That failure shape ("capability lost in a deletion") has recurred in every sub-project since and is now checked deliberately.
+
+### Lesson reader (SP3 of the learning-platform redesign)
+
+The first learner-facing screen rendered against SP1's spine: a full-bleed reading route at `/learn/tracks/<track>/<lesson>` with the curriculum on the left, the article in the middle, and contents + lesson state on the right.
+
+- **A focus route** — `isFocusRoute` (`components/layout/console/focus-route.ts`) is a pure predicate matching exactly four path segments, so the track page one level up keeps the console shell while the reader replaces it. `ConsoleChrome` reads it and renders only `#app-scroll`; the page then supplies its own `<header>` + `<main id="main-content">` **as siblings**, because a `<header>` maps to the `banner` landmark only outside sectioning content and ARIA forbids `banner` inside `main`. Exactly one banner, one main and one h1 at every viewport — asserted in e2e, not assumed.
+- **Live progress, split two ways** — `ReaderProgressProvider` owns the `#app-scroll` listener, the monotonic percent and the writes; `ReadingProgressBar` in the header and the "Read 62% · 3 min left" card in the right rail are both pure consumers. They are siblings under a server component, so a single component owning the listener could not have fed both — the card would have rendered a frozen server value and never flipped to "Auto-completed at 100%", a bug that looks like working software. Writes fire on 10% boundaries (≤10 round trips per lesson) plus a `visibilitychange` flush, and a render-phase reset on `articleSlug` stops one lesson's percent leaking into the next when React reconciles the provider in place across Prev/Next.
+- **Staff-only draft preview** — an unpublished track renders for `ADMIN`/`MODERATOR` behind the same gate `app/admin/layout.tsx` uses, with a "Draft — not visible to learners" banner that distinguishes DRAFT from ARCHIVED. Everyone else gets `notFound()`. Two e2e tests assert a canary string in the lesson body is absent for anonymous and for signed-in non-staff, which is a stronger claim than a status code — `notFound()` returns 200 app-wide in this build.
+- **Responsive at three widths** — `CurriculumRail` is `xl:`, `LessonAsideRail` is `lg:`, and `ContentsSheet` is `lg:hidden`, so the table of contents has exactly one owner at every width and never zero. Below `lg` the console tab bar is suppressed too, so the reader carries its own sign-in affordance.
+- **One new token** (`--icon-done`) and four guard suites — 93 unit assertions across `test:lesson-nav`, `test:reading-progress`, `test:console-nav` (widened to cover the routes the old model omitted, which had already produced a real double-`aria-current` bug) and `test:scroll-restoration`, plus `tests/e2e/lesson-reader.spec.ts` which seeds its own track, module, two lessons and checkpoint rather than depending on seed data.
+- **PR #168 absorbed** — its typographic intent (body line-height, the 450 weight, softened body colour, scrollable TOC, tabular-nums percentage) is carried forward re-expressed against SP2's graphite tokens; its `globals.css` hunk targeted the pre-SP2 palette and is not.
+
+Known gaps carried forward: `analyst-interview-prep` is still DRAFT (publishing is a deliberate human decision), `/learn/tracks/[slug]` ships an interim module-grouped list that SP4 replaces, and light-theme `--icon-done` still wants a designer's confirmation.
+
+### Curriculum spine (SP1 of the learning-platform redesign)
+
+Turns an unordered library into an ordered path — **track → module → lesson → checkpoint problems** — with per-user read state. Headless: no learner-facing UI ships here, but every screen in the redesign renders against this.
+
+- **Four additive models** — `Module`, `ModuleLesson`, `LessonCheckpoint`, `LessonProgress`. `Article`, `Topic`, `SQLProblem` and `Track` untouched. `LessonCheckpoint.@@unique([problemId])` encodes the rule that a problem checks exactly one lesson; choosing a join table over columns on `SQLProblem` avoided auditing every existing `select` projection.
+- **Progress rollups** — pure, Prisma-free maths in `lib/curriculum-progress.ts`, so the arithmetic is unit-tested without a database. Problems share the percent denominator with lessons. Module unlocking is **advisory only** and is never enforced — skipping ahead is always permitted.
+- **Nine admin REST routes + 14 MCP tools** — curriculum authoring through the same contract problems and articles already use. Checkpoints are article-scoped rather than module-scoped, because a lesson can sit in several modules.
+- **One authored track** — "Analyst interview prep": 5 modules, 17 lessons (715–868 words each, every one with a worked SQL example against real fixture data and a pitfall callout), 17 checkpoints. Ships as an idempotent committed seed rather than API calls, so it is reviewable in the PR and re-runnable anywhere. Writes `status` on create only, so a human's publish decision survives a re-run.
+- **101 tests** across five new suites, plus the MCP e2e harness at 94 checks. Several tests were rewritten after review because they could not fail when the code under test was reverted — a deliberate-break check became the standard evidence for new coverage on this branch.
+- **Two pre-existing bugs found and fixed in passing** — the MCP e2e harness had been unrunnable for several releases behind a stale hardcoded tool-count assertion, and its API-key revocation safety net gated on a field that tool-level failures never populate, so a failed revoke read as success.
+
+Known gaps carried forward: four lessons ship without a checkpoint (no existing problem models an event log, cohort table, or metric-definition review), and `LessonProgress` has no `articleId` index.
 
 ### v0.7.0 — MCP enhancements (article workflow + ops + assets)
 
@@ -312,7 +372,7 @@ Major platform expansions that take Data Learn from "SQL practice + learning hub
 
 ### V2 — Contest
 
-**Status:** Phase 1 foundation shipped 2026-05-24 (PR #145). Phase 2 server-side judge shipped 2026-05-26 (PR #150): sandboxed DuckDB + PGlite worker, AST-based SQL validation, transactional submit pipeline with DB-backed idempotency, hidden-data admin routes with audit log, and MCP tools for hidden datasets + publish readiness. Escape-attempt regression corpus is now the security gate. Standings table shipped 2026-06-14 (PR #157). **Phase 3 — contest play UI** (in progress 2026-06-14): a dedicated `/contests/[slug]/[problemSlug]` page so registered learners can actually submit to the judge during a live contest, with a verdict panel, a live countdown, and timezone-correct times. Source: `docs/superpowers/specs/2026-06-14-contest-play-design.md`. Phases 4-7 follow. Source plan/spec: `docs/superpowers/specs/2026-05-24-contests-design.md`.
+**Status:** Phase 1 foundation shipped 2026-05-24 (PR #145). Phase 2 server-side judge shipped 2026-05-26 (PR #150): sandboxed DuckDB + PGlite worker, AST-based SQL validation, transactional submit pipeline with DB-backed idempotency, hidden-data admin routes with audit log, and MCP tools for hidden datasets + publish readiness. Escape-attempt regression corpus is now the security gate. Standings table shipped 2026-06-14 (PR #157). **Phase 3 — contest play UI** (in progress 2026-06-14): a dedicated `/contests/[slug]/[problemSlug]` page so registered learners can actually submit to the judge during a live contest, with a verdict panel, a live countdown, and timezone-correct times. Source: `docs/superpowers/specs/2026-06-14-contest-play-design.md`. Phases 4-7 follow. Source plan/spec: `docs/superpowers/specs/2026-05-24-contests-design.md`. **Judge warm-up** (2026-06-14): the official judge forks a fresh worker per submission, so the first fork on a cold serverless instance loads the native DuckDB/PGlite binaries and ate >30s for whoever submitted first. `warmUpJudge()` (`lib/contest-judge.ts`) runs one debounced throwaway no-op fork; the play client pings `GET /api/contests/[slug]/submit` on mount (same function as the submit POST) so that cold fork is pre-paid during think-time. Custom (practice-judged, in-browser) contests are unaffected.
 
 **Deferred follow-ups (after Phase 3 play UI):**
 - **Live-refreshing standings:** standings are currently fresh-on-load only; add tick-based refresh during a live contest (no websockets).

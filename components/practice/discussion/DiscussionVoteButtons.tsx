@@ -81,7 +81,7 @@ export function DiscussionVoteButtons({
                     "inline-flex h-8 min-w-10 items-center justify-center gap-0.5 rounded-md border border-border px-1.5 transition-colors active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50",
                     viewerVote === "UP"
                         ? "border-easy/40 bg-easy/10 text-easy"
-                        : "bg-surface text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+                        : "bg-surface text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                 )}
                 title={error ?? undefined}
             >
@@ -103,7 +103,7 @@ export function DiscussionVoteButtons({
                     "inline-flex h-8 min-w-10 items-center justify-center gap-0.5 rounded-md border border-border px-1.5 transition-colors active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50",
                     viewerVote === "DOWN"
                         ? "border-hard/40 bg-hard/10 text-hard"
-                        : "bg-surface text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+                        : "bg-surface text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                 )}
                 title={error ?? undefined}
             >

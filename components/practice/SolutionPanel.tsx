@@ -203,7 +203,7 @@ export function SolutionPanel({ slug, dialects, activeDialect }: SolutionPanelPr
                     disabled={state.kind === "loading"}
                     className={cn(
                         "inline-flex items-center gap-1 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium",
-                        "hover:bg-surface-muted transition-colors",
+                        "hover:bg-surface-hover transition-colors",
                         "disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     )}
                 >

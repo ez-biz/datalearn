@@ -11,22 +11,23 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor; querie
 - **PostgreSQL** (local dev: `postgresql://anchitgupta@localhost:5432/datalearn`)
 - **NextAuth v5 (beta)** with Prisma adapter; GitHub + Google providers
 - **DuckDB-WASM** for in-browser query execution (`lib/duckdb.ts`, `lib/use-problem-db.ts`)
-- **Tailwind v4** with `@plugin "@tailwindcss/typography"`; HSL CSS variable tokens in `app/globals.css`
-- **next-themes** for dark/light toggle (light is default)
+- **Tailwind v4** with `@plugin "@tailwindcss/typography"`; HSL CSS variable tokens in `app/globals.css` — the graphite Console token system (`--canvas`, `--panel`, `--line`, `--text`, `--primary`, etc.), with every pre-existing token (`--background`, `--surface`, `--border`, `--muted-foreground`, `--easy`, etc.) now aliased onto it
+- **next-themes** for dark/light toggle (dark is default)
 - **Monaco** editor (`@monaco-editor/react`)
 - **Inter** + **JetBrains Mono** via `next/font`
 
 ## Project shape
 
 - `app/` — App Router pages
-- `actions/` — server actions (`"use server"` files)
-- `components/ui/` — primitives (Button, Card, Badge, Input, Skeleton, Logo, ThemeToggle, Container, EmptyState)
-- `components/layout/` — Navbar, Footer, ThemeProvider, MobileNav
+- `actions/` — server actions (`"use server"` files), e.g. `curriculum.ts` — session-resolving curriculum reads (`getTrackCurriculum`) and writes (`recordLessonProgress`)
+- `components/ui/` — primitives (Button, Card, Badge, Input, Skeleton, Logo, Container, EmptyState)
+- `components/layout/` — Footer, ThemeProvider, UserMenu (avatar dropdown); `console/` — the left sidebar/rail console shell (`ConsoleShell` server component, `ConsoleChrome` client wrapper, `ConsoleSidebar`, `ConsoleRail`, `MobileTabBar`, `MobileSignInMenu`, `nav-model.ts`, `focus-route.ts` — the pure predicate that decides which routes opt out of the shell, `sidebar-cookie.ts`, `useSidebarCollapse.ts`, `MainScrollRestoration.tsx`)
+- `components/learn/reader/` — the lesson reader rendered by `/learn/tracks/[slug]/[lessonSlug]`, the app's only focus route (`LessonHeader` carrying the `banner` landmark, `ReaderProgressProvider` owning the scroll listener + the percent + the writes, presentational `ReadingProgressBar`, `CurriculumRail`, `LessonBody` — shared with the topic article route so both stay typographically identical, `LessonAsideRail`, `ContentsSheet` for mobile, `CheckpointBlock`, `LessonPrevNext`, `LessonSignInNudge`, `lesson-nav.ts` — pure curriculum flattening and prev/next resolution)
 - `components/practice/` — workspace pieces (ProblemClient, ProblemPanel, PracticeList, HistoryPanel)
 - `components/sql/` — SQL UI (SqlPlayground, SqlEditor, ResultTable, ValidationResult)
 - `components/lists/` — custom problem lists (CreateListButton popover, ListDetail with rename/delete/reorder/sort, AddToListButton workspace popover, AddProblemsPicker search-and-add). All client components consuming `actions/lists.ts`.
-- `lib/` — shared modules (`auth.ts`, `prisma.ts`, `sql-validator.ts`, `duckdb.ts`, `use-problem-db.ts`, `utils.ts`, `admin-validation.ts` — kept Prisma-free; imported by `mcp-server/`, `schema-parser.ts` — server-side parser that pre-computes table info from `SqlSchema.sql` so the problem page doesn't wait on DuckDB for the Schema/INPUT panels)
-- `prisma/` — `schema.prisma`, migrations, `seed.ts`
+- `lib/` — shared modules (`auth.ts`, `prisma.ts`, `sql-validator.ts`, `duckdb.ts`, `use-problem-db.ts`, `utils.ts`, `admin-validation.ts` — kept Prisma-free; imported by `mcp-server/`, `schema-parser.ts` — server-side parser that pre-computes table info from `SqlSchema.sql` so the problem page doesn't wait on DuckDB for the Schema/INPUT panels, `curriculum-progress.ts` — pure, Prisma-free rollup/unlock math (`rollUpModule`, `rollUpTrack`, `isModuleUnlocked`, `clampProgressPercent`), `curriculum-write.ts` — userId-parameterised `LessonProgress` writer, deliberately NOT a server action, `admin-curriculum.ts` — Module/ModuleLesson/LessonCheckpoint CRUD shared by the admin API routes, MCP tools, and seed scripts)
+- `prisma/` — `schema.prisma`, migrations, `seed.ts`, `seed-analyst-track.ts` — idempotent seed for the 17-lesson "Analyst Interview Prep" track
 - `mcp-server/` — standalone stdio MCP server (own `package.json`, tsup-bundled). Lets MCP-aware assistants author SQL problems via the `/api/admin/*` REST surface using a Bearer key. Imports `lib/admin-validation.ts` directly; the bundler inlines it.
 - `scripts/mcp-e2e-test.mjs` — end-to-end harness that spawns the built MCP server with a freshly-seeded admin API key and exercises the tool surface against the live API (40 tools as of v0.8.0). Run with the dev server up.
 
@@ -54,6 +55,13 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor; querie
 - **Don't add Prisma or Next/server imports to `lib/admin-validation.ts`.** The MCP server bundles this file via tsup; pulling in Prisma would balloon the bundle and break the stdio runtime. Comment at the top of the file states this contract.
 - **Don't bypass the MCP `create_problem` DRAFT guard.** The tool input schema deliberately omits `status`; the handler hardcodes `status: "DRAFT"` after spreading user input. If you add a new write tool, follow the same omit-then-inject pattern for any field that must be controlled by humans.
 - **Don't add INSERT shapes the schema parser doesn't recognize without falling back gracefully.** `lib/schema-parser.ts` handles single-row and multi-row `INSERT INTO foo VALUES (...)`. If you add computed defaults, subqueries, or other unfamiliar DDL forms, the parser returns `null` and the page transparently falls back to DuckDB introspection — but you'll regress the first-paint UX win. Extend the parser + tests in `scripts/test-schema-parser.ts` rather than ship a fallback regression.
+- **Never write `Module.position`, `ModuleLesson.position`, or `LessonCheckpoint.position` outside their reorder transactions** (`reorderModules` / `reorderModuleLessons` / `reorderCheckpoints` in `lib/admin-curriculum.ts`). Same rule as `ProblemListItem.position` above — positions move only through the dedicated reorder path so a partial write can never leave gaps or duplicates.
+- **Never enforce module unlocking.** `isModuleUnlocked` (`lib/curriculum-progress.ts`) is advisory only — it drives the "Locked until module 02" UI copy and nothing else. It must never gate a route, reject a server action, or block a checkpoint submission; skipping ahead is always allowed by design.
+- **Never export a `userId`-parameterised writer from a `"use server"` file.** Every export of a `"use server"` module becomes a client-callable RPC endpoint, so a function that takes `userId` as a caller-supplied argument (rather than reading it from the session) would let any client write data as any other user. `lib/curriculum-write.ts` deliberately has no `"use server"` directive for this reason — `actions/curriculum.ts` resolves the session and delegates to it. Follow the same split for any future writer that needs an explicit `userId`.
+- **`npm run dev` binds to `.env.local`, not `.env`.** Unlike test scripts, the dev server does not default to local Postgres — prefix an explicit `DATABASE_URL='postgresql://anchitgupta@localhost:5432/datalearn'` when you need it against local data, or you'll be silently working against whatever `.env.local` points at.
+- **Under `@prisma/adapter-pg`, a P2002 error's `meta.target` is always `undefined`.** The offending column names instead live at `meta.driverAdapterError.cause.constraint.fields`, and they arrive partly quoted (e.g. `["\"trackId\"", "slug"]`). Strip quotes before comparing. See `isUniqueViolationOn` in `lib/admin-curriculum.ts` for the pattern that checks both this shape and the query-engine-binary `meta.target` shape.
+- **Don't add a token to `:root` without adding it to `.light`.** Both themes ship and light is not an inversion — a missing light value fails silently and only for users on that theme. `npm run check:token-parity` enforces this.
+- **Don't render page content outside `<main>` on non-focus routes.** `ConsoleChrome` owns `#app-scroll`, `<main id="main-content">` and `<Footer>`. Focus routes (`isFocusRoute`, today only the lesson reader) opt out and must supply their own `<header>` + `<main id="main-content">` pair — ARIA forbids `banner` inside `main`, which is why the header cannot simply live in the page body of a normal route.
 
 ## Running locally
 
@@ -65,6 +73,17 @@ npm run build                  # next build --webpack (do not drop --webpack)
 ```
 
 After modifying `prisma/schema.prisma`, restart the dev server — the running process holds the old generated client.
+
+The UI guards below are the ones to run after any shell, nav or reader change. All four unit suites are pure — no database, no DOM.
+
+```bash
+npm run test:console-nav          # nav model + the isFocusRoute predicate
+npm run test:lesson-nav           # curriculum flattening, prev/next, breadcrumbs
+npm run test:reading-progress     # scroll-percent maths + persistence boundaries
+npm run test:scroll-restoration   # #app-scroll restore-on-pop rules
+npm run check:token-parity        # every :root token also defined in .light
+npm run test:e2e -- lesson-reader # reader landmarks, draft gate, live progress
+```
 
 ## Subagent routing policy
 
