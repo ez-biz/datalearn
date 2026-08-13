@@ -6,6 +6,18 @@
 
 ## Recently shipped
 
+### Index screens (SP4 of the learning-platform redesign)
+
+The three screens a learner uses to find work — Practice catalog, Tracks, Module — rebuilt to the design handoff's sections 3–5, plus the Module screen that did not previously exist. **Zero schema changes**, which is what made each of the four phases revertible by reverting one PR.
+
+- **One read for one concept** — `getCatalogProblems` (`lib/practice/catalog-read.ts`) now serves both the practice catalog and the workspace problems panel. They were always the same list viewed differently; one definition of "a problem in a list" means the two screens cannot drift.
+- **Facets that tell the truth** — a facet group's counts are computed against every *other* group's selections but not its own, so selecting EASY never makes the MEDIUM count read 0. That rule is the reason `lib/practice/catalog-model.ts` exists as a pure module, and it is the first thing its 19 tests assert.
+- **The module route is 5 segments on purpose** — `isFocusRoute` matches *any* 4-segment path under `learn/tracks`, so a module index at `/learn/tracks/<track>/modules` would silently lose the console shell. There is no module index, and `test:console-nav` now pins that invariant with the real URL.
+- **`TrackItem` kept as a fallback** — the older study sequence still renders for a track with no modules. It has 0 rows locally but a full admin + MCP authoring surface, and production still runs the old tracks feature, so a track authored under the old model must not render an empty page after the release.
+- **Everything with no backing data was omitted, not faked** — `Track` has no `kind` field, so the Career/Skill filter and chips are absent; `Module` has no authored outcomes or interview-weight, so three of the design's four right-rail cards are gone. Two that looked unbacked turned out derivable: Prerequisites from earlier modules' rollups, and Module facts from `readingMinutes` and checkpoint counts.
+
+Known gaps carried forward: a production track with `TrackItem` rows and no `Module` rows would show "No lessons yet" on the index and a full study sequence on its own page — the index deliberately does not fall back to item counts; on module rows `attempted` is derived from `solved`, because `CurriculumCheckpoint` carries no attempted signal; and the tracks-index number chip is array position rather than a stable field.
+
 ### Workspace redesign (SP5 of the learning-platform redesign)
 
 The problem-solving workspace at `/practice/<slug>` rebuilt as a four-column console view — problems panel · lesson context bar · five-tab problem panel · editor — plus pass rate and community approaches. Shipped in four phases, each independently mergeable.
