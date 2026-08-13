@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { deleteUser, prisma, seedUser } from "./fixtures/db"
+import { prisma, seedUser } from "./fixtures/db"
 
 /**
  * The module screen — /learn/tracks/<track>/modules/<module>.
@@ -53,12 +53,19 @@ const LESSON_B_TITLE = "E2E Module Screen Lesson B"
  * ModuleLesson/LessonCheckpoint/LessonProgress), then the track (cascades
  * its modules), then the topic, then the author (Article.authorId is
  * `onDelete: Restrict`, so it must go last).
+ *
+ * Every row, including the author, is swept by NAMESPACE prefix rather than
+ * an exact match on this run's generated email — that's what makes cleanup
+ * crash-recoverable. `authorEmail` embeds RUN_ID, so an exact-match lookup
+ * would only ever find *this* run's own user; a process that dies between
+ * seedUser() and cleanup() (CI timeout, ctrl-C) would leak that user
+ * permanently, since no future run's RUN_ID would ever match it again.
  */
 async function cleanup(): Promise<void> {
     await prisma.article.deleteMany({ where: { slug: { startsWith: NAMESPACE } } })
     await prisma.track.deleteMany({ where: { slug: { startsWith: NAMESPACE } } })
     await prisma.topic.deleteMany({ where: { slug: { startsWith: NAMESPACE } } })
-    await deleteUser(authorEmail)
+    await prisma.user.deleteMany({ where: { email: { startsWith: NAMESPACE } } })
 }
 
 test.describe.configure({ mode: "serial" })
