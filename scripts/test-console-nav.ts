@@ -333,6 +333,16 @@ describe("shell modes are mutually exclusive", () => {
         }
     })
 
+    it("the module screen is a normal shell route", () => {
+        // 5 segments: isFocusRoute needs exactly 4, isAppRoute exactly 2.
+        // The 4-segment sibling /learn/tracks/<track>/modules WOULD match
+        // isFocusRoute, which is why no module index route exists.
+        const url = "/learn/tracks/analyst-interview-prep/modules/04-window-functions"
+        assert.equal(isFocusRoute(url), false)
+        assert.equal(isAppRoute(url), false)
+        assert.equal(isFocusRoute("/learn/tracks/analyst-interview-prep/modules"), true)
+    })
+
     it("has no tab bar item pointing at an app route", () => {
         // App routes suppress page scroll at lg, while the tab bar is the
         // shell's only navigation below lg. Keep their direct links separate.
