@@ -48,7 +48,13 @@ test.describe("practice catalog", () => {
 
     test("the / shortcut focuses search", async ({ page }) => {
         await page.goto("/practice")
-        await page.keyboard.press("/")
-        await expect(page.getByRole("searchbox")).toBeFocused()
+        // The keydown listener is attached on hydration, and goto() resolves
+        // before that. Pressing once and asserting immediately is a race the
+        // PR run won and the post-merge run lost. Retry the press until the
+        // handler exists rather than sleeping a fixed amount.
+        await expect(async () => {
+            await page.keyboard.press("/")
+            await expect(page.getByRole("searchbox")).toBeFocused()
+        }).toPass({ timeout: 15_000 })
     })
 })
