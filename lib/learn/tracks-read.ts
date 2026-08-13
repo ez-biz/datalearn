@@ -31,6 +31,29 @@ import {
 } from "@/lib/curriculum-progress"
 import { findResume, type ResumeTarget } from "@/lib/learn/tracks-model"
 
+/**
+ * Rollup for a track authored under the older TrackItem model: every item is
+ * a problem, there are no lessons, so the percentage is purely problems
+ * solved. Shaped as a TrackRollup so callers need no special case.
+ */
+export function rollUpItems(
+    items: Array<{ problem: { id: string } }>,
+    solved: Set<string>,
+): TrackRollup {
+    const problemsTotal = items.length
+    const problemsDone = items.filter((i) => solved.has(i.problem.id)).length
+    return {
+        lessonsDone: 0,
+        lessonsTotal: 0,
+        problemsDone,
+        problemsTotal,
+        percent:
+            problemsTotal === 0
+                ? 0
+                : Math.round((problemsDone / problemsTotal) * 100),
+    }
+}
+
 export type TrackSummary = {
     slug: string
     name: string
@@ -44,6 +67,9 @@ export type TrackSummary = {
      *  NOT a completion signal by itself — see lib/learn/tracks-model.ts's
      *  doc on findResume and TrackSummaryCard's `isComplete`. */
     resume: ResumeTarget
+    /** First unsolved problem on a track with no modules (older TrackItem
+     *  model); null whenever the track has modules. */
+    nextItemSlug: string | null
 }
 
 /**
@@ -124,19 +150,31 @@ export const getTrackSummariesForUser = cache(
                         },
                     },
                 },
+                // TrackItem predates the curriculum spine. Production still
+                // has published tracks built entirely from items with zero
+                // modules, so the index must be able to count them — see the
+                // fallback in the map below.
+                items: {
+                    orderBy: { position: "asc" },
+                    where: { problem: { status: "PUBLISHED" } },
+                    select: { problem: { select: { id: true, slug: true } } },
+                },
             },
         })
 
         const articleIds = tracks.flatMap((t) =>
             t.modules.flatMap((m) => m.lessons.map((l) => l.article.id)),
         )
-        const problemIds = tracks.flatMap((t) =>
-            t.modules.flatMap((m) =>
-                m.lessons.flatMap((l) =>
-                    l.article.checkpoints.map((c) => c.problem.id),
+        const problemIds = [
+            ...tracks.flatMap((t) =>
+                t.modules.flatMap((m) =>
+                    m.lessons.flatMap((l) =>
+                        l.article.checkpoints.map((c) => c.problem.id),
+                    ),
                 ),
             ),
-        )
+            ...tracks.flatMap((t) => t.items.map((i) => i.problem.id)),
+        ]
 
         const completedArticleIds = new Set<string>()
         const solvedProblemIds = new Set<string>()
@@ -205,7 +243,15 @@ export const getTrackSummariesForUser = cache(
                 })
             }
 
-            const rollup = rollUpTrack(moduleRollups)
+            // A track with no modules is authored under the older TrackItem
+            // model, which the detail page still renders. Before this
+            // fallback the index reported 0/0 and "No lessons yet" for such a
+            // track while its own page listed a full study sequence — every
+            // published track on production was in exactly that state.
+            const rollup =
+                track.modules.length > 0
+                    ? rollUpTrack(moduleRollups)
+                    : rollUpItems(track.items, solvedProblemIds)
 
             return {
                 slug: track.slug,
@@ -216,7 +262,17 @@ export const getTrackSummariesForUser = cache(
                 lessonsTotal: rollup.lessonsTotal,
                 problemsTotal: rollup.problemsTotal,
                 rollup,
-                resume: findResume(modulesForResume),
+                resume:
+                    track.modules.length > 0
+                        ? findResume(modulesForResume)
+                        : null,
+                /** First unsolved item, for an item-only track. */
+                nextItemSlug:
+                    track.modules.length > 0
+                        ? null
+                        : (track.items.find(
+                              (i) => !solvedProblemIds.has(i.problem.id),
+                          )?.problem.slug ?? null),
             }
         })
     },
