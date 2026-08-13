@@ -149,6 +149,9 @@ jobs:
       - name: Test problems panel model
         run: npm run test:problems-panel
 
+      - name: Test catalog model
+        run: npm run test:catalog-model
+
       - name: Test pass rate
         run: npm run test:pass-rate
 
