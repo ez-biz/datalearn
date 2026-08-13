@@ -106,8 +106,12 @@ describe("filterCatalog — combining groups", () => {
 
     it("topics and companies are separate groups", () => {
         const rows = [
-            p({ slug: "a", topicTags: ["joins"], companyTags: ["acme"] }),
-            p({ slug: "b", topicTags: ["joins"] }),
+            p({
+                slug: "a",
+                topicTags: [{ slug: "joins", name: "Joins" }],
+                companyTags: [{ slug: "acme", name: "Acme" }],
+            }),
+            p({ slug: "b", topicTags: [{ slug: "joins", name: "Joins" }] }),
         ]
         const out = filterCatalog(
             rows,
@@ -216,11 +220,38 @@ describe("computeFacets", () => {
 
     it("orders topic and company facets by count descending", () => {
         const rows = [
-            p({ slug: "a", topicTags: ["joins", "windows"] }),
-            p({ slug: "b", topicTags: ["joins"] }),
+            p({
+                slug: "a",
+                topicTags: [
+                    { slug: "joins", name: "Joins" },
+                    { slug: "windows", name: "Window functions" },
+                ],
+            }),
+            p({ slug: "b", topicTags: [{ slug: "joins", name: "Joins" }] }),
         ]
         const facets = computeFacets(rows, EMPTY_FILTERS)
         assert.deepEqual(facets.topics.map((f) => f.value), ["joins", "windows"])
         assert.equal(facets.topics[0].count, 2)
+    })
+
+    it("a facet's label is the tag's display name, not its slug", () => {
+        const rows = [
+            p({
+                slug: "a",
+                topicTags: [{ slug: "recursive-cte", name: "Recursive CTE" }],
+                companyTags: [{ slug: "stripe", name: "Stripe" }],
+            }),
+        ]
+        const facets = computeFacets(rows, EMPTY_FILTERS)
+        assert.deepEqual(facets.topics[0], {
+            value: "recursive-cte",
+            label: "Recursive CTE",
+            count: 1,
+        })
+        assert.deepEqual(facets.companies[0], {
+            value: "stripe",
+            label: "Stripe",
+            count: 1,
+        })
     })
 })

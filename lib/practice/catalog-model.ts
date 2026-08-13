@@ -85,12 +85,12 @@ function matchesEngine(problem: CatalogProblem, selected: CatalogFilters["engine
 
 function matchesTopics(problem: CatalogProblem, selected: string[]): boolean {
     if (selected.length === 0) return true
-    return problem.topicTags.some((t) => selected.includes(t))
+    return problem.topicTags.some((t) => selected.includes(t.slug))
 }
 
 function matchesCompanies(problem: CatalogProblem, selected: string[]): boolean {
     if (selected.length === 0) return true
-    return problem.companyTags.some((c) => selected.includes(c))
+    return problem.companyTags.some((c) => selected.includes(c.slug))
 }
 
 function matchesSearch(problem: CatalogProblem, search: string): boolean {
@@ -178,10 +178,36 @@ function countBy<T extends string>(
     return counts
 }
 
-function sortedFacetList(counts: Map<string, number>): FacetCount[] {
+/**
+ * Same job as `countBy`, for the two tag groups: `topicTags`/`companyTags`
+ * are `{slug, name}[]`, not plain strings, and the facet needs both — the
+ * slug as the stable filter/count key (so a renamed tag doesn't silently
+ * stop matching an already-selected filter), the name as what's shown.
+ * Every occurrence of a slug carries the same name, so keeping the first
+ * one seen is enough.
+ */
+function countTagsBy(
+    problems: CatalogProblem[],
+    filters: CatalogFilters,
+    except: keyof CatalogFacets,
+    tagsOf: (p: CatalogProblem) => { slug: string; name: string }[]
+): Map<string, { name: string; count: number }> {
+    const counts = new Map<string, { name: string; count: number }>()
+    for (const problem of problems) {
+        if (!matchesAllExcept(problem, filters, except)) continue
+        for (const tag of tagsOf(problem)) {
+            const existing = counts.get(tag.slug)
+            if (existing) existing.count += 1
+            else counts.set(tag.slug, { name: tag.name, count: 1 })
+        }
+    }
+    return counts
+}
+
+function sortedTagFacetList(counts: Map<string, { name: string; count: number }>): FacetCount[] {
     return [...counts.entries()]
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .map(([value, count]) => ({ value, label: value, count }))
+        .sort((a, b) => b[1].count - a[1].count || a[1].name.localeCompare(b[1].name))
+        .map(([slug, { name, count }]) => ({ value: slug, label: name, count }))
 }
 
 /**
@@ -196,8 +222,9 @@ function sortedFacetList(counts: Map<string, number>): FacetCount[] {
  * Status, difficulty and engine always list every option, even at zero, so
  * the rail's shape never changes as filters are toggled. Topics and
  * companies list only tags present in the (other-group-filtered) result,
- * ordered by count descending then slug, since the tag universe is
- * open-ended and an all-zero long tail would be noise.
+ * ordered by count descending then name, since the tag universe is
+ * open-ended and an all-zero long tail would be noise. Their `value` is the
+ * tag's slug (what filtering matches on); `label` is the display name.
  */
 export function computeFacets(
     problems: CatalogProblem[],
@@ -206,8 +233,8 @@ export function computeFacets(
     const statusCounts = countBy(problems, filters, "status", (p) => [statusOf(p)])
     const difficultyCounts = countBy(problems, filters, "difficulty", (p) => [p.difficulty])
     const engineCounts = countBy(problems, filters, "engine", (p) => p.dialects)
-    const topicCounts = countBy(problems, filters, "topics", (p) => p.topicTags)
-    const companyCounts = countBy(problems, filters, "companies", (p) => p.companyTags)
+    const topicCounts = countTagsBy(problems, filters, "topics", (p) => p.topicTags)
+    const companyCounts = countTagsBy(problems, filters, "companies", (p) => p.companyTags)
 
     return {
         status: STATUS_OPTIONS.map((o) => ({
@@ -225,7 +252,7 @@ export function computeFacets(
             label: o.label,
             count: engineCounts.get(o.value) ?? 0,
         })),
-        topics: sortedFacetList(topicCounts),
-        companies: sortedFacetList(companyCounts),
+        topics: sortedTagFacetList(topicCounts),
+        companies: sortedTagFacetList(companyCounts),
     }
 }

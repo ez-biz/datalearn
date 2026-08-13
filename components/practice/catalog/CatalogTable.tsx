@@ -14,6 +14,14 @@ import { CATALOG_ROW_GRID, CatalogRow } from "@/components/practice/catalog/Cata
  * `cell`) over CSS-grid `<div>`s rather than a native `<table>`, so the
  * header's `CATALOG_ROW_GRID` template — shared with `CatalogRow` — can use
  * the `1fr` title column a native table can't express.
+ *
+ * The outer `role="table"` element is the horizontal-scroll container
+ * (`overflow-x-auto`), not a wrapper around it — the header and body
+ * `rowgroup`s are both direct children of it, so they share one scroll
+ * position and never drift out of column alignment on a narrow screen. The
+ * design's fixed grid (`CATALOG_ROW_GRID`'s `min-w`) is kept exactly as
+ * specified rather than given a bespoke mobile layout; scroll is the escape
+ * hatch, per SP4.
  */
 export function CatalogTable({ problems }: { problems: CatalogProblem[] }) {
     if (problems.length === 0) {
@@ -30,7 +38,7 @@ export function CatalogTable({ problems }: { problems: CatalogProblem[] }) {
         <div
             role="table"
             aria-label="Practice problems"
-            className="overflow-hidden rounded-lg border border-line-soft"
+            className="overflow-x-auto rounded-lg border border-line-soft"
         >
             <div role="rowgroup">
                 <div

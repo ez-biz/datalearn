@@ -11,10 +11,14 @@ const MOBILE_TAG_LIMIT = 2
 
 /**
  * Grid templates shared with `CatalogTable`'s header so columns never drift
- * out of alignment between the header row and the data rows.
+ * out of alignment between the header row and the data rows. Each carries a
+ * `min-w` wide enough for its fixed-width columns plus a readable minimum
+ * for the `1fr` title column, so the row never compresses on a narrow
+ * screen — it overflows instead, and the table's `overflow-x-auto`
+ * container turns that into a horizontal scroll rather than clipped text.
  */
-export const CATALOG_ROW_GRID = "grid-cols-[34px_62px_1fr_120px_90px_78px_20px]"
-export const CATALOG_ROW_GRID_COMPACT = "grid-cols-[34px_62px_1fr_90px_20px]"
+export const CATALOG_ROW_GRID = "min-w-[620px] grid-cols-[34px_62px_1fr_120px_90px_78px_20px]"
+export const CATALOG_ROW_GRID_COMPACT = "min-w-[360px] grid-cols-[34px_62px_1fr_90px_20px]"
 
 const DIFFICULTY_LABEL: Record<CatalogProblem["difficulty"], string> = {
     EASY: "Easy",
@@ -98,9 +102,9 @@ export function CatalogRow({
                         <div className="hidden flex-wrap items-center gap-1 sm:flex">
                             {problem.topicTags.map((tag) => (
                                 <TagPill
-                                    key={tag}
-                                    slug={tag}
-                                    name={tag}
+                                    key={tag.slug}
+                                    slug={tag.slug}
+                                    name={tag.name}
                                     kind="TOPIC"
                                     stopPropagation
                                 />
@@ -109,9 +113,9 @@ export function CatalogRow({
                         <div className="flex flex-wrap items-center gap-1 sm:hidden">
                             {problem.topicTags.slice(0, MOBILE_TAG_LIMIT).map((tag) => (
                                 <TagPill
-                                    key={tag}
-                                    slug={tag}
-                                    name={tag}
+                                    key={tag.slug}
+                                    slug={tag.slug}
+                                    name={tag.name}
                                     kind="TOPIC"
                                     stopPropagation
                                 />
@@ -128,7 +132,7 @@ export function CatalogRow({
 
             {!compact && (
                 <span role="cell" className="truncate font-mono text-[11px] text-text-3">
-                    {company ?? ""}
+                    {company?.name ?? ""}
                 </span>
             )}
 

@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { cn } from "@/lib/utils"
 import type {
     CatalogFacets,
@@ -45,14 +46,16 @@ export function FacetRail({ facets, filters, onToggle }: FacetRailProps) {
                 selected={filters.engine}
                 onToggle={(value) => onToggle("engine", value)}
             />
-            {facets.topics.length > 0 && (
-                <ChipGroup
-                    title="Topics"
-                    options={facets.topics}
-                    selected={filters.topics}
-                    onToggle={(value) => onToggle("topics", value)}
-                />
-            )}
+            {/* Always rendered, even with zero topic chips to show — this is
+                the catalog's only click path to the full tag index now that
+                the redesigned header dropped the old "Browse by tag" link. */}
+            <ChipGroup
+                title="Topics"
+                options={facets.topics}
+                selected={filters.topics}
+                onToggle={(value) => onToggle("topics", value)}
+                headerLink={{ href: "/practice/tags", label: "All tags" }}
+            />
             {facets.companies.length > 0 && (
                 <RowGroup
                     title="Companies"
@@ -65,9 +68,20 @@ export function FacetRail({ facets, filters, onToggle }: FacetRailProps) {
     )
 }
 
-function GroupHeading({ children }: { children: React.ReactNode }) {
+function GroupHeading({
+    children,
+    className,
+}: {
+    children: React.ReactNode
+    className?: string
+}) {
     return (
-        <h3 className="mb-2 font-mono text-[10px] uppercase tracking-wider text-text-dim">
+        <h3
+            className={cn(
+                "mb-2 font-mono text-[10px] uppercase tracking-wider text-text-dim",
+                className
+            )}
+        >
             {children}
         </h3>
     )
@@ -120,36 +134,53 @@ function ChipGroup({
     options,
     selected,
     onToggle,
+    headerLink,
 }: {
     title: string
     options: FacetCount[]
     selected: string[]
     onToggle: (value: string) => void
+    /** Rendered next to the heading regardless of whether `options` is
+     *  empty — used by Topics to keep a working link to the full tag index
+     *  even when the current filter combination has no topic chips left. */
+    headerLink?: { href: string; label: string }
 }) {
     return (
         <div>
-            <GroupHeading>{title}</GroupHeading>
-            <div className="flex flex-wrap gap-1.5">
-                {options.map((option) => {
-                    const active = selected.includes(option.value)
-                    return (
-                        <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => onToggle(option.value)}
-                            aria-pressed={active}
-                            className={cn(
-                                "rounded-full border px-2 py-0.5 font-mono text-[10px] lowercase transition-colors duration-150",
-                                active
-                                    ? "border-primary/30 bg-primary/10 text-primary"
-                                    : "border-line-soft bg-panel-sunken text-text-3 hover:border-line-strong hover:text-foreground"
-                            )}
-                        >
-                            {option.label}
-                        </button>
-                    )
-                })}
+            <div className="mb-2 flex items-center justify-between gap-2">
+                <GroupHeading className="mb-0">{title}</GroupHeading>
+                {headerLink && (
+                    <Link
+                        href={headerLink.href}
+                        className="font-mono text-[10px] text-text-dim transition-colors duration-150 hover:text-primary"
+                    >
+                        {headerLink.label}
+                    </Link>
+                )}
             </div>
+            {options.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                    {options.map((option) => {
+                        const active = selected.includes(option.value)
+                        return (
+                            <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => onToggle(option.value)}
+                                aria-pressed={active}
+                                className={cn(
+                                    "rounded-full border px-2 py-0.5 font-mono text-[10px] lowercase transition-colors duration-150",
+                                    active
+                                        ? "border-primary/30 bg-primary/10 text-primary"
+                                        : "border-line-soft bg-panel-sunken text-text-3 hover:border-line-strong hover:text-foreground"
+                                )}
+                            >
+                                {option.label}
+                            </button>
+                        )
+                    })}
+                </div>
+            )}
         </div>
     )
 }

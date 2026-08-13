@@ -24,9 +24,10 @@ export type CatalogProblem = {
     moduleId: string | null
     modulePosition: number | null
     moduleTitle: string | null
-    /** Tag slugs split by kind, for the two facet groups. */
-    topicTags: string[]
-    companyTags: string[]
+    /** Tags split by kind, for the two facet groups. `slug` is the stable
+     *  filter/group key; `name` is what gets displayed. */
+    topicTags: { slug: string; name: string }[]
+    companyTags: { slug: string; name: string }[]
     dialects: ("DUCKDB" | "POSTGRES")[]
     attemptCount: number
     acceptedCount: number
@@ -89,7 +90,7 @@ export const getCatalogProblems = cache(
                 attemptCount: true,
                 acceptedCount: true,
                 tags: {
-                    select: { slug: true, kind: true },
+                    select: { slug: true, name: true, kind: true },
                     orderBy: { slug: "asc" },
                 },
                 lessonCheckpoint: {
@@ -161,10 +162,10 @@ export const getCatalogProblems = cache(
                 moduleTitle: module?.name ?? null,
                 topicTags: p.tags
                     .filter((t) => t.kind !== "COMPANY")
-                    .map((t) => t.slug),
+                    .map((t) => ({ slug: t.slug, name: t.name })),
                 companyTags: p.tags
                     .filter((t) => t.kind === "COMPANY")
-                    .map((t) => t.slug),
+                    .map((t) => ({ slug: t.slug, name: t.name })),
                 dialects: p.dialects as CatalogProblem["dialects"],
                 attemptCount: p.attemptCount,
                 acceptedCount: p.acceptedCount,

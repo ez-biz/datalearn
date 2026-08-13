@@ -134,8 +134,12 @@ function groupByTag(problems: PanelProblem[]): PanelGroup[] {
     for (const problem of problems) {
         // The panel's Tags mode predates the topic/company facet split — it
         // groups by both, same as it grouped by the single `tags` field
-        // before this type gained the split.
-        const tags = [...problem.topicTags, ...problem.companyTags]
+        // before this type gained the split. Grouped by slug (not name):
+        // `topicTags`/`companyTags` carry both now, but this panel's
+        // grouping key and displayed label were always the slug, and stay
+        // that way here — unrelated to the catalog facet rail's switch to
+        // showing names.
+        const tags = [...problem.topicTags, ...problem.companyTags].map((t) => t.slug)
         if (tags.length === 0) {
             untagged.push(problem)
             continue

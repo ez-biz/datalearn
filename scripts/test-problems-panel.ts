@@ -226,7 +226,16 @@ describe("buildPanelGroups — todo mode", () => {
 describe("buildPanelGroups — tags mode", () => {
     it("groups by tag and repeats a problem under each of its tags", () => {
         const groups = buildPanelGroups(
-            [p({ number: 1, slug: "both", topicTags: ["joins", "window-functions"] })],
+            [
+                p({
+                    number: 1,
+                    slug: "both",
+                    topicTags: [
+                        { slug: "joins", name: "Joins" },
+                        { slug: "window-functions", name: "Window functions" },
+                    ],
+                }),
+            ],
             "tags",
             ""
         )
@@ -240,7 +249,7 @@ describe("buildPanelGroups — tags mode", () => {
         const groups = buildPanelGroups(
             [
                 p({ number: 1, slug: "bare" }),
-                p({ number: 2, slug: "tagged", topicTags: ["joins"] }),
+                p({ number: 2, slug: "tagged", topicTags: [{ slug: "joins", name: "Joins" }] }),
             ],
             "tags",
             ""
