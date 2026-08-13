@@ -1,19 +1,23 @@
 import type { Metadata } from "next"
 import { cache } from "react"
 import { notFound } from "next/navigation"
+import { ArrowRight, LockKeyhole } from "lucide-react"
 import { auth } from "@/lib/auth"
 import {
     getTrackCurriculumForUser,
     type CurriculumCheckpoint,
     type CurriculumModule,
 } from "@/lib/curriculum-read"
+import type { ModuleRollup } from "@/lib/curriculum-progress"
 import type { CatalogProblem } from "@/lib/practice/catalog-read"
 import { lessonState, moduleFacts, resumeLesson } from "@/lib/learn/module-model"
 import { CatalogRow } from "@/components/practice/catalog/CatalogRow"
 import { Container } from "@/components/ui/Container"
+import { LinkButton } from "@/components/ui/Button"
 import { ModuleHeader } from "@/components/learn/module/ModuleHeader"
 import { LessonRow } from "@/components/learn/module/LessonRow"
 import { ModuleRail } from "@/components/learn/module/ModuleRail"
+import { modulePrefix } from "@/components/learn/reader/lesson-nav"
 
 type Props = {
     params: Promise<{ slug: string; moduleSlug: string }>
@@ -92,12 +96,12 @@ function toCatalogProblem(
 }
 
 /**
- * A module's checkpoints, deduped by problem — an article legally appears
- * in only one module (unlike the track-wide cross-listing lesson-nav.ts
- * documents), but a problem could still be checkpointed from more than one
- * lesson inside the same module. First occurrence wins; `solved` doesn't
- * vary by which lesson checkpoints it, since it's viewer state on the
- * problem itself.
+ * A module's checkpoints, deduped by problem. `LessonCheckpoint` carries
+ * `@@unique([problemId])` (prisma/schema.prisma) — a problem is checkpointed
+ * by at most one lesson anywhere in the app, so today this can never find a
+ * duplicate. Kept anyway as a defensive floor: if that constraint is ever
+ * relaxed, `CatalogRow`'s `key={problem.slug}` below stays collision-free
+ * without this file needing to know why.
  */
 function dedupeByProblem(checkpoints: CurriculumCheckpoint[]): CurriculumCheckpoint[] {
     const seen = new Set<string>()
@@ -116,10 +120,15 @@ function dedupeByProblem(checkpoints: CurriculumCheckpoint[]): CurriculumCheckpo
  * unlike the lesson reader this needs no bespoke <header>/<main> pair;
  * ConsoleChrome supplies both.
  *
+ * Everything below the breadcrumb bar — hero, Lessons, Attached problems —
+ * lives in ONE `1fr 340px` grid, per the design spec: the hero is not a
+ * banner sitting above the grid, it's the top of the grid's left column, so
+ * `ModuleRail` runs alongside it too, not just alongside the lesson list.
+ *
  * `mod.unlocked` is ADVISORY ONLY (lib/curriculum-progress.ts). It drives
- * the "Locked until NN" chip in ModuleHeader and nothing else — every
- * lesson below renders as a working link and the route itself never checks
- * it, matching CLAUDE.md's "never enforce module unlocking" rule.
+ * the "Locked until NN" chip in the hero and nothing else — every lesson
+ * below renders as a working link and the route itself never checks it,
+ * matching CLAUDE.md's "never enforce module unlocking" rule.
  */
 export default async function ModulePage({ params }: Props) {
     const { slug, moduleSlug } = await params
@@ -145,18 +154,41 @@ export default async function ModulePage({ params }: Props) {
 
     return (
         <>
-            <ModuleHeader
-                trackSlug={slug}
-                mod={mod}
-                totalModules={curriculum.modules.length}
-                resumeLessonSlug={resume?.slug ?? null}
-                resumeLessonNumber={resumeIndex >= 0 ? resumeIndex + 1 : null}
-            />
+            <ModuleHeader trackSlug={slug} mod={mod} totalModules={curriculum.modules.length} />
 
-            <Container width="lg" className="pb-14 sm:pb-20">
+            <Container width="lg" className="py-8 pb-14 sm:py-10 sm:pb-20">
                 <div className="grid gap-8 lg:grid-cols-[1fr_340px] lg:items-start">
                     <div className="min-w-0">
-                        <h2 className="mb-3 font-mono text-[10px] uppercase tracking-wider text-text-muted">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono text-[10px] uppercase tracking-wider text-text-dim">
+                                Module {modulePrefix(mod.position)}
+                            </span>
+                            {!mod.unlocked && (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-line-strong bg-panel-raised px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-text-muted">
+                                    <LockKeyhole className="size-3" aria-hidden="true" />
+                                    Locked until {modulePrefix(mod.position - 1)}
+                                </span>
+                            )}
+                        </div>
+
+                        <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
+                            {mod.name}
+                        </h1>
+                        <p className="mt-3 max-w-[62ch] text-text-muted">{mod.description}</p>
+
+                        {resume && (
+                            <LinkButton
+                                href={`/learn/tracks/${slug}/${resume.slug}`}
+                                className="mt-5"
+                            >
+                                Resume lesson {resumeIndex + 1}
+                                <ArrowRight className="size-4" aria-hidden="true" />
+                            </LinkButton>
+                        )}
+
+                        <ModuleProgressBar rollup={mod.rollup} className="mt-6 max-w-2xl" />
+
+                        <h2 className="mb-3 mt-10 font-mono text-[10px] uppercase tracking-wider text-text-muted">
                             Lessons · {mod.lessons.length}
                         </h2>
                         {mod.lessons.length === 0 ? (
@@ -216,5 +248,43 @@ export default async function ModulePage({ params }: Props) {
                 </div>
             </Container>
         </>
+    )
+}
+
+/**
+ * The hero's rollup bar. Unlike the generic `TrackProgressBar` (a single
+ * "X / Y complete"), the spec requires lessons and problems stay two
+ * separately-readable counts — summing them into one figure would let a
+ * module with 5/5 lessons done but 0/5 problems done read as "50%
+ * complete" with no way to tell which half is finished. One bar, two
+ * counts in its label; `rollup.percent` (already lessons+problems combined)
+ * still drives the fill width and the standalone `NN%`.
+ */
+function ModuleProgressBar({ rollup, className }: { rollup: ModuleRollup; className?: string }) {
+    return (
+        <div className={className}>
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[13px]">
+                <span className="font-medium tabular-nums text-text-2">
+                    {rollup.lessonsDone} of {rollup.lessonsTotal} lessons · {rollup.problemsDone}{" "}
+                    of {rollup.problemsTotal} problems
+                </span>
+                <span className="font-mono text-[11px] tabular-nums text-primary">
+                    {rollup.percent}%
+                </span>
+            </div>
+            <div
+                className="mt-2 h-2 overflow-hidden rounded-full bg-panel-sunken"
+                role="progressbar"
+                aria-label="Module progress"
+                aria-valuenow={rollup.percent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+            >
+                <div
+                    className="h-full rounded-full bg-primary transition-[width] duration-300"
+                    style={{ width: `${rollup.percent}%` }}
+                />
+            </div>
+        </div>
     )
 }
