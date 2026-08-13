@@ -141,7 +141,17 @@ test.describe("Tracks learner pages", () => {
         await expect(
             page.getByText("A track that should be visible to learners."),
         ).toBeVisible()
-        await expect(page.getByText("3 problems")).toBeVisible()
+        // This fixture seeds TrackItem rows, not Module/Lesson rows — the
+        // rebuilt index card (SP4 Task 9) reads lessons/problems from the
+        // curriculum (modules) model via getTrackSummariesForUser, so a
+        // TrackItem-only track honestly shows 0/0 here rather than the old
+        // item-count badge. It must also render no dead "Resume" link when
+        // there is nothing to resume — see components/learn/tracks/
+        // TrackSummaryCard.tsx.
+        await expect(
+            page.getByText("0 lessons · 0 problems · 1.3 hrs"),
+        ).toBeVisible()
+        await expect(page.getByText("No lessons yet")).toBeVisible()
         await expect(page.getByText("E2E Draft Track")).toHaveCount(0)
     })
 
