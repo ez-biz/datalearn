@@ -1,5 +1,16 @@
 "use client"
 
+// The tag/company detail routes (`/practice/tags/[slug]`) render a
+// tag-scoped problem list with the same inline search/difficulty/status
+// filters the practice catalog used to have — before SP4's catalog rebuild
+// replaced that page's own list with the facet-rail + table stack in
+// `components/practice/catalog/`. Those routes read `Problem[]` from
+// `getProblemsByTag` (`actions/problems.ts`), a different shape than the
+// catalog's `CatalogProblem[]` (no `solved`/`attempted`/`dialects`/pass-rate
+// counters), so they can't consume the new catalog components directly.
+// Rather than pull that route onto the new data model — out of scope for
+// the catalog rebuild — this file keeps serving it under its own name.
+
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { ArrowRight, CheckCircle2, Search } from "lucide-react"
@@ -31,12 +42,12 @@ const MOBILE_TAG_LIMIT = 2
 
 const DIFFICULTIES: ("ALL" | Difficulty)[] = ["ALL", "EASY", "MEDIUM", "HARD"]
 
-interface PracticeListProps {
+interface TagProblemListProps {
     problems: Problem[]
     solvedSlugs: string[]
 }
 
-export function PracticeList({ problems, solvedSlugs }: PracticeListProps) {
+export function TagProblemList({ problems, solvedSlugs }: TagProblemListProps) {
     const solvedSet = useMemo(() => new Set(solvedSlugs), [solvedSlugs])
     const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL")
     const [query, setQuery] = useState("")

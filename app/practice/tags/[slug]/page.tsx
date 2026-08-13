@@ -6,7 +6,7 @@ import { getProblemsByTag } from "@/actions/problems"
 import { getSolvedSlugs } from "@/actions/submissions"
 import { Container } from "@/components/ui/Container"
 import { Eyebrow } from "@/components/ui/Eyebrow"
-import { PracticeList } from "@/components/practice/PracticeList"
+import { TagProblemList } from "@/components/practice/TagProblemList"
 
 interface PageProps {
     params: Promise<{ slug: string }>
@@ -100,7 +100,7 @@ export default async function TagDetailPage({ params }: PageProps) {
                     )}
                 </div>
             </header>
-            <PracticeList problems={problems} solvedSlugs={solvedSlugs} />
+            <TagProblemList problems={problems} solvedSlugs={solvedSlugs} />
         </Container>
     )
 }
