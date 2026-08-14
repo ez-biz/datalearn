@@ -137,7 +137,7 @@ export function ConsoleChrome({
                             tabIndex={-1}
                             className={
                                 app
-                                    ? "flex flex-1 flex-col focus:outline-none lg:min-h-0"
+                                    ? "flex min-h-0 flex-1 flex-col focus:outline-none"
                                     : "flex flex-1 flex-col focus:outline-none"
                             }
                         >
