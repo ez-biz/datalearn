@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react"
 import { Container } from "@/components/ui/Container"
+import { Card } from "@/components/ui/Card"
 import { LinkButton } from "@/components/ui/Button"
 import { cn } from "@/lib/utils"
 import type { HomeData } from "@/lib/home/home-read"
@@ -23,21 +24,22 @@ interface SignedInHomeProps {
     daily: PlanInput["daily"]
 }
 
-const DIFFICULTY_DOTS: Array<{
+const DIFFICULTY_ROWS: Array<{
     key: "EASY" | "MEDIUM" | "HARD"
     label: string
-    dot: string
+    bar: string
 }> = [
-    { key: "EASY", label: "Easy", dot: "bg-easy" },
-    { key: "MEDIUM", label: "Medium", dot: "bg-medium" },
-    { key: "HARD", label: "Hard", dot: "bg-hard" },
+    { key: "EASY", label: "Easy", bar: "bg-easy" },
+    { key: "MEDIUM", label: "Medium", bar: "bg-medium" },
+    { key: "HARD", label: "Hard", bar: "bg-hard" },
 ]
 
 /**
  * Assembles the seven presentational dashboard cards into the signed-in
  * home page. Owns only what none of the seven cards can: the greeting
- * (needs `name`), the "solved by difficulty" strip (needs `stats` but maps
- * to no single card), and the two-column layout.
+ * (needs `name`), the "X of Y solved" subtitle and the progress-by-
+ * difficulty card (both need `stats` crossed with `home.catalogTotals`,
+ * which maps to no single card), and the two-column layout.
  *
  * Layout is two columns at `lg` and up (matches the retired UserHome's own
  * breakpoint), single column below it — this task covers desktop/tablet
@@ -65,36 +67,10 @@ export function SignedInHome({ name, home, stats, daily }: SignedInHomeProps) {
                         <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
                             {greeting}
                         </h1>
-                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
-                            <span className="tabular-nums">
-                                {stats.solved} solved · {stats.submissions} submissions
-                                all time
-                            </span>
-                            <span
-                                className="hidden h-3 w-px bg-border sm:inline"
-                                aria-hidden="true"
-                            />
-                            <span className="inline-flex items-center gap-3">
-                                {DIFFICULTY_DOTS.map(({ key, label, dot }) => (
-                                    <span
-                                        key={key}
-                                        className="inline-flex items-center gap-1.5"
-                                    >
-                                        <span
-                                            className={cn(
-                                                "h-1.5 w-1.5 rounded-full",
-                                                dot
-                                            )}
-                                            aria-hidden="true"
-                                        />
-                                        {label}{" "}
-                                        <span className="font-medium tabular-nums text-foreground">
-                                            {stats.byDifficulty[key]}
-                                        </span>
-                                    </span>
-                                ))}
-                            </span>
-                        </div>
+                        <p className="mt-2 text-sm tabular-nums text-muted-foreground">
+                            {stats.solved} of {home.catalogTotals.total} problems
+                            solved · {stats.submissions} submissions all time
+                        </p>
                     </div>
                     <LinkButton
                         href="/practice"
@@ -118,9 +94,67 @@ export function SignedInHome({ name, home, stats, daily }: SignedInHomeProps) {
                         <StreakCard streak={home.streak} week={home.week} />
                         <DailyCard daily={daily} />
                         <WeakSpotsCard weakSpots={home.weakSpots} />
+                        <ProgressByDifficulty
+                            solved={stats.byDifficulty}
+                            total={home.catalogTotals.byDifficulty}
+                        />
                     </div>
                 </div>
             </Container>
         </div>
+    )
+}
+
+/**
+ * Solved/total bars per difficulty, restoring UserHome's ProgressCard.
+ * `total` is `home.catalogTotals.byDifficulty` — counted from the exact
+ * same `getCatalogProblems` read that `/practice` itself renders from
+ * (PUBLISHED only, contest-locked problems already excluded there), so this
+ * card's denominator can never disagree with the catalog page's.
+ */
+function ProgressByDifficulty({
+    solved,
+    total,
+}: {
+    solved: UserStats["byDifficulty"]
+    total: HomeData["catalogTotals"]["byDifficulty"]
+}) {
+    return (
+        <Card className="p-5">
+            <h2 className="font-mono text-[10px] uppercase tracking-wider text-text-dim">
+                Progress by difficulty
+            </h2>
+            <ul className="mt-3 space-y-3">
+                {DIFFICULTY_ROWS.map(({ key, label, bar }) => {
+                    const solvedCount = solved[key]
+                    const totalCount = total[key]
+                    const pct =
+                        totalCount > 0
+                            ? Math.min(100, Math.round((solvedCount / totalCount) * 100))
+                            : 0
+                    return (
+                        <li key={key}>
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="font-medium text-foreground">
+                                    {label}
+                                </span>
+                                <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                                    {solvedCount} / {totalCount}
+                                </span>
+                            </div>
+                            <div className="mt-1.5 h-[3px] overflow-hidden rounded-full bg-panel-sunken">
+                                <div
+                                    className={cn(
+                                        "h-full rounded-full transition-[width] duration-300",
+                                        bar
+                                    )}
+                                    style={{ width: `${pct}%` }}
+                                />
+                            </div>
+                        </li>
+                    )
+                })}
+            </ul>
+        </Card>
     )
 }
