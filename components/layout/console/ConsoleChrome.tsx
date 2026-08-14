@@ -112,17 +112,19 @@ export function ConsoleChrome({
 
                 pb-14 clears the 56px fixed MobileTabBar; focus routes render no
                 tab bar, so they must not carry it. App routes retain that
-                mobile clearance below `lg`, but clamp this outer container at
-                `lg` because the workspace panes own their scrolling. Their
-                footer is omitted at every width: inside a clamped application
-                view it would be unreachable, not merely out of the way. */}
+                mobile clearance at every width, but clamp this outer
+                container's scroll at every width too — the workspace panes
+                own their scrolling below `lg` as well as above it, once the
+                segmented mobile panes land. Their footer is omitted at every
+                width: inside a clamped application view it would be
+                unreachable, not merely out of the way. */}
             <div
                 id="app-scroll"
                 className={
                     focus
                         ? "flex flex-1 flex-col overflow-y-auto print:overflow-visible"
                         : app
-                          ? "flex flex-1 flex-col overflow-y-auto pb-14 lg:overflow-hidden lg:pb-0 print:overflow-visible print:pb-0"
+                          ? "flex flex-1 flex-col overflow-hidden pb-14 lg:pb-0 print:overflow-visible print:pb-0"
                           : "flex flex-1 flex-col overflow-y-auto pb-14 lg:pb-0 print:overflow-visible print:pb-0"
                 }
             >

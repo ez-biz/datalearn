@@ -20,7 +20,9 @@ test.describe("workspace shell", () => {
         await expect(page.getByRole("contentinfo")).toHaveCount(1)
     })
 
-    test("#app-scroll scrolls below lg and clamps at lg", async ({ page }) => {
+    test("#app-scroll clamps at every width, but clears the mobile tab bar below lg", async ({
+        page,
+    }) => {
         await page.setViewportSize({ width: 768, height: 900 })
         await page.goto("/practice/simple-select")
         const mobile = await page
@@ -32,7 +34,7 @@ test.describe("workspace shell", () => {
                     paddingBottom: style.paddingBottom,
                 }
             })
-        expect(mobile).toEqual({ overflowY: "auto", paddingBottom: "56px" })
+        expect(mobile).toEqual({ overflowY: "hidden", paddingBottom: "56px" })
 
         await page.setViewportSize({ width: 1440, height: 900 })
         const desktop = await page
