@@ -36,6 +36,17 @@ export type HomeData = {
     week: DayBucket[]
     /** Track with the most progress, or null when there are no tracks. */
     activeTrack: TrackSummary | null
+    /** Whole-catalog totals, counted from the same `catalog` array
+     *  `nextProblem` is chosen from — so the dashboard's "X of Y solved"
+     *  and per-difficulty progress always agree with what /practice itself
+     *  shows (same read, same exclusions: PUBLISHED only, contest-locked
+     *  problems already excluded by getCatalogProblems's query). Free —
+     *  the array is already in memory for `nextProblem`, this just counts
+     *  it. */
+    catalogTotals: {
+        total: number
+        byDifficulty: { EASY: number; MEDIUM: number; HARD: number }
+    }
 }
 
 /**
@@ -196,6 +207,14 @@ export async function getHomeData(
           }
         : null
 
+    const catalogTotals = {
+        total: catalog.length,
+        byDifficulty: { EASY: 0, MEDIUM: 0, HARD: 0 },
+    }
+    for (const p of catalog) {
+        catalogTotals.byDifficulty[p.difficulty]++
+    }
+
     const plan = buildTodayPlan({ resume, daily, nextProblem })
 
     const weakSpots = computeWeakSpots(
@@ -215,5 +234,5 @@ export async function getHomeData(
     // trailing 7 days ending `today` — exactly what the week grid wants.
     const week = heatmap.slice(-7)
 
-    return { plan, weakSpots, streak, week, activeTrack }
+    return { plan, weakSpots, streak, week, activeTrack, catalogTotals }
 }
