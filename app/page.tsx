@@ -17,8 +17,10 @@ import { getProblems } from "@/actions/problems"
 import { getTopics } from "@/actions/content"
 import { auth } from "@/lib/auth"
 import { getDailyStatusForCurrentUser } from "@/actions/daily"
-import { getSolvedSlugs, getUserStats } from "@/actions/submissions"
-import { UserHome } from "@/components/home/UserHome"
+import { getUserStats } from "@/actions/submissions"
+import { getHomeData } from "@/lib/home/home-read"
+import type { PlanInput } from "@/lib/home/today-plan"
+import { SignedInHome } from "@/components/home/dashboard/SignedInHome"
 
 export default async function Home() {
     const [{ data: problems }, { data: topics }, session] = await Promise.all([
@@ -30,19 +32,39 @@ export default async function Home() {
     // Logged-in users get a personalized dashboard. Anonymous visitors get
     // the marketing pitch below.
     if (session?.user?.id) {
-        const [stats, solvedSlugs, dailyStatus] = await Promise.all([
+        // Two phases, not one three-way Promise.all: getHomeData consumes
+        // the daily status (it composes the whole "today's plan" — lesson,
+        // daily, next problem — in one place, buildTodayPlan), so it can't
+        // start until the daily read resolves. Stats and daily still
+        // overlap; only the home read is serialized behind them. Costs one
+        // extra round trip, deliberately, over having SignedInHome re-derive
+        // buildTodayPlan's ordering/de-dup rules itself.
+        const [stats, dailyStatus] = await Promise.all([
             getUserStats(),
-            getSolvedSlugs(),
             getDailyStatusForCurrentUser(),
         ])
         if (stats) {
+            // Bridge actions/daily.ts's DailyStatus (nested problem summary)
+            // to lib/home/today-plan.ts's flatter PlanInput["daily"] shape —
+            // the two are deliberately distinct types (see home-read.ts's
+            // and today-plan.ts's own doc comments on why daily stays a
+            // separate session-resolving action), so getHomeData and
+            // SignedInHome both need the flattened version.
+            const daily: PlanInput["daily"] = dailyStatus.daily
+                ? {
+                      slug: dailyStatus.daily.problem.slug,
+                      title: dailyStatus.daily.problem.title,
+                      difficulty: dailyStatus.daily.problem.difficulty,
+                      solvedToday: dailyStatus.solvedToday,
+                  }
+                : null
+            const home = await getHomeData(session.user.id, daily)
             return (
-                <UserHome
+                <SignedInHome
                     name={session.user.name ?? null}
+                    home={home}
                     stats={stats}
-                    problems={problems ?? []}
-                    solvedSlugs={solvedSlugs}
-                    dailyStatus={dailyStatus}
+                    daily={daily}
                 />
             )
         }
