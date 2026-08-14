@@ -187,28 +187,62 @@ test("with the featured track carrying items but no modules, the path preview li
     await expect(page.locator(".animate-pulse")).toHaveCount(0)
 })
 
-test("the stat strip and stat tile row render no zero-value clause", async ({
+test("with lessons at zero, the hero strip omits the lessons clause instead of rendering '0 lessons'", async ({
     page,
 }) => {
+    // Hero.tsx's STAT_TILES (Problems/Topics/Articles/Tracks) is NOT the
+    // right axis for this assertion — none of those four counts can ever
+    // be 0 in this suite: problems/topics/articles come from prisma/seed.ts
+    // (always non-empty), and tracks is guaranteed >= 1 by this file's own
+    // fixture. An assertion that can never be false proves nothing. The
+    // axis that actually goes to 0 is STRIP_CLAUSES's "lessons" —
+    // app/page.tsx's `totalLessons` is `tracks.reduce((s,t) =>
+    // s+t.lessonsTotal, 0)`, a sum across every PUBLISHED track, and
+    // production ships zero ModuleLesson rows anywhere (the whole reason
+    // this drop-if-zero rule exists at all).
+    //
+    // That sum is page-wide, not scoped to this file's zero-module
+    // fixture — a *different* PUBLISHED, module-bearing track elsewhere
+    // (e.g. local Postgres's ambient `analyst-interview-prep`, 17 real
+    // lessons) would legitimately push the total above 0 and falsify this
+    // test's premise. Detect, don't assume: same pattern as
+    // home-signed-in.spec.ts's test 1 — skip locally when such a track is
+    // present, fail loudly in CI (test.yml seeds no curriculum at all, so
+    // finding one there means that assumption broke).
+    const ambientLessonTracks = await prisma.track.findMany({
+        where: {
+            status: "PUBLISHED",
+            slug: { not: { startsWith: PREFIX } },
+            modules: {
+                some: { lessons: { some: { article: { status: "PUBLISHED" } } } },
+            },
+        },
+        select: { slug: true },
+    })
+
+    if (ambientLessonTracks.length > 0) {
+        const found = ambientLessonTracks.map((t) => t.slug).join(", ")
+        if (process.env.CI) {
+            throw new Error(
+                `CI is expected to seed no curriculum (see .github/workflows/test.yml), ` +
+                    `but found ${ambientLessonTracks.length} PUBLISHED, lesson-bearing ` +
+                    `track(s) (${found}). This test's "lessons total is 0" premise depends ` +
+                    `on that assumption — investigate what started seeding curriculum data ` +
+                    `in CI before trusting this test's pass/fail again.`
+            )
+        }
+        test.skip(
+            true,
+            `skipped: ${ambientLessonTracks.length} published, lesson-bearing track(s) ` +
+                `present (${found}); this assertion requires every published track's ` +
+                `lesson total to be 0, which only CI's curriculum-free database guarantees.`
+        )
+    }
+
     await page.goto("/")
 
-    // The compact mono strip directly above the H1 (Hero.tsx's
-    // STRIP_CLAUSES) — e.g. "23 problems · 2 tracks". Every clause whose
-    // count is 0 is dropped rather than rendered as "0 lessons"; production
-    // ships 0 ModuleLesson rows, which is exactly why this strip has to be
-    // able to drop the lessons clause entirely.
     const heading = page.getByRole("heading", { level: 1 })
     const strip = heading.locator("xpath=preceding-sibling::p[1]")
     await expect(strip).toBeVisible()
-    await expect(strip).not.toContainText(/\b0\s*(problems?|lessons?|tracks?)\b/i)
-
-    // The wider 4-up stat row (Hero.tsx's STAT_TILES) — same drop-if-zero
-    // rule, applied independently per tile. No <dd> value should ever be
-    // the literal digit "0".
-    const tileValues = page.locator("dl dd")
-    const tileCount = await tileValues.count()
-    expect(tileCount).toBeGreaterThan(0)
-    for (let i = 0; i < tileCount; i++) {
-        await expect(tileValues.nth(i)).not.toHaveText("0")
-    }
+    await expect(strip).not.toContainText(/lesson/i)
 })
