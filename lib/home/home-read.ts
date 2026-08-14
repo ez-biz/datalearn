@@ -12,7 +12,10 @@
 //
 // getDailyStatusForCurrentUser (actions/daily.ts) stays a separate "use
 // server" action that resolves its own session — the page calls it
-// directly, and this read does not fold the daily problem into `plan`.
+// directly and passes the shaped result in as `daily`, so the plan's
+// lesson/daily/problem ordering and de-duplication live in exactly one
+// place (buildTodayPlan) rather than being partly re-derived by a
+// dashboard component.
 
 import { prisma } from "@/lib/prisma"
 import { computeWeakSpots, type WeakSpot } from "@/lib/home/weak-spots"
@@ -106,22 +109,56 @@ function utcMidnightDaysBefore(today: Date, daysBack: number): Date {
 }
 
 /**
+ * Same window actions/profile.ts's getProfileData uses for its heatmap
+ * (its `HEATMAP_DAYS`). Not imported from there — a "use server" file may
+ * only export async functions, so that constant isn't reusable — but kept
+ * numerically in sync deliberately: `streak` here must agree with the
+ * `/profile` page's streak for the same user, and a narrower window here
+ * would silently cap `current`/`longest` below what `/profile` reports.
+ * If actions/profile.ts's HEATMAP_DAYS ever changes, change this too.
+ */
+const HEATMAP_WINDOW_DAYS = 365
+
+/**
  * Everything the signed-in home dashboard renders, in a bounded number of
  * queries regardless of curriculum size: the tracks-index read, the catalog
  * read, at most one extra curriculum read to resolve a resume target, and
- * two Submission.findMany calls (recent 40 for weak spots, last 7 days for
- * the week grid and streak).
+ * two Submission.findMany calls (recent 40 for weak spots, and a single
+ * 365-day window — matching /profile's own — that feeds both `streak` and
+ * `week`).
+ *
+ * `week` and `streak` come from the same buildHeatmap(dates, 365, today)
+ * series rather than two separate queries: `streak` is computeStreaks of
+ * the whole series (so it agrees with /profile's streak for the same user
+ * by construction — identical window, identical function), and `week` is
+ * `heatmap.slice(-7)`, the tail of that same array. There is deliberately
+ * no second, narrower source for the week grid — a provable slice of the
+ * streak's own series cannot drift from it the way two independent queries
+ * could.
+ *
+ * `daily` is the caller's already-fetched getDailyStatusForCurrentUser()
+ * result (actions/daily.ts stays a separate session-resolving action), so
+ * the whole plan — lesson, daily, problem, including the de-duplication
+ * rule that drops the problem row when it matches the daily's slug — is
+ * composed in exactly one place: buildTodayPlan. Pass null for a signed-out
+ * caller or a day with no daily problem.
  *
  * Pass `today` to pin "now" for tests and for callers that need a stable
- * day boundary; defaults to `new Date()`.
+ * day boundary; defaults to `new Date()`. Never reaches buildHeatmap
+ * un-pinned — the parameter is threaded through, not re-read from
+ * `new Date()` at the call site.
  */
 export async function getHomeData(
     userId: string,
+    daily: PlanInput["daily"],
     today: Date = new Date()
 ): Promise<HomeData> {
-    const windowStart = utcMidnightDaysBefore(today, 6)
+    const heatmapWindowStart = utcMidnightDaysBefore(
+        today,
+        HEATMAP_WINDOW_DAYS - 1
+    )
 
-    const [tracks, catalog, weakSpotSubmissions, weekSubmissions] =
+    const [tracks, catalog, weakSpotSubmissions, heatmapSubmissions] =
         await Promise.all([
             getTrackSummariesForUser(userId),
             getCatalogProblems(userId),
@@ -142,7 +179,7 @@ export async function getHomeData(
                 },
             }),
             prisma.submission.findMany({
-                where: { userId, createdAt: { gte: windowStart } },
+                where: { userId, createdAt: { gte: heatmapWindowStart } },
                 select: { createdAt: true },
             }),
         ])
@@ -159,7 +196,7 @@ export async function getHomeData(
           }
         : null
 
-    const plan = buildTodayPlan({ resume, daily: null, nextProblem })
+    const plan = buildTodayPlan({ resume, daily, nextProblem })
 
     const weakSpots = computeWeakSpots(
         weakSpotSubmissions.map((s) => ({
@@ -168,12 +205,15 @@ export async function getHomeData(
         }))
     )
 
-    const week = buildHeatmap(
-        weekSubmissions.map((s) => s.createdAt),
-        7,
+    const heatmap = buildHeatmap(
+        heatmapSubmissions.map((s) => s.createdAt),
+        HEATMAP_WINDOW_DAYS,
         today
     )
-    const streak = computeStreaks(week)
+    const streak = computeStreaks(heatmap)
+    // buildHeatmap returns oldest-first, so the last 7 entries are the
+    // trailing 7 days ending `today` — exactly what the week grid wants.
+    const week = heatmap.slice(-7)
 
     return { plan, weakSpots, streak, week, activeTrack }
 }
