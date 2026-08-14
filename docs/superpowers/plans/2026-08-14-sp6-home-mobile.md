@@ -473,7 +473,9 @@ export type HomeData = {
     streak: StreakInfo          // { current, longest, lastActiveDate }
     /** Exactly 7 buckets, oldest first, for the week grid. */
     week: DayBucket[]           // { date: string; count: number }
-    /** Track with the most progress, or null when there are no tracks. */
+    /** Track with the most progress, or null when there are no tracks.
+     *  Task 4 extends TrackSummary with per-module rollups (`modules[]`)
+     *  so ModuleProgress has a data source; no extra query. */
     activeTrack: TrackSummary | null
 }
 
@@ -588,9 +590,13 @@ type UserStats = {
 
 `daily` is still passed to `SignedInHome` separately because `DailyCard` needs the full status (including `solvedToday`), which the plan row does not carry.
 
-`ModuleProgress` — six cards, each number, name, 3px bar, percentage. **Does not render at all when the active track has no modules** — not six empty cards.
+`ModuleProgress` — six cards, each number, name, 3px bar, percentage, consuming `activeTrack.modules`. **Does not render at all when the active track has no modules** — not six empty cards. Production has zero modules, so that is the live path.
 
-`RecentSubmissions` — rows on `grid 1fr 120px 90px 80px`: problem, verdict chip, relative time, runtime. Verdict chips: Accepted `primary`, Wrong answer `destructive` — each on its own tinted background and border.
+> **CORRECTED 2026-08-14.** This originally assumed `activeTrack` carried per-module data. It did not — `TrackSummary` had only an aggregate `rollup`, so this card would have rendered nothing everywhere, forever. `getTrackSummariesForUser` was already fetching `modules → lessons → checkpoints` in its single deep query (`lib/learn/tracks-read.ts:128`) and discarding the detail, so the fix exposes per-module rollups via the existing `rollUpModule` (`lib/curriculum-progress.ts:38`) at **zero additional queries**. Module numbers must come from `modulePrefix` (`components/learn/reader/lesson-nav.ts`) — `Module.position` is 0-indexed and displays +1; restating that arithmetic instead of importing it already caused one off-by-one where a panel read "03" against the reader's "04".
+
+`RecentSubmissions` — rows on `grid 1fr 120px 90px`: problem, verdict chip, relative time. Verdict chips: Accepted `primary`, Wrong answer `destructive` — each on its own tinted background and border.
+
+> **CORRECTED 2026-08-14.** This originally specified a fourth **runtime** column. No such data exists: there is no runtime, duration or elapsed field on `Submission`, `ContestSubmission` or `ContestProblemSolve` anywhere in `prisma/schema.prisma` (`RUNTIME_ERROR` is only a `SubmissionStatus` value). Rendering a permanent `—` would be honest but dead — it implies a feature that does not exist. Dropped, following SP4's precedent that unbacked design blocks are omitted rather than stubbed. **Do not add a schema field for this**; SP6 ships zero migrations.
 
 - [ ] **Step 2: Build the right rail**
 
