@@ -23,15 +23,17 @@ function formatRelative(date: Date): string {
 }
 
 /**
- * Recent submission rows on `grid 1fr 120px 90px 80px`: problem, verdict
- * chip, relative time, runtime.
+ * Recent submission rows on `grid 1fr 120px 90px`: problem, verdict chip,
+ * relative time.
  *
- * The runtime column renders "—": `Submission` (prisma/schema.prisma) does
- * not capture query execution time anywhere in the schema, on this model
- * or any other (checked ContestSubmission/ContestProblemSolve too — same
- * story). Rather than invent a number or silently drop the column and
- * break the four-column grid the design calls for, this shows an honest
- * "not tracked" placeholder in that slot.
+ * The design's original spec included a fourth "runtime" column, dropped
+ * here: `Submission` (prisma/schema.prisma) does not capture query
+ * execution time anywhere in the schema, on this model or any other
+ * (checked ContestSubmission/ContestProblemSolve too — same story). This
+ * project's precedent (SP4) is to omit an unbacked design block rather than
+ * stub it — a permanent "—" is dead UI that implies a feature that doesn't
+ * exist. Ships zero migrations; add the column back if runtime tracking
+ * ever lands.
  */
 export function RecentSubmissions({ recent }: RecentSubmissionsProps) {
     return (
@@ -61,7 +63,7 @@ export function RecentSubmissions({ recent }: RecentSubmissionsProps) {
                         const accepted = s.status === "ACCEPTED"
                         const locked = Boolean(s.problem.contestLock)
                         const row = (
-                            <div className="grid grid-cols-[1fr_120px_90px_80px] items-center gap-3 py-2.5">
+                            <div className="grid grid-cols-[1fr_120px_90px] items-center gap-3 py-2.5">
                                 <span className="truncate text-sm font-medium text-foreground">
                                     <span className="mr-1 tabular-nums text-muted-foreground">
                                         {s.problem.number}.
@@ -90,9 +92,6 @@ export function RecentSubmissions({ recent }: RecentSubmissionsProps) {
                                 </span>
                                 <span className="text-xs tabular-nums text-muted-foreground">
                                     {formatRelative(s.createdAt)}
-                                </span>
-                                <span className="text-xs tabular-nums text-muted-foreground">
-                                    —
                                 </span>
                             </div>
                         )
