@@ -580,7 +580,9 @@ type UserStats = {
                    contestLock: { unlocksAt: Date } | null } }>
 }
 ```
-- Produces: `SignedInHome({ name, home, stats, daily })`.
+- Produces: `SignedInHome({ name, home, stats, daily })`, at `components/home/dashboard/SignedInHome.tsx`.
+
+> **PLAN DEFECT, corrected 2026-08-14.** This task's Files and Steps list only the seven cards, so `SignedInHome` — named here in Produces and imported by Task 5 — was specified nowhere and got orphaned. It was built in a follow-up dispatch and now exists. **`stats` is `UserStats` from `actions/submissions.ts`, not `actions/profile.ts`** as stated elsewhere in this plan. When a task's Produces names an artifact, its Steps must build it.
 
 - [ ] **Step 1: Build the left column**
 
