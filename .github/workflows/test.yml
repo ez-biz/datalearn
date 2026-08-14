@@ -164,6 +164,12 @@ jobs:
       - name: Test approach sort
         run: npm run test:approach-sort
 
+      - name: Test weak spots
+        run: npm run test:weak-spots
+
+      - name: Test today's plan
+        run: npm run test:today-plan
+
       - name: Test lesson nav model
         run: npm run test:lesson-nav
 
