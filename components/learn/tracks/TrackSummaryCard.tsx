@@ -75,7 +75,8 @@ export function TrackSummaryCard({ track, index }: TrackSummaryCardProps) {
                     {track.summary}
                 </p>
                 <p className="mt-3 font-mono text-[11px] tabular-nums text-text-dim">
-                    {track.lessonsTotal} lessons · {track.problemsTotal} problems ·{" "}
+                    {hasLessons && `${track.lessonsTotal} lessons · `}
+                    {track.problemsTotal} problems ·{" "}
                     {formatHours(track.estimatedMinutes)} hrs
                 </p>
 
@@ -121,9 +122,30 @@ export function TrackSummaryCard({ track, index }: TrackSummaryCardProps) {
                             Continue
                             <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                         </Link>
+                    ) : track.nextItemSlug ? (
+                        // Item-only track: no lessons to resume, but there is
+                        // a next unsolved problem. Before this the card said
+                        // "No lessons yet" while the detail page listed a full
+                        // study sequence — true of every published track on
+                        // production at release time.
+                        <Link
+                            href={`/practice/${track.nextItemSlug}`}
+                            className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-primary transition-colors hover:text-primary-hover"
+                        >
+                            {rollup.problemsDone > 0 ? "Resume" : "Start"}
+                            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                        </Link>
+                    ) : track.problemsTotal > 0 ? (
+                        <Link
+                            href={`/learn/tracks/${track.slug}`}
+                            className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-primary transition-colors hover:text-primary-hover"
+                        >
+                            Review
+                            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                        </Link>
                     ) : (
                         <span className="shrink-0 text-sm text-text-dim">
-                            No lessons yet
+                            Nothing here yet
                         </span>
                     )}
                 </div>

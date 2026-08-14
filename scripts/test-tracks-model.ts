@@ -5,6 +5,7 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { findResume, type ResumeModule } from "../lib/learn/tracks-model"
+import { rollUpItems } from "../lib/learn/tracks-read"
 
 function mod(
     slug: string,
@@ -54,5 +55,40 @@ describe("findResume", () => {
             mod("m3", [{ slug: "l4", completed: false }]),
         ]
         assert.deepEqual(findResume(modules), { moduleSlug: "m2", lessonSlug: "l3" })
+    })
+})
+
+describe("rollUpItems — the TrackItem fallback", () => {
+    // Every published track on production at the v0.9.0 release was
+    // item-only. Before the fallback the index reported 0/0 for all of them
+    // while their detail pages listed full study sequences.
+    const items = [
+        { problem: { id: "a" } },
+        { problem: { id: "b" } },
+        { problem: { id: "c" } },
+    ]
+
+    it("counts every item as a problem and no lessons", () => {
+        const r = rollUpItems(items, new Set())
+        assert.equal(r.problemsTotal, 3)
+        assert.equal(r.lessonsTotal, 0)
+        assert.equal(r.problemsDone, 0)
+        assert.equal(r.percent, 0)
+    })
+
+    it("counts solved items and rounds the percentage", () => {
+        const r = rollUpItems(items, new Set(["a", "b"]))
+        assert.equal(r.problemsDone, 2)
+        assert.equal(r.percent, 67)
+    })
+
+    it("is 100% when every item is solved", () => {
+        assert.equal(rollUpItems(items, new Set(["a", "b", "c"])).percent, 100)
+    })
+
+    it("is 0%, not NaN, for a track with no items", () => {
+        const r = rollUpItems([], new Set())
+        assert.equal(r.percent, 0)
+        assert.equal(r.problemsTotal, 0)
     })
 })
