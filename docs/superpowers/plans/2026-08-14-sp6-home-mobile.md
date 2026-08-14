@@ -479,6 +479,7 @@ export type HomeData = {
 
 export const getHomeData: (
     userId: string,
+    daily: PlanInput["daily"],   // Task 2's own type — not a third definition
     today?: Date
 ) => Promise<HomeData>
 ```
@@ -492,11 +493,13 @@ Compose, do not re-derive:
 - `getTrackSummariesForUser(userId)` → `activeTrack` (highest `rollup.percent` among tracks with any progress, else the first) and the `resume` for the plan.
 - `getCatalogProblems(userId)` → `nextProblem` (first unsolved in curriculum order).
 - One `Submission.findMany` for this user, most recent 40, selecting `status` and the problem's topic tags → `computeWeakSpots`.
-- One `Submission.findMany` selecting `createdAt` over the last 7 days → `buildHeatmap(dates, 7, today)` → `week`, and `computeStreaks` for `streak`.
+- One `Submission.findMany` selecting `createdAt` over **365 days** → `buildHeatmap(dates, 365, today)`. `computeStreaks(heatmap)` → `streak`; `heatmap.slice(-7)` → `week`.
+
+> **CORRECTED 2026-08-14 — human ruling; supersedes this plan's original text.** This step originally specified a 7-day window feeding both `week` and `streak`. That caps `streak.current` and `streak.longest` at 7, so a learner on a 15-day streak would read **7** here and **15** on `/profile`. `/profile` uses `HEATMAP_DAYS = 365` (`actions/profile.ts:51`) with the same `computeStreaks`, so the home must use the same basis. Deriving `week` as the tail of that same series means the grid and the headline **cannot** disagree by construction — there is no second source to drift. This is the same cross-screen-contradiction class as `6968fbb` and `423fc5a`, both of which needed their own fix PRs. Do not reintroduce the 7-day streak.
 
 **Accept `today` as a parameter defaulting to `new Date()`** so a caller can pin it. `buildHeatmap` already takes one.
 
-`getDailyStatusForCurrentUser()` stays where it is — it resolves its own session and the page calls it directly.
+**`daily` is a parameter, not an internal call.** `getDailyStatusForCurrentUser()` resolves its own session, so it stays where it is and the page passes its result in. `getHomeData` then composes the entire plan — lesson, daily, problem — through `buildTodayPlan` in one place, including the rule that drops the problem row when it duplicates the daily's slug. Keep `daily` nullable: a day with no daily problem must still yield a valid plan. **Consumers render `plan` as given and never re-order or re-filter it** — that ordering rule lives in `buildTodayPlan` alone.
 
 - [ ] **Step 2: Verify against real data**
 
@@ -581,7 +584,9 @@ type UserStats = {
 
 `ResumeCard` — `primary` border, mono "Pick up where you stopped", 22px/600 title, mono meta, a 4px bar, a 42px `primary` Resume button. **Falls back**: with no curriculum resume it shows the next unsolved problem and links to `/practice/<slug>`; with neither it does not render.
 
-`TodayPlan` — rows on `grid 18px 1fr 90px`: state icon, title + mono meta, "Open →". Renders `buildTodayPlan`'s output. **Renders nothing when the plan is empty.**
+`TodayPlan` — rows on `grid 18px 1fr 90px`: state icon, title + mono meta, "Open →". Renders `home.plan` **exactly as given, in the order given**. `getHomeData` already composed it through `buildTodayPlan` from the `daily` the page passed in, so the daily row is present and correctly positioned — do not insert it here, re-order the rows, or re-apply the drop-the-duplicate-problem rule. That logic has exactly one home. **Renders nothing when the plan is empty.**
+
+`daily` is still passed to `SignedInHome` separately because `DailyCard` needs the full status (including `solvedToday`), which the plan row does not carry.
 
 `ModuleProgress` — six cards, each number, name, 3px bar, percentage. **Does not render at all when the active track has no modules** — not six empty cards.
 
@@ -589,7 +594,9 @@ type UserStats = {
 
 - [ ] **Step 2: Build the right rail**
 
-`StreakCard` — a 7-column grid of 26px squares in four tints keyed to `week[i].count` (0, 1, 2–3, 4+), with the current streak as the headline.
+`StreakCard` — a 7-column grid of 26px squares in four tints keyed to `week[i].count` (0, 1, 2–3, 4+), with `streak.current` as the headline. `week` is exactly 7 buckets, oldest first.
+
+The headline and the grid measure **different windows on purpose**: `streak.current` spans 365 days and matches `/profile` exactly, while the grid shows the last 7. A learner on a 30-day streak correctly sees "30" above seven filled squares. Label the grid as the last 7 days so the two read as complementary rather than contradictory; do not recompute a streak from `week`.
 
 `DailyCard` — `warning` border, the daily problem, and a solved-today state.
 
@@ -625,7 +632,19 @@ git commit -m "feat(home): add the signed-in dashboard components"
 
 - [ ] **Step 1: Rewire**
 
-`app/page.tsx` keeps its existing session branch. For a signed-in user it now fetches `getHomeData(session.user.id)` alongside `getUserStats()` and `getDailyStatusForCurrentUser()`, and renders `SignedInHome`. Keep the existing fallback: if the stats read fails, fall through to the anonymous page rather than erroring.
+`app/page.tsx` keeps its existing session branch. For a signed-in user:
+
+```ts
+const [stats, daily] = await Promise.all([
+    getUserStats(),
+    getDailyStatusForCurrentUser(),
+])
+const home = await getHomeData(session.user.id, daily)
+```
+
+then renders `SignedInHome`. Two phases, not one three-way `Promise.all`: `getHomeData` now consumes `daily`, so it cannot start until the daily resolves. That costs one extra round trip of latency, and it is the deliberate price of composing the plan in exactly one place — the alternative was `TodayPlan` re-deriving `buildTodayPlan`'s ordering and de-duplication rules in the component, putting the same rule in two places. Stats and daily still overlap, so only the home read is serialized behind them.
+
+Keep the existing fallback: if the stats read fails, fall through to the anonymous page rather than erroring.
 
 Delete `UserHome.tsx` only after confirming nothing else imports it:
 
