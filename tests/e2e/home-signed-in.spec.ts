@@ -18,12 +18,21 @@ import { prisma, seedUser, sessionCookie, type SeededUser } from "./fixtures/db"
  * anything, so that ambient track would otherwise leak into test 1's
  * "no curriculum" assertion and make it fail locally while passing in CI —
  * exactly the kind of environment-dependent flake this suite must not have.
- * Test 1 neutralizes this deterministically: snapshot every PUBLISHED
- * track that currently has at least one module, flip it to DRAFT (invisible
- * to getTrackSummariesForUser's default allowDraft=false query) for the
- * duration of the test, then restore the original status in a `finally`
- * regardless of assertion outcome. This is the same snapshot/restore shape
- * daily.spec.ts uses for the shared DailyProblem row.
+ *
+ * Test 1 does NOT mutate ambient rows to neutralize this — an earlier
+ * version snapshotted every PUBLISHED module-bearing track, flipped it to
+ * DRAFT, and restored the original status in a `finally`. That `finally`
+ * does not run on process termination (Ctrl+C, OOM, a killed worker), which
+ * could leave a developer's real curriculum silently stuck in DRAFT — the
+ * same failure class as this project's earlier fixture-leak bug, and
+ * silent besides. Fixed by detecting instead of mutating: query for
+ * PUBLISHED module-bearing tracks and, if any exist, either skip (local —
+ * this assertion needs a curriculum-free database, which only CI
+ * guarantees) or fail loudly (CI — `test.yml` seeds no curriculum, so a
+ * module-bearing track there means that assumption broke; a silent skip in
+ * CI would let this assertion quietly stop running forever the day someone
+ * adds curriculum seeding). No writes to ambient rows at any point, so a
+ * crash mid-test leaves nothing behind to clean up.
  *
  * This file's own track/module fixture (test 3) is seeded as DRAFT in
  * `beforeAll` and flipped to PUBLISHED only inside test 3, so it can never
@@ -202,66 +211,69 @@ test.afterAll(async () => {
 test("a learner with no curriculum and no submissions sees a coherent dashboard with no Module progress and no Weak spots", async ({
     page,
 }) => {
+    // Detect, never mutate — see the file doc comment above. A crash
+    // between a flip and a restore is a worse outcome than a skipped test.
     const ambientModuleTracks = await prisma.track.findMany({
         where: { status: "PUBLISHED", modules: { some: {} } },
-        select: { id: true, status: true },
+        select: { slug: true },
     })
 
-    try {
-        if (ambientModuleTracks.length > 0) {
-            await prisma.track.updateMany({
-                where: { id: { in: ambientModuleTracks.map((t) => t.id) } },
-                data: { status: "DRAFT" },
-            })
-        }
-
-        await page.context().addCookies([sessionCookie(emptyUser.sessionToken, BASE_URL)])
-        await page.goto("/")
-
-        // Normal shell route (not the lesson reader's focus route): footer
-        // and exactly one banner landmark, same guard module.spec.ts uses.
-        await expect(page.getByRole("contentinfo")).toHaveCount(1)
-        await expect(page.getByRole("banner")).toHaveCount(1)
-
-        await expect(
-            page.getByRole("heading", { level: 1 }).first()
-        ).toContainText("Welcome back")
-
-        // The two cards that are gated by the fallback rule and must not
-        // appear when there is nothing to feature.
-        await expect(
-            page.getByRole("heading", { name: "Module progress" })
-        ).toHaveCount(0)
-        await expect(page.getByRole("heading", { name: "Weak spots" })).toHaveCount(
-            0
-        )
-
-        // Cards that never return null render their honest empty/zero
-        // state instead of vanishing. `.first()` throughout: the App-Router
-        // hydration/streaming pass can briefly render a second copy of these
-        // elements — the settled DOM renders each once, but an un-scoped
-        // locator strict-mode-violates on the transient duplicate. Same
-        // guard as daily.spec.ts and tracks.spec.ts.
-        await expect(page.getByText("No submissions yet").first()).toBeVisible()
-        // StreakCard renders the count and the "day streak" label as
-        // sibling <span>s with no literal space between them in the
-        // compiled JSX, so match loosely rather than assume a space.
-        await expect(page.getByText(/0\s*day streak/).first()).toBeVisible()
-        await expect(
-            page.getByRole("heading", { name: "Progress by difficulty" }).first()
-        ).toBeVisible()
-    } finally {
-        if (ambientModuleTracks.length > 0) {
-            await Promise.all(
-                ambientModuleTracks.map((t) =>
-                    prisma.track.update({
-                        where: { id: t.id },
-                        data: { status: t.status },
-                    })
-                )
+    if (ambientModuleTracks.length > 0) {
+        const found = ambientModuleTracks.map((t) => t.slug).join(", ")
+        if (process.env.CI) {
+            // Loud, not skipped: test.yml is documented to seed no
+            // curriculum, so a module-bearing track here means that
+            // assumption has broken. A silent skip would let this
+            // assertion quietly stop running the day that changes.
+            throw new Error(
+                `CI is expected to seed no curriculum (see .github/workflows/test.yml), ` +
+                    `but found ${ambientModuleTracks.length} PUBLISHED module-bearing ` +
+                    `track(s) (${found}). This test's "no curriculum" assertion depends on ` +
+                    `that assumption — investigate what started seeding curriculum data in ` +
+                    `CI before trusting this test's pass/fail again.`
             )
         }
+        test.skip(
+            true,
+            `skipped: ${ambientModuleTracks.length} published module-bearing track(s) ` +
+                `present (${found}); this assertion requires a curriculum-free database, ` +
+                `which is CI's shape.`
+        )
     }
+
+    await page.context().addCookies([sessionCookie(emptyUser.sessionToken, BASE_URL)])
+    await page.goto("/")
+
+    // Normal shell route (not the lesson reader's focus route): footer
+    // and exactly one banner landmark, same guard module.spec.ts uses.
+    await expect(page.getByRole("contentinfo")).toHaveCount(1)
+    await expect(page.getByRole("banner")).toHaveCount(1)
+
+    await expect(page.getByRole("heading", { level: 1 }).first()).toContainText(
+        "Welcome back"
+    )
+
+    // The two cards that are gated by the fallback rule and must not
+    // appear when there is nothing to feature.
+    await expect(
+        page.getByRole("heading", { name: "Module progress" })
+    ).toHaveCount(0)
+    await expect(page.getByRole("heading", { name: "Weak spots" })).toHaveCount(0)
+
+    // Cards that never return null render their honest empty/zero
+    // state instead of vanishing. `.first()` throughout: the App-Router
+    // hydration/streaming pass can briefly render a second copy of these
+    // elements — the settled DOM renders each once, but an un-scoped
+    // locator strict-mode-violates on the transient duplicate. Same
+    // guard as daily.spec.ts and tracks.spec.ts.
+    await expect(page.getByText("No submissions yet").first()).toBeVisible()
+    // StreakCard renders the count and the "day streak" label as
+    // sibling <span>s with no literal space between them in the
+    // compiled JSX, so match loosely rather than assume a space.
+    await expect(page.getByText(/0\s*day streak/).first()).toBeVisible()
+    await expect(
+        page.getByRole("heading", { name: "Progress by difficulty" }).first()
+    ).toBeVisible()
 })
 
 test("a learner with an accepted submission sees it in Recent submissions with an Accepted chip", async ({
