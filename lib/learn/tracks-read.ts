@@ -67,7 +67,16 @@ export type ModuleProgressSummary = {
     slug: string
     position: number
     name: string
+    /** Free — Module.description, added to the existing select alongside
+     *  the fields below. Consumed by the signed-out home's path preview
+     *  (components/home/marketing/PathPreview.tsx) for its row subtext. */
+    description: string
     percent: number
+    /** Free — rollUpModule already computes these in the loop below; this
+     *  just exposes them instead of discarding them. Same reasoning as
+     *  `percent` itself. */
+    lessonsTotal: number
+    problemsTotal: number
 }
 
 export type TrackSummary = {
@@ -153,6 +162,7 @@ export const getTrackSummariesForUser = cache(
                         id: true,
                         slug: true,
                         name: true,
+                        description: true,
                         position: true,
                         lessons: {
                             where: { article: { status: "PUBLISHED" } },
@@ -263,7 +273,10 @@ export const getTrackSummariesForUser = cache(
                     slug: module.slug,
                     position: module.position,
                     name: module.name,
+                    description: module.description,
                     percent: moduleRollup.percent,
+                    lessonsTotal: moduleRollup.lessonsTotal,
+                    problemsTotal: moduleRollup.problemsTotal,
                 })
 
                 modulesForResume.push({
