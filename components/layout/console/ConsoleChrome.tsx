@@ -1,6 +1,7 @@
 "use client"
 
 import { usePathname } from "next/navigation"
+import { ConsoleAdminRailFrame } from "./ConsoleAdminRailFrame"
 import { ConsoleRail } from "./ConsoleRail"
 import { ConsoleSidebar, type TrackProgress } from "./ConsoleSidebar"
 import { isAppRoute, isFocusRoute } from "./focus-route"
@@ -32,6 +33,14 @@ interface ConsoleChromeProps {
      */
     adminSidebarSlot: React.ReactNode
     /**
+     * The collapsed counterpart of adminSidebarSlot — same rationale, same
+     * "server component built in ConsoleShell" origin. Rendered instead of
+     * the learner ConsoleRail when the sidebar is collapsed on an admin
+     * route, so collapsing never hides the admin nav behind the learner
+     * rail (see ConsoleAdminRail's header comment).
+     */
+    adminRailSlot: React.ReactNode
+    /**
      * The site <Footer />, passed in rather than imported.
      *
      * Footer is an async server component; a client module that imported it
@@ -54,6 +63,7 @@ export function ConsoleChrome({
     tabBarAccountSlot,
     signInSlot,
     adminSidebarSlot,
+    adminRailSlot,
     footerSlot,
     children,
 }: ConsoleChromeProps) {
@@ -103,7 +113,13 @@ export function ConsoleChrome({
             {!focus && (
                 <header className="flex shrink-0 print:hidden">
                     {collapsed ? (
-                        <ConsoleRail onToggle={toggle} accountSlot={railAccountSlot} />
+                        admin ? (
+                            <ConsoleAdminRailFrame onToggle={toggle} accountSlot={railAccountSlot}>
+                                {adminRailSlot}
+                            </ConsoleAdminRailFrame>
+                        ) : (
+                            <ConsoleRail onToggle={toggle} accountSlot={railAccountSlot} />
+                        )
                     ) : admin ? (
                         adminSidebarSlot
                     ) : (
