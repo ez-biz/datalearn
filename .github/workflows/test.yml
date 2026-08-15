@@ -158,6 +158,9 @@ jobs:
       - name: Admin problems filter
         run: npm run test:problems-filter
 
+      - name: Admin form tabs
+        run: npm run test:form-tabs
+
       - name: Test catalog model
         run: npm run test:catalog-model
 
