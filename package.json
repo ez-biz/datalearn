@@ -77,6 +77,7 @@
     "test:article-publish-routes": "tsx scripts/test-article-publish-routes.ts",
     "test:mcp-e2e-log-redaction": "node --test scripts/test-mcp-e2e-log-redaction.mjs",
     "test:console-nav": "node --import tsx --test scripts/test-console-nav.ts",
+    "test:admin-nav": "node --import tsx --test scripts/test-admin-nav.ts",
     "test:problems-panel": "node --import tsx --test scripts/test-problems-panel.ts",
     "test:catalog-model": "node --import tsx --test scripts/test-catalog-model.ts",
     "test:module-model": "node --import tsx --test scripts/test-module-model.ts",

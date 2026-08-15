@@ -146,6 +146,9 @@ jobs:
       - name: Test console nav model
         run: npm run test:console-nav
 
+      - name: Test admin nav model
+        run: npm run test:admin-nav
+
       - name: Test problems panel model
         run: npm run test:problems-panel
 
