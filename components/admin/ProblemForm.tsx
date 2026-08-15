@@ -435,7 +435,20 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
     }, [dialects, runResults, expectedOutputs, tagSlugs])
 
     return (
-        <form onSubmit={onSubmit} className="space-y-6">
+        // noValidate: every tab's fields stay mounted, so a `required`
+        // field on a tab OTHER than the active one is still part of the
+        // form's constraint-validation set. Left to the browser, clicking
+        // Submit while that field is empty aborts the submit event before
+        // React's onSubmit ever runs — no fetch, no error banner, no tab
+        // switch, nothing — because a hidden control can't be focused for
+        // the native validation bubble. (Confirmed by hand: with a hidden
+        // required field empty, `form.checkValidity()` is false and a
+        // submit click never reaches the network.) Validation is already
+        // server-authoritative here (Zod, see the API routes); noValidate
+        // routes every failure through that one path — setError +
+        // setErroredFields + firstErroredTab — instead of two divergent
+        // ones depending on which tab happens to be active.
+        <form onSubmit={onSubmit} className="space-y-6" noValidate>
             {error && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
                     {error}
