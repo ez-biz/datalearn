@@ -461,7 +461,21 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
             })
             const json = await res.json().catch(() => ({}))
             if (!res.ok) {
-                setError(json.error ?? `Request failed: ${res.status}`)
+                // `curriculumNote` (PATCH .../[slug]/route.ts's curriculum-sync
+                // step) is banner-only extra context — e.g. "the old binding
+                // was already removed" when a reassign's addCheckpoint half
+                // fails after removeCheckpoint's already committed. It's kept
+                // out of `json.error` itself so the exact-string match just
+                // below (and the Curriculum-tab routing it drives) still sees
+                // the same message addCheckpoint/removeCheckpoint always
+                // returned.
+                setError(
+                    json.error
+                        ? json.curriculumNote
+                            ? `${json.error} ${json.curriculumNote}`
+                            : json.error
+                        : `Request failed: ${res.status}`
+                )
                 // Zod failures carry `details`; the four hand-thrown route
                 // errors (SCHEMA_NOT_FOUND, SLUG_TAKEN, TAGS_NOT_FOUND,
                 // PUBLISHED_DIALECT_MAP_INCOMPLETE — see the two API routes'

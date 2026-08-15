@@ -312,8 +312,27 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                     problemSlug: updated.slug,
                 })
                 if (!added.ok) {
+                    // If there was an old binding, removeCheckpoint above
+                    // already committed its own transaction — a failure here
+                    // does NOT roll that back (see the comment above
+                    // checkpointSync's declaration: two separate
+                    // transactions, not one atomic one, because
+                    // add/removeCheckpoint each own their own position-shift
+                    // logic). So this problem now has no checkpoint at all,
+                    // not merely its old one — surface that separately from
+                    // `error` (kept byte-for-byte identical to what
+                    // addCheckpoint returned) so ProblemForm's exact-string
+                    // match in fieldErrorsFromKnownServerMessage still routes
+                    // this to the Curriculum tab; the client appends this
+                    // note to the banner text only.
                     return NextResponse.json(
-                        { error: added.error },
+                        {
+                            error: added.error,
+                            ...(checkpointSync.oldArticleSlug && {
+                                curriculumNote:
+                                    "The previous checkpoint binding was already removed — re-check this problem's curriculum binding before assuming it's unchanged.",
+                            }),
+                        },
                         { status: added.status }
                     )
                 }
