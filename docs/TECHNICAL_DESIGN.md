@@ -154,14 +154,14 @@ datalearn/
 ├── components/
 │   ├── ui/                       Hand-rolled primitives (Button, Card, Badge, Input, Skeleton, Logo, Container, EmptyState)
 │   ├── layout/                   Footer, ThemeProvider, UserMenu (avatar dropdown)
-│   │   └── console/              ConsoleShell (server), ConsoleChrome (client), ConsoleSidebar, ConsoleRail, MobileTabBar, MobileSignInMenu, nav-model.ts, sidebar-cookie.ts, useSidebarCollapse.ts
+│   │   └── console/              ConsoleShell (server), ConsoleChrome (client), ConsoleSidebar, ConsoleRail, ConsoleAdminSidebar/ConsoleAdminRail (admin nav, gated on role), MobileTabBar, MobileSignInMenu, nav-model.ts, sidebar-cookie.ts, useSidebarCollapse.ts
 │   ├── practice/                 ProblemClient (workspace state), ProblemPanel, PracticeList, HistoryPanel, RelatedArticlesPanel, ReportDialog
 │   ├── lists/                    CreateListButton (popover), ListDetail (rename/delete/reorder/sort), AddToListButton (workspace popover), AddProblemsPicker (search-and-add)
 │   ├── sql/                      SqlPlayground (Monaco + Run/Submit), SqlEditor, ResultTable, ValidationResult, SqlPlaygroundSkeleton
 │   ├── home/                     UserHome (logged-in dashboard with continue / progress / recommended / recent cards)
 │   ├── profile/                  ProfileSidebar, ActivityHeatmap, SolvedDonut, SkillsByTag, PlaceholderCard
 │   ├── learn/                    Cross-link panels, article rendering
-│   └── admin/                    AdminNav, ProblemForm, HintsEditor, TagPicker, ArticleEditor, ContributorsClient, ApiKeysClient
+│   └── admin/                    ProblemForm, AdminQuickActions, HintsEditor, TagPicker, ArticleEditor, ContributorsClient, ApiKeysClient
 ├── lib/
 │   ├── auth.ts                   NextAuth setup; signIn callback guards account-link takeover
 │   ├── api-auth.ts               requireAdmin / requireContributor; Bearer + session paths; Origin/CSRF gate
@@ -170,6 +170,7 @@ datalearn/
 │   ├── use-problem-db.ts         Shared per-page DB hook (one connection, schema bootstrapped once)
 │   ├── sql-validator.ts          Pure validator: epsilon for floats, ordered/unordered modes
 │   ├── admin-validation.ts       Zod schemas — kept Prisma-free (imported by mcp-server/)
+│   ├── admin/                    admin-nav-model.ts (ADMIN_NAV + visibility/active-key logic, pure) with admin-nav-match.ts split out for closure-free client-leaf imports; form-tabs.ts, metric-delta.ts, problems-filter.ts — all pure, unit-tested
 │   ├── schema-parser.ts          Server-side parser for SqlSchema.sql → TableInfo[] (skips DuckDB roundtrip)
 │   ├── profile-stats.ts          Pure helpers: toDayKey / buildHeatmap / computeStreaks
 │   ├── article-versions.ts       Snapshot-on-publish for ArticleVersion / ProblemVersion
