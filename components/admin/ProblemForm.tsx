@@ -64,20 +64,96 @@ const DIALECT_LABELS: Record<Dialect, string> = {
 }
 
 /**
- * First path segment of every Zod issue reported by
- * `z.treeifyError` — the API routes' validation-failure shape
- * (`{ error, details }`, see `app/api/admin/problems/route.ts` and
- * `.../[slug]/route.ts`). `treeifyError`'s top-level `properties` keys
- * are already first-path-segments (a nested issue on `schemaInline.name`
- * lives at `details.properties.schemaInline.properties.name`, not as a
- * dotted key) — exactly what `tabForField`/`tabsWithErrors` expect per
- * their doc comments in `lib/admin/form-tabs.ts`.
+ * First path segment of every Zod issue reported by `z.treeifyError`,
+ * mapped to its first human-readable message — the API routes'
+ * validation-failure shape (`{ error, details }`, see
+ * `app/api/admin/problems/route.ts` and `.../[slug]/route.ts`).
+ * `treeifyError`'s top-level `properties` keys are already
+ * first-path-segments (a nested issue on `schemaInline.name` lives at
+ * `details.properties.schemaInline.properties.name`, not as a dotted
+ * key) — exactly what `tabForField`/`tabsWithErrors` expect per their doc
+ * comments in `lib/admin/form-tabs.ts`. A key can be present with no
+ * message of its own (e.g. `schemaInline` when only a nested property
+ * failed) — falls back to a generic string so the field still renders
+ * *something* rather than an empty error paragraph.
  */
-function fieldNamesFromTreeifiedError(details: unknown): string[] {
-    if (!details || typeof details !== "object") return []
+function fieldErrorsFromTreeifiedError(details: unknown): Record<string, string> {
+    if (!details || typeof details !== "object") return {}
     const properties = (details as { properties?: unknown }).properties
-    if (!properties || typeof properties !== "object") return []
-    return Object.keys(properties)
+    if (!properties || typeof properties !== "object") return {}
+    const out: Record<string, string> = {}
+    for (const [key, value] of Object.entries(properties as Record<string, unknown>)) {
+        const errors = (value as { errors?: unknown } | undefined)?.errors
+        out[key] =
+            Array.isArray(errors) && typeof errors[0] === "string" && errors[0]
+                ? errors[0]
+                : "Check this field."
+    }
+    return out
+}
+
+/**
+ * The four errors both routes hand-throw OUTSIDE Zod — `SCHEMA_NOT_FOUND`,
+ * `SLUG_TAKEN` (and the P2002 unique-constraint fallback, same message),
+ * `TAGS_NOT_FOUND`, `PUBLISHED_DIALECT_MAP_INCOMPLETE` — return
+ * `{ error }` or `{ error, missing }` with no `details` at all (see the
+ * `catch` blocks in `app/api/admin/problems/route.ts` and
+ * `.../[slug]/route.ts`). Without this, a save rejected for one of these
+ * reasons falls back to nothing but the top banner: no tab marked, no
+ * field marked — the exact failure this task exists to prevent, arriving
+ * through a path `fieldErrorsFromTreeifiedError` never sees.
+ *
+ * Matched on the routes' exact/prefix response text since there's no
+ * machine-readable error code in the response today — if that wording
+ * ever changes, this silently falls back to the top banner only, same as
+ * any other unmatched error, rather than mis-attributing.
+ */
+function fieldErrorsFromKnownServerMessage(
+    message: string | undefined,
+    missing: unknown
+): Record<string, string> {
+    if (!message) return {}
+    if (message === "schemaId does not match any SqlSchema.") {
+        return { schemaId: message }
+    }
+    if (message === "A problem with that slug already exists.") {
+        return { slug: message }
+    }
+    if (message.startsWith("Unknown tag slug(s): ")) {
+        return { tagSlugs: message }
+    }
+    if (
+        message ===
+        "PUBLISHED problems require non-empty solutions and expectedOutputs for every listed dialect."
+    ) {
+        // `missing` is e.g. ["solutions.DUCKDB", "expectedOutputs.POSTGRES"]
+        // — see getMissingPublishedDialectMapEntries in lib/admin-validation.ts.
+        // Attribute only to whichever of solutions/expectedOutputs actually
+        // appear, so a problem missing only expectedOutputs doesn't also
+        // flag a perfectly fine solution.
+        const prefixes = new Set(
+            (Array.isArray(missing) ? missing : [])
+                .filter((entry): entry is string => typeof entry === "string")
+                .map((entry) => entry.split(".")[0])
+        )
+        const out: Record<string, string> = {}
+        if (prefixes.has("solutions")) {
+            out.solutionSql = message
+            out.solutions = message
+        }
+        if (prefixes.has("expectedOutputs")) {
+            out.expectedOutput = message
+            out.expectedOutputs = message
+        }
+        // Malformed/empty `missing` — still mark both solution fields
+        // rather than dropping a real 400 down to a banner-only failure.
+        if (Object.keys(out).length === 0) {
+            out.solutionSql = message
+            out.expectedOutput = message
+        }
+        return out
+    }
+    return {}
 }
 
 interface ProblemFormProps {
@@ -176,10 +252,15 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
 
     // Tab strip state — Task 10. `lib/admin/form-tabs.ts` is authoritative
     // for which tab owns which field; this component only tracks which
-    // tab is active and which field names the last save attempt reported.
+    // tab is active and, keyed by field name, the message the last save
+    // attempt reported for it (drives both the tab-level marker via
+    // `tabsWithErrors` and the per-field `<Field error=…>` text below).
     const [activeTab, setActiveTab] = useState<FormTabId>(FORM_TABS[0].id)
-    const [erroredFields, setErroredFields] = useState<string[]>([])
-    const erroredTabs = useMemo(() => tabsWithErrors(erroredFields), [erroredFields])
+    const [erroredFieldMessages, setErroredFieldMessages] = useState<Record<string, string>>({})
+    const erroredTabs = useMemo(
+        () => tabsWithErrors(Object.keys(erroredFieldMessages)),
+        [erroredFieldMessages]
+    )
 
     // Auto-derive slug from title until the user manually edits the slug field
     useEffect(() => {
@@ -266,7 +347,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
     async function onSubmit(e: React.FormEvent) {
         e.preventDefault()
         setError(null)
-        setErroredFields([])
+        setErroredFieldMessages({})
         setSubmitting(true)
         try {
             // Send only the entries for currently-listed dialects.
@@ -340,13 +421,19 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
             const json = await res.json().catch(() => ({}))
             if (!res.ok) {
                 setError(json.error ?? `Request failed: ${res.status}`)
-                if (json.details) {
-                    console.error("Validation details:", json.details)
-                    const fields = fieldNamesFromTreeifiedError(json.details)
-                    setErroredFields(fields)
-                    const target = firstErroredTab(fields)
-                    if (target) setActiveTab(target)
-                }
+                // Zod failures carry `details`; the four hand-thrown route
+                // errors (SCHEMA_NOT_FOUND, SLUG_TAKEN, TAGS_NOT_FOUND,
+                // PUBLISHED_DIALECT_MAP_INCOMPLETE — see the two API routes'
+                // catch blocks) don't, so they're matched on `json.error`'s
+                // text instead. Either way the result feeds the same
+                // tab-marking + jump path.
+                const fieldMessages = json.details
+                    ? fieldErrorsFromTreeifiedError(json.details)
+                    : fieldErrorsFromKnownServerMessage(json.error, json.missing)
+                if (json.details) console.error("Validation details:", json.details)
+                setErroredFieldMessages(fieldMessages)
+                const target = firstErroredTab(Object.keys(fieldMessages))
+                if (target) setActiveTab(target)
                 return
             }
             const newSlug = json?.data?.slug ?? slug
@@ -445,9 +532,13 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
         // required field empty, `form.checkValidity()` is false and a
         // submit click never reaches the network.) Validation is already
         // server-authoritative here (Zod, see the API routes); noValidate
-        // routes every failure through that one path — setError +
-        // setErroredFields + firstErroredTab — instead of two divergent
-        // ones depending on which tab happens to be active.
+        // guarantees onSubmit always runs so a failed save reaches the
+        // fetch call. It does NOT by itself guarantee every failure gets
+        // a tab/field marker — that depends on the server response being
+        // one `onSubmit` knows how to attribute to a field (Zod `details`,
+        // or one of the hand-thrown messages `fieldErrorsFromKnownServerMessage`
+        // matches). An error the client can't attribute still surfaces —
+        // in the top banner only, same as before this task.
         <form onSubmit={onSubmit} className="space-y-6" noValidate>
             {error && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -481,7 +572,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="grid sm:grid-cols-2 gap-4">
-                            <Field label="Title" htmlFor="title" required>
+                            <Field label="Title" htmlFor="title" required error={erroredFieldMessages.title}>
                                 <Input
                                     id="title"
                                     value={title}
@@ -490,7 +581,13 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                                     required
                                 />
                             </Field>
-                            <Field label="Slug" htmlFor="slug" description="Lowercase, hyphenated. Used in the URL." required>
+                            <Field
+                                label="Slug"
+                                htmlFor="slug"
+                                description="Lowercase, hyphenated. Used in the URL."
+                                required
+                                error={erroredFieldMessages.slug}
+                            >
                                 <Input
                                     id="slug"
                                     value={slug}
@@ -529,7 +626,12 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                                     { value: "ARCHIVED", label: "Archived" },
                                 ]}
                             />
-                            <Field label="Ordered comparison" htmlFor="ordered" description="If checked, row order matters during validation.">
+                            <Field
+                                label="Ordered comparison"
+                                htmlFor="ordered"
+                                description="If checked, row order matters during validation."
+                                error={erroredFieldMessages.ordered}
+                            >
                                 <label className="inline-flex items-center gap-2 h-10">
                                     <input
                                         id="ordered"
@@ -548,6 +650,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                             label="SQL engines"
                             htmlFor="dialect-duckdb"
                             description="Engines this problem can be solved in. Most are portable — narrow only when the canonical solution uses dialect-specific syntax (JSONB, STRING_AGG, LIST_AGG, etc.)."
+                            error={erroredFieldMessages.dialects}
                         >
                             <div role="group" aria-label="SQL engines" className="flex flex-wrap gap-2">
                                 {(["DUCKDB", "POSTGRES"] as const).map((d) => {
@@ -633,7 +736,13 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                                 })}
                             </div>
                         </Field>
-                        <Field label="Description" htmlFor="description" description="What the user has to do. Plain text." required>
+                        <Field
+                            label="Description"
+                            htmlFor="description"
+                            description="What the user has to do. Plain text."
+                            required
+                            error={erroredFieldMessages.description}
+                        >
                             <Textarea
                                 id="description"
                                 value={description}
@@ -649,6 +758,11 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                                 Tags
                             </label>
                             <TagPicker value={tagSlugs} onChange={setTagSlugs} />
+                            {erroredFieldMessages.tagSlugs && (
+                                <p className="text-xs text-destructive">
+                                    {erroredFieldMessages.tagSlugs}
+                                </p>
+                            )}
                         </div>
                         {initial.mode === "edit" && (
                             <Field
@@ -656,6 +770,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                                 htmlFor="discussionMode"
                                 description="Controls the learner-facing discussion tab for this problem."
                                 required
+                                error={erroredFieldMessages.discussionMode}
                             >
                                 <select
                                     id="discussionMode"
@@ -718,7 +833,12 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                         </div>
 
                         {schemaMode === "existing" ? (
-                            <Field label="Schema" htmlFor="schemaId" required>
+                            <Field
+                                label="Schema"
+                                htmlFor="schemaId"
+                                required
+                                error={erroredFieldMessages.schemaId}
+                            >
                                 <select
                                     id="schemaId"
                                     value={schemaId}
@@ -760,12 +880,18 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                                         required={schemaMode === "inline"}
                                     />
                                 </Field>
+                                {erroredFieldMessages.schemaInline && (
+                                    <p className="text-xs text-destructive">
+                                        {erroredFieldMessages.schemaInline}
+                                    </p>
+                                )}
                             </div>
                         )}
                         <Field
                             label="Schema description (optional)"
                             htmlFor="schemaDescription"
                             description="Short prose about the dataset. Shown when no input tables are detected."
+                            error={erroredFieldMessages.schemaDescription}
                         >
                             <Textarea
                                 id="schemaDescription"
@@ -888,7 +1014,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                                 Editing for: {DIALECT_LABELS[activeDialect]} (only dialect)
                             </div>
                         )}
-                        <Field label="Solution SQL" htmlFor="solution">
+                        <Field label="Solution SQL" htmlFor="solution" error={erroredFieldMessages.solutionSql}>
                             <Textarea
                                 id="solution"
                                 value={solutionSql}
@@ -938,6 +1064,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                             htmlFor="expectedOutput"
                             description="Captured automatically from Run & capture. Locked by default — manual edits are an escape hatch only."
                             required
+                            error={erroredFieldMessages.expectedOutput}
                         >
                             <div className="space-y-2">
                                 <Textarea
@@ -981,8 +1108,11 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                     <CardHeader>
                         <CardTitle>Hints</CardTitle>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-2">
                         <HintsEditor value={hints} onChange={setHints} />
+                        {erroredFieldMessages.hints && (
+                            <p className="text-xs text-destructive">{erroredFieldMessages.hints}</p>
+                        )}
                     </CardContent>
                 </Card>
             </div>
