@@ -3,6 +3,7 @@ import { z } from "zod"
 import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { withAdmin } from "@/lib/api-auth"
+import { addCheckpoint, removeCheckpoint } from "@/lib/admin-curriculum"
 import {
     getMissingPublishedDialectMapEntries,
     ProblemDiscussionMode,
@@ -74,7 +75,7 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
         input.ordered !== undefined
 
     try {
-        const updated = await prisma.$transaction(async (tx) => {
+        const txResult = await prisma.$transaction(async (tx) => {
             const lockedProblem = await lockProblemBySlug(tx, slug)
             if (!lockedProblem) throw new Error("PROBLEM_NOT_FOUND")
 
@@ -92,6 +93,43 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                     select: { id: true },
                 })
                 if (slugOwner) throw new Error("SLUG_TAKEN")
+            }
+
+            // Task 11 (SP7) — curriculum placement. Resolved and validated
+            // here (inside the transaction, same snapshot as the lock) but
+            // NOT written here: `addCheckpoint`/`removeCheckpoint` each run
+            // their own `prisma.$transaction`, and Prisma has no true nested
+            // transactions — calling them with the global client from
+            // inside this callback would just open an unrelated, separately
+            // committed transaction, breaking the atomicity this block is
+            // trying to preserve. So this only computes WHAT needs to
+            // change; the actual add/remove calls happen after this
+            // transaction commits (returned alongside the updated problem,
+            // rather than closed over in an outer `let`, so there's no
+            // question of whether the reassignment inside this closure is
+            // visible after `await prisma.$transaction(...)` resolves).
+            let checkpointSync: {
+                oldArticleSlug: string | null
+                newArticleSlug: string | null
+            } | null = null
+            if (input.curriculumLessonId !== undefined) {
+                const currentCheckpoint = await tx.lessonCheckpoint.findUnique({
+                    where: { problemId: lockedProblem.id },
+                    select: { article: { select: { slug: true } } },
+                })
+                let targetArticleSlug: string | null = null
+                if (input.curriculumLessonId) {
+                    const targetArticle = await tx.article.findUnique({
+                        where: { id: input.curriculumLessonId },
+                        select: { slug: true },
+                    })
+                    if (!targetArticle) throw new Error("LESSON_NOT_FOUND")
+                    targetArticleSlug = targetArticle.slug
+                }
+                const oldArticleSlug = currentCheckpoint?.article.slug ?? null
+                if (oldArticleSlug !== targetArticleSlug) {
+                    checkpointSync = { oldArticleSlug, newArticleSlug: targetArticleSlug }
+                }
             }
 
             const data: Prisma.SQLProblemUpdateInput = {
@@ -242,14 +280,58 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                 }
             }
 
-            return result
+            return { problem: result, checkpointSync }
         })
+        const { problem: updated, checkpointSync } = txResult
+
+        // Task 11 (SP7) — apply the curriculum reassignment computed inside
+        // the transaction above, now that the problem row (and, if it
+        // changed, its slug) is committed. Runs OUTSIDE the transaction —
+        // see the comment where `checkpointSync` is computed. Order
+        // matters: remove the old binding before adding the new one,
+        // because `LessonCheckpoint.@@unique([problemId])` means
+        // `addCheckpoint` rejects a problem that's still claimed by
+        // another lesson. Every write here goes through
+        // `addCheckpoint`/`removeCheckpoint` — neither this route nor this
+        // file ever touches `LessonCheckpoint.position` directly.
+        if (checkpointSync) {
+            if (checkpointSync.oldArticleSlug) {
+                const removed = await removeCheckpoint(
+                    checkpointSync.oldArticleSlug,
+                    updated.slug
+                )
+                if (!removed.ok) {
+                    return NextResponse.json(
+                        { error: removed.error },
+                        { status: removed.status }
+                    )
+                }
+            }
+            if (checkpointSync.newArticleSlug) {
+                const added = await addCheckpoint(checkpointSync.newArticleSlug, {
+                    problemSlug: updated.slug,
+                })
+                if (!added.ok) {
+                    return NextResponse.json(
+                        { error: added.error },
+                        { status: added.status }
+                    )
+                }
+            }
+        }
+
         return NextResponse.json({ data: updated })
     } catch (e: unknown) {
         const error = e as { code?: string; message?: string }
         if (error.message === "SCHEMA_NOT_FOUND") {
             return NextResponse.json(
                 { error: "schemaId does not match any SqlSchema." },
+                { status: 400 }
+            )
+        }
+        if (error.message === "LESSON_NOT_FOUND") {
+            return NextResponse.json(
+                { error: "curriculumLessonId does not match any lesson." },
                 { status: 400 }
             )
         }

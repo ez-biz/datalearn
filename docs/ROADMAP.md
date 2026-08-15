@@ -6,6 +6,19 @@
 
 ## Recently shipped
 
+### Admin redesign (SP7 of the learning-platform redesign)
+
+The admin surface rebuilt in four phases — shell, overview, problems list, problem form — against the graphite console tokens the rest of the redesign already established. **Zero migrations across all four phases**, same discipline as SP4.
+
+- **The admin sidebar swapped in, it wasn't bolted on** — `/admin` was already a normal console-shell route (`ConsoleShell` wraps everything from `app/layout.tsx`); Phase 1 replaced the learner nav with a role-filtered admin one rather than adding a second shell. `lib/admin/admin-nav-model.ts` is pure and fail-closed for any role outside the known union.
+- **A real security fix surfaced mid-build** — Phase 1's admin nav model, referenced from a client leaf, was not tree-shaken out of the learner bundle: the full nav literal (every `/admin` href, badge keys, permission flags) shipped to anonymous visitors on `/` and `/practice`. Not an auth bypass, but exactly the kind of leak a server-rendered nav exists to prevent. Fixed with a closure-free `lib/admin/admin-nav-match.ts` the client leaf imports instead of the whole model.
+- **The problem form's five tabs are driven by one authoritative map, not five card locations** — `lib/admin/form-tabs.ts` maps every submittable field to the tab that owns it; a failed save (Zod or one of the four hand-thrown route errors) marks that tab and jumps to it. Every field stays mounted across tab switches (`hidden`, never conditional rendering), which the standing e2e proves via DOM-node identity (`isConnected`), not value survival — a value-only assertion would pass even if tabs unmounted their content, since state is lifted to `ProblemForm`.
+- **Curriculum placement reuses the existing `LessonCheckpoint` relation — no `lessonId` column on `SQLProblem`.** The problem form's Curriculum tab binds a problem to the lesson it checks by calling `addCheckpoint`/`removeCheckpoint` (never a direct `position` write); reassigning a problem's lesson removes the old binding before adding the new one, because `LessonCheckpoint.@@unique([problemId])` means a problem checks at most one lesson. With zero modules and zero lessons in production, the panel says so plainly and links to lesson authoring rather than rendering a dead picker.
+- **Keyboard shortcuts use `event.code`, not `event.key`** — macOS remaps `.key` under Option (⌥P yields `π`), so the overview's quick-action shortcuts check the layout-independent property. The e2e proof dispatches a synthetic event shaped like real macOS output (`key:"π", code:"KeyP"`) specifically because Playwright's own CDP dispatch can't otherwise distinguish the two properties.
+- **Eleven new CI suites** — `test:admin-nav`, `test:console-nav` (widened), `test:metric-delta`, `test:problems-filter`, `test:form-tabs`, plus five `tests/e2e/admin-*.spec.ts` files, each proven non-vacuous by breaking the thing it claims to guard and watching it fail before committing.
+
+Known gaps carried forward: `npm run lint` still crashes repo-wide from the pre-existing eslint-plugin-react incompatibility (SP4's finding, unrelated to this work); the status filter on the problems list uses `role="group"` + `aria-pressed` rather than the canonical `radiogroup`/`radio` pattern; and the four hand-thrown problem-form route errors are still matched on exact response text, not a stable error code — a documented, accepted risk, not an oversight.
+
 ### Index screens (SP4 of the learning-platform redesign)
 
 The three screens a learner uses to find work — Practice catalog, Tracks, Module — rebuilt to the design handoff's sections 3–5, plus the Module screen that did not previously exist. **Zero schema changes**, which is what made each of the four phases revertible by reverting one PR.

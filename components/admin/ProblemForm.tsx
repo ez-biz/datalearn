@@ -6,9 +6,9 @@ import { Check, Loader2, Play, Save } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Field, Input, Textarea } from "@/components/ui/Input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
-import { EmptyState } from "@/components/ui/EmptyState"
 import { HintsEditor } from "./HintsEditor"
 import { TagPicker } from "./TagPicker"
+import { CurriculumPlacement, type CurriculumBinding } from "./problem-form/CurriculumPlacement"
 import { FormTabStrip } from "./problem-form/FormTabStrip"
 import { SegmentedControl } from "./problem-form/SegmentedControl"
 import { ValidationChecklist, type ChecklistItem } from "./problem-form/ValidationChecklist"
@@ -56,6 +56,11 @@ export interface ProblemFormInitial {
     expectedOutput: string
     /** @deprecated v0.4.2 — fallback when `expectedOutputs` is empty. */
     solutionSql: string
+    /** Task 11 (SP7) — this problem's current `LessonCheckpoint`, if any.
+     * `undefined`/absent in create mode (the problem doesn't exist yet, so
+     * it can't be a checkpoint of anything). `null` in edit mode means
+     * "exists but unbound." */
+    curriculumBinding?: CurriculumBinding | null
 }
 
 const DIALECT_LABELS: Record<Dialect, string> = {
@@ -108,6 +113,18 @@ function fieldErrorsFromTreeifiedError(details: unknown): Record<string, string>
  * ever changes, this silently falls back to the top banner only, same as
  * any other unmatched error, rather than mis-attributing.
  */
+const CURRICULUM_ERROR_MESSAGES = new Set([
+    "curriculumLessonId does not match any lesson.",
+    "Lesson not found.",
+    "Problem not found.",
+    "Checkpoint not found.",
+    "That problem is already a checkpoint on this lesson.",
+    "That problem is already a checkpoint on another lesson.",
+    "The curriculum changed during the write — reload and retry.",
+    "Failed to add checkpoint.",
+    "Failed to remove checkpoint.",
+])
+
 function fieldErrorsFromKnownServerMessage(
     message: string | undefined,
     missing: unknown
@@ -121,6 +138,15 @@ function fieldErrorsFromKnownServerMessage(
     }
     if (message.startsWith("Unknown tag slug(s): ")) {
         return { tagSlugs: message }
+    }
+    // Task 11 (SP7) — every message the curriculum-sync step in
+    // app/api/admin/problems/[slug]/route.ts's PATCH handler can surface:
+    // the route's own pre-check plus every non-ok result string
+    // addCheckpoint/removeCheckpoint (lib/admin-curriculum.ts) can return.
+    // All land on the same field/tab since this route's only caller of
+    // those two functions is the curriculum-sync step.
+    if (CURRICULUM_ERROR_MESSAGES.has(message)) {
+        return { curriculumLessonId: message }
     }
     if (
         message ===
@@ -182,6 +208,13 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
     const [dialects, setDialects] = useState<Dialect[]>(initialDialects)
     const [hints, setHints] = useState(initial.hints)
     const [tagSlugs, setTagSlugs] = useState(initial.tagSlugs)
+    // Task 11 (SP7) — the target lesson's article id, or "" for no lesson.
+    // Folded into the PATCH payload as `curriculumLessonId` on save, same
+    // as every other field here; see CurriculumPlacement's doc comment for
+    // why the actual write lives server-side.
+    const [curriculumLessonId, setCurriculumLessonId] = useState(
+        initial.curriculumBinding?.lessonId ?? ""
+    )
 
     // v0.4.2+ per-dialect maps. Initialize from the new fields when
     // present, fall back to the legacy single fields (which seed every
@@ -404,6 +437,14 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
             if (method === "PATCH") {
                 delete payload.schemaInline
                 payload.discussionMode = discussionMode
+                // Task 11 (SP7) — curriculum placement is edit-only (see
+                // CurriculumPlacement's create-mode message): `addCheckpoint`
+                // looks the problem up by slug, which doesn't exist to find
+                // until create has already committed. `null` explicitly
+                // clears a binding; the server treats an omitted field
+                // (create's payload never sets this key at all) as "leave
+                // it untouched."
+                payload.curriculumLessonId = curriculumLessonId || null
                 if (schemaMode !== "existing") {
                     setError(
                         "Inline schema creation is only supported when creating a new problem. Pick an existing schema."
@@ -1118,10 +1159,11 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
             </div>
 
             {/* ---- Curriculum ----
-                Placement wiring (curriculumLessonId) lands in Task 11 — this
-                tab exists now so the strip has all five designed tabs and
-                errors routed to "curriculum" have somewhere to land, but
-                there's no field to render yet. */}
+                Task 11: binds this problem to a lesson via the existing
+                LessonCheckpoint relation. See CurriculumPlacement.tsx for
+                the three load-bearing rules (no new columns, writes only
+                through addCheckpoint/removeCheckpoint, one lesson per
+                problem). */}
             <div
                 role="tabpanel"
                 id="form-tabpanel-curriculum"
@@ -1129,17 +1171,13 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                 hidden={activeTab !== "curriculum"}
                 className="space-y-6"
             >
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Curriculum</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <EmptyState
-                            title="Curriculum placement is coming soon"
-                            description="Binding this problem to a lesson checkpoint is wired up in a follow-up task."
-                        />
-                    </CardContent>
-                </Card>
+                <CurriculumPlacement
+                    mode={initial.mode}
+                    value={curriculumLessonId}
+                    onChange={setCurriculumLessonId}
+                    initialBinding={initial.curriculumBinding ?? null}
+                    error={erroredFieldMessages.curriculumLessonId}
+                />
             </div>
 
             <ValidationChecklist items={checklistItems} />
