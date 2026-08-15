@@ -5,10 +5,12 @@ import { auth } from "@/lib/auth"
 import { excludeLockedProblems } from "@/lib/contest-locks"
 import { prisma } from "@/lib/prisma"
 import { FEATURED_TRACK_SLUG } from "@/lib/curriculum-featured"
+import { userHasDiscussionPermission } from "@/lib/discussions/permissions"
 import { SignInDialogButton } from "@/components/auth/SignInDialog"
 import { Footer } from "@/components/layout/Footer"
 import { UserMenu } from "@/components/layout/UserMenu"
 import { cookies } from "next/headers"
+import { ConsoleAdminSidebar } from "./ConsoleAdminSidebar"
 import { ConsoleChrome } from "./ConsoleChrome"
 import { MobileSignInMenu } from "./MobileSignInMenu"
 import { parseSidebarState, SIDEBAR_COOKIE } from "./sidebar-cookie"
@@ -52,6 +54,52 @@ export async function ConsoleShell({ children }: { children: React.ReactNode }) 
             total,
             dailySolved: dailyStatus.solvedToday,
         }
+    }
+
+    // The admin sidebar's badge counts. Built here, not in app/admin/layout.tsx
+    // (formerly the only place they were computed for AdminNav), because
+    // ConsoleChrome's admin sidebar slot is a sibling of the routed page, not
+    // an ancestor of it: by the time ConsoleShell returns the element tree
+    // that fixes ConsoleChrome's props, the nested /admin layout inside
+    // `children` has not executed yet, so it has no way to hand data up into
+    // a slot this component already resolved. Session is already fetched
+    // above, so gating on role is free; ConsoleShell has no access to the
+    // pathname (only ConsoleChrome does, via usePathname), so this can't be
+    // narrowed to admin routes only — it costs a handful of extra Prisma
+    // counts on every navigation for signed-in ADMIN/MODERATOR users, same
+    // "eager compute, let the client decide whether to use it" trade-off as
+    // menuStats above. app/admin/layout.tsx keeps its own auth-check redirect
+    // as defense in depth; it no longer needs these counts since it renders
+    // no chrome of its own.
+    let adminSidebarSlot: React.ReactNode = null
+    const role = session?.user?.role
+    if (session?.user?.id && (role === "ADMIN" || role === "MODERATOR")) {
+        const userId = session.user.id
+        const canViewDiscussionQueue =
+            role === "ADMIN" ||
+            (await userHasDiscussionPermission({ id: userId, role }, "VIEW_DISCUSSION_QUEUE"))
+        const discussionQueueCountPromise = canViewDiscussionQueue
+            ? prisma.discussionReport.count({ where: { status: "OPEN" } })
+            : Promise.resolve(0)
+        const [openReportCount, articleQueueCount, discussionQueueCount] =
+            role === "ADMIN"
+                ? await Promise.all([
+                      prisma.problemReport.count({ where: { resolvedAt: null } }),
+                      prisma.article.count({ where: { status: "SUBMITTED" } }),
+                      discussionQueueCountPromise,
+                  ])
+                : [0, 0, await discussionQueueCountPromise]
+
+        adminSidebarSlot = (
+            <ConsoleAdminSidebar
+                viewer={{ role, canViewDiscussionQueue }}
+                badges={{
+                    openReports: openReportCount,
+                    articleQueue: articleQueueCount,
+                    discussionQueue: discussionQueueCount,
+                }}
+            />
+        )
     }
 
     // UserMenu is the sole reviewed account surface — the sidebar header,
@@ -105,6 +153,7 @@ export async function ConsoleShell({ children }: { children: React.ReactNode }) 
             railAccountSlot={accountMenu("rail")}
             tabBarAccountSlot={accountMenu("tabbar")}
             signInSlot={signInSlot}
+            adminSidebarSlot={adminSidebarSlot}
             footerSlot={<Footer />}
         >
             {children}

@@ -21,6 +21,17 @@ interface ConsoleChromeProps {
     tabBarAccountSlot: React.ReactNode
     signInSlot: React.ReactNode
     /**
+     * The admin sidebar, passed in rather than imported — same reason as
+     * footerSlot below. ConsoleAdminSidebar is a server component that pulls
+     * in the full ADMIN_NAV item list; importing it directly into this
+     * client component would drag that list into the browser bundle for
+     * every visitor, not just the admins this ever renders for. Null on
+     * every render where ConsoleShell didn't build one (i.e. the signed-in
+     * user isn't ADMIN/MODERATOR) — ConsoleChrome only ever reads it when
+     * `admin` is true, so that's never actually reached for a learner route.
+     */
+    adminSidebarSlot: React.ReactNode
+    /**
      * The site <Footer />, passed in rather than imported.
      *
      * Footer is an async server component; a client module that imported it
@@ -42,6 +53,7 @@ export function ConsoleChrome({
     railAccountSlot,
     tabBarAccountSlot,
     signInSlot,
+    adminSidebarSlot,
     footerSlot,
     children,
 }: ConsoleChromeProps) {
@@ -49,6 +61,10 @@ export function ConsoleChrome({
     const pathname = usePathname()
     const focus = isFocusRoute(pathname)
     const app = isAppRoute(pathname)
+    // Admin is NOT a fourth shell mode. It is a normal route that swaps which
+    // nav the existing sidebar renders, so isFocusRoute/isAppRoute — and the
+    // test asserting they are disjoint — are untouched.
+    const admin = pathname.startsWith("/admin")
 
     return (
         <div className="flex h-dvh overflow-hidden print:block print:h-auto print:overflow-visible">
@@ -83,6 +99,8 @@ export function ConsoleChrome({
                 <header className="flex shrink-0 print:hidden">
                     {collapsed ? (
                         <ConsoleRail onToggle={toggle} accountSlot={railAccountSlot} />
+                    ) : admin ? (
+                        adminSidebarSlot
                     ) : (
                         <ConsoleSidebar
                             trackProgress={trackProgress}
