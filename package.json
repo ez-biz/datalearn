@@ -80,6 +80,7 @@
     "test:admin-nav": "node --import tsx --test scripts/test-admin-nav.ts",
     "test:metric-delta": "node --import tsx --test scripts/test-metric-delta.ts",
     "test:problems-panel": "node --import tsx --test scripts/test-problems-panel.ts",
+    "test:problems-filter": "node --import tsx --test scripts/test-problems-filter.ts",
     "test:catalog-model": "node --import tsx --test scripts/test-catalog-model.ts",
     "test:module-model": "node --import tsx --test scripts/test-module-model.ts",
     "test:tracks-model": "node --import tsx --test scripts/test-tracks-model.ts",

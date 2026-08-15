@@ -155,6 +155,9 @@ jobs:
       - name: Test problems panel model
         run: npm run test:problems-panel
 
+      - name: Admin problems filter
+        run: npm run test:problems-filter
+
       - name: Test catalog model
         run: npm run test:catalog-model
 
