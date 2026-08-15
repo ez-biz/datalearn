@@ -6,6 +6,20 @@
 
 ## Recently shipped
 
+### Home and mobile workspace (SP6 of the learning-platform redesign)
+
+Replaces the retired `UserHome.tsx` with a signed-in dashboard and a signed-out marketing home, then gives the problem workspace the mobile-native layout SP5 deferred. The last learner-facing sub-project — only SP7 (admin) remains.
+
+- **The fallback rule, stated up front and applied before shipping** — SP4 shipped a tracks index that rendered "0 lessons · No lessons yet" against production's curriculum-less reality and took two PRs to catch. SP6 names the rule first: a block that would render zero or empty either shows an honest alternative or does not render at all. `ResumeCard`/`TodayPlan`/`ModuleProgress` degrade to "next unsolved problem" or are omitted outright rather than rendering empty shells; the hero's "12-minute assessment" CTA — implemented nowhere in the repo — becomes "Start the path" into the first published track.
+- **Signed-in dashboard, seven cards** — `SignedInHome` (`components/home/dashboard/`) assembles `ResumeCard`, `TodayPlan`, `ModuleProgress`, `RecentSubmissions`, `StreakCard`, `DailyCard`, `WeakSpotsCard`, plus an inline progress-by-difficulty card, behind one bounded-query read (`lib/home/home-read.ts::getHomeData`) that composes existing reads instead of adding new ones.
+- **Weak spots, built though nothing implemented it yet** — `lib/home/weak-spots.ts` computes per-tag pass rate over recent submissions, the "what are you worst at" signal SP1's original spec anticipated but no screen had used.
+- **Signed-out marketing home** (`components/home/marketing/`) — `Hero`, `PathPreview`, `HowItWorks`, `Proof`. The path preview is the only block with real logic: module rows when a track has modules, published tracks with problem counts when it does not.
+- **Mobile workspace** (`components/practice/workspace/`) — a segmented Problem/Code/Result view where all three panes stay mounted the whole time and only visibility toggles by CSS, so Monaco's model and query-result state survive a tap between segments. A full-screen problems sheet and a SQL-token accessory row round out the phone layout.
+- **The shell clamp widened** — `isAppRoute` (`components/layout/console/focus-route.ts`) now clamps `#app-scroll` at every width, not just `lg` and above, so the workspace's own panes own scrolling on mobile too.
+- **A whole-branch review caught a deterministic CI failure and a numerator bug before merge** — a Playwright `hasNot` filter only matches descendants, never the queried element itself, so a mobile-sheet assertion passed locally by accident (the seeded `analyst-interview-prep` modules happened to sort the current problem out of first place) and failed every CI run, where no `Module` rows exist. And the signed-in "X of Y solved" subtitle counted ACCEPTED submissions across every problem while its denominator counted the catalog array, so an archived or contest-locked solve could read "5 of 4"; both counts now come from the same `getCatalogProblems` read `/practice` renders from.
+
+Known gaps carried forward: the 36px SQL accessory chips and 32px Reset button sit under the 44px touch-target guideline — a deliberate, triaged follow-up, not a miss; `pickActiveTrack` always features whichever visible track has the single highest rollup percent, so the dashboard's featured track can flip the moment a user makes progress elsewhere; and SP7 (admin) is the only sub-project left.
+
 ### Index screens (SP4 of the learning-platform redesign)
 
 The three screens a learner uses to find work — Practice catalog, Tracks, Module — rebuilt to the design handoff's sections 3–5, plus the Module screen that did not previously exist. **Zero schema changes**, which is what made each of the four phases revertible by reverting one PR.

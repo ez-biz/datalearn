@@ -29,6 +29,11 @@ interface ActionBarProps {
  * panel open this column is ~554px, and before SP5's four-column layout the
  * same controls had ~860px. Without wrapping they overflow and clip the
  * right-most button rather than moving to a second line.
+ *
+ * Below `lg`, Run and Submit grow to equal-width 46px touch targets and take
+ * the row's first line on their own (flex-wrap pushes Reset and the
+ * checkpoint link to a second line). At `lg`+ both reset to their original
+ * `size="sm"` dimensions — unchanged from before this task.
  */
 export function ActionBar({
     onRun,
@@ -59,6 +64,7 @@ export function ActionBar({
                 disabled={runDisabled}
                 title={runTitle}
                 data-testid="workspace-run-footer"
+                className="h-[46px] flex-1 lg:h-8 lg:flex-none"
             >
                 {!dbReady ? (
                     <>
@@ -80,6 +86,7 @@ export function ActionBar({
                     onClick={onSubmit}
                     disabled={submitDisabled}
                     title={submitTitle}
+                    className="h-[46px] flex-1 lg:h-8 lg:flex-none"
                 >
                     {submitting ? (
                         <>

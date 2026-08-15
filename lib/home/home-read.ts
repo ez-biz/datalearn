@@ -37,15 +37,22 @@ export type HomeData = {
     /** Track with the most progress, or null when there are no tracks. */
     activeTrack: TrackSummary | null
     /** Whole-catalog totals, counted from the same `catalog` array
-     *  `nextProblem` is chosen from — so the dashboard's "X of Y solved"
-     *  and per-difficulty progress always agree with what /practice itself
-     *  shows (same read, same exclusions: PUBLISHED only, contest-locked
-     *  problems already excluded by getCatalogProblems's query). Free —
-     *  the array is already in memory for `nextProblem`, this just counts
-     *  it. */
+     *  `nextProblem` is chosen from — both `total`/`byDifficulty` (the
+     *  denominators) and `solved`/`solvedByDifficulty` (the numerators) are
+     *  counted off this one array's `solved` flag, so the dashboard's
+     *  "X of Y solved" and per-difficulty progress always agree with what
+     *  /practice itself shows (same read, same exclusions: PUBLISHED only,
+     *  contest-locked problems already excluded by getCatalogProblems's
+     *  query — unlike `UserStats.solved`/`byDifficulty` from
+     *  actions/submissions.ts, which count ACCEPTED submissions across
+     *  every problem regardless of status or contest lock, and so can both
+     *  disagree with and exceed these counts). Free — the array is already
+     *  in memory for `nextProblem`, this just counts it. */
     catalogTotals: {
         total: number
+        solved: number
         byDifficulty: { EASY: number; MEDIUM: number; HARD: number }
+        solvedByDifficulty: { EASY: number; MEDIUM: number; HARD: number }
     }
 }
 
@@ -209,10 +216,16 @@ export async function getHomeData(
 
     const catalogTotals = {
         total: catalog.length,
+        solved: 0,
         byDifficulty: { EASY: 0, MEDIUM: 0, HARD: 0 },
+        solvedByDifficulty: { EASY: 0, MEDIUM: 0, HARD: 0 },
     }
     for (const p of catalog) {
         catalogTotals.byDifficulty[p.difficulty]++
+        if (p.solved) {
+            catalogTotals.solved++
+            catalogTotals.solvedByDifficulty[p.difficulty]++
+        }
     }
 
     const plan = buildTodayPlan({ resume, daily, nextProblem })

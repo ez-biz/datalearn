@@ -15,6 +15,7 @@ import {
 } from "@/lib/use-problem-db"
 import { SqlPlaygroundSkeleton } from "@/components/sql/SqlPlaygroundSkeleton"
 import { WorkspaceLayout } from "./workspace/WorkspaceLayout"
+import type { Segment } from "./workspace/MobileSegments"
 import { ProblemsPanel } from "./workspace/ProblemsPanel"
 import type { PanelProblem } from "@/lib/workspace/problems-panel-model"
 import type { CheckpointContext } from "@/lib/workspace/queries"
@@ -138,6 +139,27 @@ export function ProblemClient({
         } catch {
             // Storage unavailable — keep the default.
         }
+    }, [])
+
+    // Mobile Problem/Code/Result workspace. Neither piece is persisted —
+    // unlike panelOpen, there is no cross-session "preference" here, just a
+    // transient view. unseenVerdict tints the Result segment after a submit
+    // and clears the moment the learner opens it; the segment never
+    // auto-switches on submit (see handleSubmit below) — the design signals
+    // rather than yanking the learner off the editor.
+    const [activeSegment, setActiveSegment] = useState<Segment>("code")
+    const [unseenVerdict, setUnseenVerdict] = useState(false)
+    const handleSegmentChange = useCallback((segment: Segment) => {
+        setActiveSegment(segment)
+        if (segment === "result") setUnseenVerdict(false)
+    }, [])
+
+    // The mobile "all problems" sheet. Kept separate from panelOpen, which
+    // persists the desktop column/overlay's open state to localStorage — a
+    // phone user opening this sheet has no such durable preference to set.
+    const [mobileProblemsOpen, setMobileProblemsOpen] = useState(false)
+    const toggleMobileProblems = useCallback(() => {
+        setMobileProblemsOpen((open) => !open)
     }, [])
 
     // Schema and Expected output are open on a first visit and collapsed
@@ -313,6 +335,7 @@ export function ProblemClient({
             // but Submit writes a row to the DB and grants ACCEPTED
             // credit toward the user's stats — needs a real account.
             if (!isSignedIn) {
+                setUnseenVerdict(true)
                 return {
                     ok: false,
                     reason: "Sign in to submit your solution and track your progress. Run still works for anonymous users.",
@@ -325,6 +348,7 @@ export function ProblemClient({
                 dialect,
             })
             if (outcome.ok) setSolved(true)
+            setUnseenVerdict(true)
             setHistory((prev) => [
                 {
                     id: `local-${Date.now()}`,
@@ -344,6 +368,11 @@ export function ProblemClient({
         <WorkspaceLayout
             panelOpen={panelOpen}
             onTogglePanel={togglePanel}
+            activeSegment={activeSegment}
+            onSegmentChange={handleSegmentChange}
+            unseenVerdict={unseenVerdict}
+            mobileProblemsOpen={mobileProblemsOpen}
+            onToggleMobileProblems={toggleMobileProblems}
             contextBar={
                 checkpointContext ? (
                     <LessonContextBar context={checkpointContext} />
@@ -354,6 +383,13 @@ export function ProblemClient({
                     problems={panelProblems}
                     currentSlug={slug}
                     onClose={togglePanel}
+                />
+            }
+            mobileProblemsPanel={
+                <ProblemsPanel
+                    problems={panelProblems}
+                    currentSlug={slug}
+                    onClose={toggleMobileProblems}
                 />
             }
             problemPanel={
@@ -416,6 +452,7 @@ export function ProblemClient({
                     allowedDialects={allowedDialects}
                     onDialectChange={handleDialectChange}
                     checkpointContext={checkpointContext}
+                    activeSegment={activeSegment}
                     />
                 </div>
             }

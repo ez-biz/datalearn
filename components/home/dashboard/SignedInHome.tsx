@@ -37,9 +37,11 @@ const DIFFICULTY_ROWS: Array<{
 /**
  * Assembles the seven presentational dashboard cards into the signed-in
  * home page. Owns only what none of the seven cards can: the greeting
- * (needs `name`), the "X of Y solved" subtitle and the progress-by-
- * difficulty card (both need `stats` crossed with `home.catalogTotals`,
- * which maps to no single card), and the two-column layout.
+ * (needs `name`), the "X of Y solved" subtitle (solved/total both come from
+ * `home.catalogTotals`; only the trailing submissions count still needs
+ * `stats.submissions`) and the progress-by-difficulty card (entirely
+ * `home.catalogTotals`, numerator and denominator alike — see
+ * `ProgressByDifficulty`'s own doc comment), and the two-column layout.
  *
  * Layout is two columns at `lg` and up (matches the retired UserHome's own
  * breakpoint), single column below it — this task covers desktop/tablet
@@ -68,8 +70,9 @@ export function SignedInHome({ name, home, stats, daily }: SignedInHomeProps) {
                             {greeting}
                         </h1>
                         <p className="mt-2 text-sm tabular-nums text-muted-foreground">
-                            {stats.solved} of {home.catalogTotals.total} problems
-                            solved · {stats.submissions} submissions all time
+                            {home.catalogTotals.solved} of {home.catalogTotals.total}{" "}
+                            problems solved · {stats.submissions} submissions all
+                            time
                         </p>
                     </div>
                     <LinkButton
@@ -95,7 +98,7 @@ export function SignedInHome({ name, home, stats, daily }: SignedInHomeProps) {
                         <DailyCard daily={daily} />
                         <WeakSpotsCard weakSpots={home.weakSpots} />
                         <ProgressByDifficulty
-                            solved={stats.byDifficulty}
+                            solved={home.catalogTotals.solvedByDifficulty}
                             total={home.catalogTotals.byDifficulty}
                         />
                     </div>
@@ -107,16 +110,20 @@ export function SignedInHome({ name, home, stats, daily }: SignedInHomeProps) {
 
 /**
  * Solved/total bars per difficulty, restoring UserHome's ProgressCard.
- * `total` is `home.catalogTotals.byDifficulty` — counted from the exact
- * same `getCatalogProblems` read that `/practice` itself renders from
- * (PUBLISHED only, contest-locked problems already excluded there), so this
- * card's denominator can never disagree with the catalog page's.
+ * Both `solved` (`home.catalogTotals.solvedByDifficulty`) and `total`
+ * (`home.catalogTotals.byDifficulty`) are counted from the exact same
+ * `getCatalogProblems` read that `/practice` itself renders from
+ * (PUBLISHED only, contest-locked problems already excluded there), so
+ * neither this card's numerator nor its denominator can disagree with the
+ * catalog page's — and `solved` can never exceed `total`, unlike
+ * `UserStats.byDifficulty`, which counts ACCEPTED submissions with no
+ * catalog-membership check.
  */
 function ProgressByDifficulty({
     solved,
     total,
 }: {
-    solved: UserStats["byDifficulty"]
+    solved: HomeData["catalogTotals"]["solvedByDifficulty"]
     total: HomeData["catalogTotals"]["byDifficulty"]
 }) {
     return (
