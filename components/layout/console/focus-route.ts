@@ -21,7 +21,7 @@ export function isFocusRoute(pathname: string): boolean {
 /**
  * Whether a path is an "app mode" route — one that sits inside the console
  * shell but behaves like an application view rather than a document: no
- * footer, and no page scroll at `lg` and above, because its inner panes own
+ * footer, and no page scroll at any width, because its inner panes own
  * their own scrolling.
  *
  * Today that is exactly the problem workspace: /practice/<slug>. The catalog
