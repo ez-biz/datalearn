@@ -1,11 +1,20 @@
-// Server component: renders the admin sidebar that ConsoleChrome swaps in
-// for the learner ConsoleSidebar on /admin/* routes (see ConsoleChrome.tsx).
+// Server component: renders the admin sidebar content that
+// ConsoleAdminSidebarFrame wraps for /admin/* routes (see ConsoleChrome.tsx).
 // Deliberately NOT "use client" — the full ADMIN_NAV item list (icons,
 // hrefs, badge keys) must never ship to the browser bundle for the general
 // population of visitors, only for the small set of signed-in ADMIN /
 // MODERATOR users this ever renders for. The one piece that genuinely needs
 // the live pathname (active-item highlighting) is isolated in the small
 // client leaf AdminSidebarLink.
+//
+// Returns a fragment, not its own sized container: the headerSlot
+// (UserMenu, sign-out) + collapse toggle row lives in
+// ConsoleAdminSidebarFrame instead, because that row needs
+// useSidebarCollapse's `toggle` closure, which only exists once
+// ConsoleChrome has mounted client-side — long after this component was
+// already built server-side in ConsoleShell. ThemeRow, by contrast, needs no
+// such closure (useHydratedTheme is self-contained), so it's rendered
+// directly here, same as AdminSidebarLink.
 import Link from "next/link"
 import { ShieldCheck } from "lucide-react"
 import {
@@ -14,6 +23,7 @@ import {
     type AdminNavViewer,
 } from "@/lib/admin/admin-nav-model"
 import { AdminSidebarLink } from "./AdminSidebarLink"
+import { ThemeRow } from "./ThemeToggle"
 
 export interface AdminBadgeCounts {
     openReports: number
@@ -35,8 +45,8 @@ export function ConsoleAdminSidebar({ viewer, badges }: ConsoleAdminSidebarProps
     const groups = visibleAdminNav(viewer)
 
     return (
-        <div className="hidden w-[236px] shrink-0 flex-col border-r border-line-soft bg-panel lg:flex">
-            <div className="flex items-center gap-2.5 px-3 pb-2.5 pt-3">
+        <>
+            <div className="flex items-center gap-2.5 px-3 pb-2.5">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[5px] bg-accent/15 text-accent">
                     <ShieldCheck className="h-4 w-4" aria-hidden />
                 </span>
@@ -74,7 +84,8 @@ export function ConsoleAdminSidebar({ viewer, badges }: ConsoleAdminSidebarProps
                     ))}
                 </nav>
 
-                <div className="mt-auto border-t border-line-soft p-2">
+                <div className="mt-auto flex flex-col gap-px border-t border-line-soft p-2">
+                    <ThemeRow />
                     <Link
                         href="/"
                         className="flex items-center gap-2.5 rounded-[5px] px-2.5 py-[7px] text-[13.5px] text-text-muted transition-colors duration-150 hover:bg-panel-hover hover:text-foreground"
@@ -83,6 +94,6 @@ export function ConsoleAdminSidebar({ viewer, badges }: ConsoleAdminSidebarProps
                     </Link>
                 </div>
             </div>
-        </div>
+        </>
     )
 }

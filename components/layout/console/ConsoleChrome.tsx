@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import { ConsoleAdminRailFrame } from "./ConsoleAdminRailFrame"
+import { ConsoleAdminSidebarFrame } from "./ConsoleAdminSidebarFrame"
 import { ConsoleRail } from "./ConsoleRail"
 import { ConsoleSidebar, type TrackProgress } from "./ConsoleSidebar"
 import { isAppRoute, isFocusRoute } from "./focus-route"
@@ -121,7 +122,9 @@ export function ConsoleChrome({
                             <ConsoleRail onToggle={toggle} accountSlot={railAccountSlot} />
                         )
                     ) : admin ? (
-                        adminSidebarSlot
+                        <ConsoleAdminSidebarFrame headerSlot={headerSlot} onToggle={toggle}>
+                            {adminSidebarSlot}
+                        </ConsoleAdminSidebarFrame>
                     ) : (
                         <ConsoleSidebar
                             trackProgress={trackProgress}
