@@ -201,9 +201,15 @@ test.describe("mobile problems sheet", () => {
 
         // Pick any row that isn't the current problem — robust to whatever
         // order the seeded catalog happens to render in.
+        //
+        // `aria-current="page"` sits on the <a> itself (ProblemsPanel.tsx),
+        // not a descendant, so `filter({ hasNot: ... })` — which only
+        // matches descendants, never the element itself — is a no-op here.
+        // `.and()` intersects the two locators against the same element, so
+        // it correctly excludes the current problem's own link.
         const otherProblem = sheet
             .getByRole("link")
-            .filter({ hasNot: page.locator('[aria-current="page"]') })
+            .and(page.locator(':not([aria-current="page"])'))
             .first()
         const href = await otherProblem.getAttribute("href")
         expect(href).not.toBeNull()
