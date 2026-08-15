@@ -67,7 +67,13 @@ const ACTIONS: QuickAction[] = [
  *  controls are plain buttons, not inputs, so without the form check
  *  focusing one of them and pressing e.g. ⌥P would router.push away and
  *  discard the whole in-progress problem, with no dirty-state or
- *  beforeunload guard to catch it. */
+ *  beforeunload guard to catch it.
+ *
+ *  `target` isn't always an Element — a KeyboardEvent dispatched directly on
+ *  `window` (as this project's e2e suite does, to reproduce the real
+ *  Option-remap shape CDP can't) reports `target === window`, which has no
+ *  `.closest`. `el?.closest?.("form")` guards that call too, not just the
+ *  reference, so it degrades to "not inside a form" instead of throwing. */
 function isTypingTarget(target: EventTarget | null): boolean {
     const el = target as HTMLElement | null
     const tag = el?.tagName
@@ -75,7 +81,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
         tag === "INPUT" ||
         tag === "TEXTAREA" ||
         Boolean(el?.isContentEditable) ||
-        Boolean(el?.closest("form"))
+        Boolean(el?.closest?.("form"))
     )
 }
 
