@@ -1,11 +1,14 @@
 "use server"
 
 import { prisma } from "@/lib/prisma"
+import { computeDelta, type MetricDelta } from "@/lib/admin/metric-delta"
 
 export type AdminMetric = {
     label: string
     value: number
     href: string
+    /** Absent when no honest delta exists for this metric. */
+    delta?: MetricDelta
 }
 
 export type AdminActivityItem = {
@@ -17,8 +20,11 @@ export type AdminActivityItem = {
     href: string
 }
 
-export async function getAdminDashboardMetrics(): Promise<AdminMetric[]> {
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+export async function getAdminDashboardMetrics(
+    now: Date = new Date()
+): Promise<AdminMetric[]> {
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
     const [
         problemCount,
         articleCount,
@@ -27,6 +33,9 @@ export async function getAdminDashboardMetrics(): Promise<AdminMetric[]> {
         submissionsLast7d,
         pendingReports,
         pendingArticles,
+        problemCountAtPeriodStart,
+        contestCountAtPeriodStart,
+        submissionsPrior7d,
     ] = await Promise.all([
         prisma.sQLProblem.count(),
         prisma.article.count({ where: { status: "PUBLISHED" } }),
@@ -37,23 +46,61 @@ export async function getAdminDashboardMetrics(): Promise<AdminMetric[]> {
         }),
         prisma.problemReport.count({ where: { resolvedAt: null } }),
         prisma.article.count({ where: { status: "SUBMITTED" } }),
+        // Deltas below are honest only where the metric has a real
+        // historical basis (createdAt-backed running totals or a prior
+        // fixed window). Articles, Tracks, Open reports and Pending
+        // review get `previous: null` — no model carries `publishedAt`,
+        // `updatedAt` moves on any edit, and queue depths have no
+        // meaningful "growth" — so those cards render no delta at all.
+        prisma.sQLProblem.count({ where: { createdAt: { lt: sevenDaysAgo } } }),
+        prisma.contest.count({ where: { createdAt: { lt: sevenDaysAgo } } }),
+        prisma.submission.count({
+            where: { createdAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo } },
+        }),
     ])
 
     return [
-        { label: "Problems", value: problemCount, href: "/admin/problems" },
-        { label: "Articles", value: articleCount, href: "/admin/articles" },
-        { label: "Tracks", value: trackCount, href: "/admin/tracks" },
-        { label: "Contests", value: contestCount, href: "/admin/contests" },
+        {
+            label: "Problems",
+            value: problemCount,
+            href: "/admin/problems",
+            delta: computeDelta(problemCount, problemCountAtPeriodStart) ?? undefined,
+        },
+        {
+            label: "Articles",
+            value: articleCount,
+            href: "/admin/articles",
+            delta: computeDelta(articleCount, null) ?? undefined,
+        },
+        {
+            label: "Tracks",
+            value: trackCount,
+            href: "/admin/tracks",
+            delta: computeDelta(trackCount, null) ?? undefined,
+        },
+        {
+            label: "Contests",
+            value: contestCount,
+            href: "/admin/contests",
+            delta: computeDelta(contestCount, contestCountAtPeriodStart) ?? undefined,
+        },
         {
             label: "Submissions (7d)",
             value: submissionsLast7d,
             href: "/admin/problems",
+            delta: computeDelta(submissionsLast7d, submissionsPrior7d) ?? undefined,
         },
-        { label: "Open reports", value: pendingReports, href: "/admin/reports" },
+        {
+            label: "Open reports",
+            value: pendingReports,
+            href: "/admin/reports",
+            delta: computeDelta(pendingReports, null) ?? undefined,
+        },
         {
             label: "Pending review",
             value: pendingArticles,
             href: "/admin/articles?status=SUBMITTED",
+            delta: computeDelta(pendingArticles, null) ?? undefined,
         },
     ]
 }

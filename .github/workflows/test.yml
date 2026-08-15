@@ -149,6 +149,9 @@ jobs:
       - name: Test admin nav model
         run: npm run test:admin-nav
 
+      - name: Admin metric deltas
+        run: npm run test:metric-delta
+
       - name: Test problems panel model
         run: npm run test:problems-panel
 
