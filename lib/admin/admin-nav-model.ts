@@ -23,6 +23,7 @@ import {
     Tag,
     Users,
 } from "lucide-react"
+import { matchesAdminPath } from "./admin-nav-match"
 
 export type AdminBadgeKey = "openReports" | "articleQueue" | "discussionQueue"
 
@@ -200,17 +201,12 @@ export function visibleAdminNav(viewer: AdminNavViewer): AdminNavGroup[] {
     return groups
 }
 
-function matchesPathname(item: AdminNavItem, pathname: string): boolean {
-    if (item.match === "exact") return pathname === item.href
-    return pathname === item.href || pathname.startsWith(`${item.href}/`)
-}
-
 /** Active item key for a pathname, or null. Longest prefix wins. */
 export function activeAdminNavKey(pathname: string): string | null {
     let best: AdminNavItem | null = null
     for (const group of ADMIN_NAV) {
         for (const item of group.items) {
-            if (!matchesPathname(item, pathname)) continue
+            if (!matchesAdminPath(pathname, item.href, item.match ?? "prefix")) continue
             if (!best || item.href.length > best.href.length) {
                 best = item
             }

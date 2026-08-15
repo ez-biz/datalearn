@@ -63,8 +63,8 @@ export function ConsoleAdminSidebar({ viewer, badges }: ConsoleAdminSidebarProps
                             {group.items.map((item) => (
                                 <AdminSidebarLink
                                     key={item.key}
-                                    itemKey={item.key}
                                     href={item.href}
+                                    match={item.match ?? "prefix"}
                                     label={item.label}
                                     icon={<item.icon className="h-[15px] w-[15px]" aria-hidden />}
                                     badgeCount={badgeFor(item.badgeKey, badges)}

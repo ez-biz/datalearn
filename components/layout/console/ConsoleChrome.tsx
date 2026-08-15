@@ -64,7 +64,12 @@ export function ConsoleChrome({
     // Admin is NOT a fourth shell mode. It is a normal route that swaps which
     // nav the existing sidebar renders, so isFocusRoute/isAppRoute — and the
     // test asserting they are disjoint — are untouched.
-    const admin = pathname.startsWith("/admin")
+    //
+    // Segment-aware, not a raw prefix check: a raw `pathname.startsWith("/admin")`
+    // would also match a sibling CMS page at e.g. /admin-faq (reachable via
+    // app/[slug]), sending a non-admin visitor down the admin branch with no
+    // adminSidebarSlot to render there.
+    const admin = pathname === "/admin" || pathname.startsWith("/admin/")
 
     return (
         <div className="flex h-dvh overflow-hidden print:block print:h-auto print:overflow-visible">
