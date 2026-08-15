@@ -57,7 +57,11 @@ Adding the proposed columns would create **a second source of truth for a fact t
 
 ### The shell
 
-`ConsoleChrome` keeps sole ownership of `#app-scroll`, `<main id="main-content">` and `<Footer>`. It gains one branch: for `/admin` paths it renders the admin nav model instead of the learner one and marks that subtree so the violet accent applies.
+**Correction to an earlier reading of the current state.** Admin does not opt out of the console shell. `ConsoleShell` wraps every route from the root layout (`app/layout.tsx:87`), and `/admin/*` matches neither `isFocusRoute` nor `isAppRoute`, so admin is already a **normal** shell route. `app/admin/layout.tsx` then adds `AdminNav` *inside* that shell.
+
+So an admin on `/admin/problems` currently sees **two navigations stacked**: the learner sidebar (Home / Practice / Learn …) plus the horizontal admin row. That redundancy — not a missing shell — is what this phase fixes.
+
+The work is therefore a **swap, not an addition**: `ConsoleChrome` keeps sole ownership of `#app-scroll`, `<main id="main-content">` and `<Footer>`, and gains one branch — for `/admin` paths it renders the admin nav model instead of the learner one, and marks that subtree so the violet accent applies. `AdminNav` is then deleted and `app/admin/layout.tsx` keeps only its auth check and badge-count queries, which move to feeding the sidebar.
 
 Admin remains a **normal** shell route. There is no fourth shell mode, so `isFocusRoute` and `isAppRoute` stay provably disjoint and their mutual-exclusivity unit test is untouched. Sidebar collapse, the collapse cookie, scroll restoration and the skip link are all inherited rather than reimplemented.
 
@@ -75,9 +79,11 @@ Groups, matching the design:
 
 Header: a violet `shield-check` mark, "Admin", and a role chip (Owner / Moderator). Footer: "Back to the site". Badge counts (`articleQueue`, `openReports`, `discussionQueue`) render as violet pills.
 
-### Role filtering is a security boundary, not a display rule
+### Role filtering
 
-`AdminNav` filters by role **client-side** today. A server-rendered sidebar must filter **server-side**: a moderator must never receive admin-only nav items in their HTML, even hidden.
+To be precise about what is and is not true today: `AdminNav` is a client component, but its `role` and `canViewDiscussionQueue` inputs are resolved **server-side** in the layout and passed as props, and the filter runs before render — so a moderator's rendered HTML already contains no admin-only links. The current behaviour is correct; the item list merely also ships in the client bundle, which exposes route names, not data.
+
+Moving the nav model to a server component keeps that guarantee and stops shipping the list. The requirement for the rebuild is therefore: **the filter must stay server-side, and a moderator must never receive admin-only items in rendered HTML.** This is a property to preserve, not a hole to close.
 
 The existing three-layer gating is unchanged — middleware (`middleware.ts:66-123`), the admin layout (`app/admin/layout.tsx:17-22`), and per-route `withAdmin` / `requireAdminPage`. This spec changes only what is rendered, never what is authorized.
 
