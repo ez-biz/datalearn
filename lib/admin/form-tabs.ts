@@ -31,14 +31,19 @@ export const FORM_TABS: { id: FormTabId; label: string }[] = [
  * `LessonCheckpoint` relation. It's mapped here ahead of Task 11 wiring
  * it into the form.
  *
- * Two entries are judgment calls, not obvious reads — flagged in
- * task-9-report.md for confirmation before Task 10 places them:
- *  - `schemaDescription` renders inside today's "Basics" card, but its
- *    content ("Short prose about the dataset") is schema-descriptive, so
- *    it's routed to `schema` here.
- *  - `tagSlugs` and `discussionMode` have no dedicated tab in the
- *    5-tab design; both fall back to `basics` as the general
- *    problem-settings tab.
+ * This map is the SOURCE OF TRUTH for tab placement, not a description
+ * of today's card layout. A field's tab here determines which tab
+ * Task 10's restructure must render it on — not the other way round.
+ * That matters for three fields that don't live in the Basics card
+ * today: `schemaDescription` currently sits in the "Basics" card but is
+ * routed to `schema` (its content is dataset-descriptive prose);
+ * `tagSlugs` (today's own "Tags" card) and `discussionMode` (today's
+ * own "Discussion" card) have no dedicated tab in the five-tab design
+ * and are routed to `basics` as the general problem-settings tab.
+ * Leaving any of the three unmapped would mean a real, submittable
+ * field has no tab at all — a rejected save with nothing highlighted
+ * anywhere — which is worse than a placement someone might disagree
+ * with. Task 10 places these three fields on the tabs listed here.
  */
 const FIELD_TAB_MAP: Record<string, FormTabId> = {
     // Basics
@@ -75,6 +80,12 @@ const FIELD_TAB_MAP: Record<string, FormTabId> = {
  * unmapped — deliberately not a default to `"basics"`, because a
  * silently mis-routed error is exactly the failure tabs introduce: the
  * author would land on a tab where nothing is actually wrong.
+ *
+ * Callers pass the first path segment, not a dotted path. A nested Zod
+ * issue for the inline-schema object reports `path: ["schemaInline",
+ * "name"]`; pass `"schemaInline"` (`path[0]`), not `"schemaInline.name"`
+ * — the latter isn't a key in the map and would silently return `null`,
+ * routing nowhere.
  */
 export function tabForField(field: string): FormTabId | null {
     return FIELD_TAB_MAP[field] ?? null
@@ -88,6 +99,11 @@ const TAB_ORDER: FormTabId[] = FORM_TABS.map((t) => t.id)
  * names are ignored rather than raising — the caller is expected to be
  * a list of server-reported field names, some of which may not be
  * form-visible.
+ *
+ * Pass first path segments, not dotted paths: a Zod issue path of
+ * `["schemaInline", "name"]` should contribute `"schemaInline"` to
+ * `fields`, not the joined string `"schemaInline.name"` — the map has
+ * no dotted keys, so a dotted string is unmapped and silently ignored.
  */
 export function tabsWithErrors(fields: string[]): FormTabId[] {
     const errored = new Set<FormTabId>()
