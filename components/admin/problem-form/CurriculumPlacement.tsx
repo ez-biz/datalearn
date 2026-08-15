@@ -157,7 +157,8 @@ export function CurriculumPlacement({
     return (
         <PanelShell>
             <p className="text-sm text-muted-foreground">
-                A problem can check at most one lesson — `LessonCheckpoint` enforces
+                A problem can check at most one lesson —{" "}
+                <code className="font-mono text-xs">LessonCheckpoint</code> enforces
                 this at the database level. Picking a different lesson below{" "}
                 <span className="font-medium text-foreground">reassigns</span> this
                 problem&apos;s checkpoint; it never adds a second binding.
