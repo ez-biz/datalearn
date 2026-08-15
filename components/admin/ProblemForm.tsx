@@ -6,10 +6,21 @@ import { Check, Loader2, Play, Save } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Field, Input, Textarea } from "@/components/ui/Input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
+import { EmptyState } from "@/components/ui/EmptyState"
 import { HintsEditor } from "./HintsEditor"
 import { TagPicker } from "./TagPicker"
+import { FormTabStrip } from "./problem-form/FormTabStrip"
+import { SegmentedControl } from "./problem-form/SegmentedControl"
+import { ValidationChecklist, type ChecklistItem } from "./problem-form/ValidationChecklist"
 import { useProblemDB } from "@/lib/use-problem-db"
 import { slugify } from "@/lib/admin-validation"
+import { cn } from "@/lib/utils"
+import {
+    FORM_TABS,
+    firstErroredTab,
+    tabsWithErrors,
+    type FormTabId,
+} from "@/lib/admin/form-tabs"
 
 type Difficulty = "EASY" | "MEDIUM" | "HARD"
 type ProblemStatus = "DRAFT" | "BETA" | "PUBLISHED" | "ARCHIVED"
@@ -50,6 +61,23 @@ export interface ProblemFormInitial {
 const DIALECT_LABELS: Record<Dialect, string> = {
     DUCKDB: "DuckDB",
     POSTGRES: "Postgres",
+}
+
+/**
+ * First path segment of every Zod issue reported by
+ * `z.treeifyError` — the API routes' validation-failure shape
+ * (`{ error, details }`, see `app/api/admin/problems/route.ts` and
+ * `.../[slug]/route.ts`). `treeifyError`'s top-level `properties` keys
+ * are already first-path-segments (a nested issue on `schemaInline.name`
+ * lives at `details.properties.schemaInline.properties.name`, not as a
+ * dotted key) — exactly what `tabForField`/`tabsWithErrors` expect per
+ * their doc comments in `lib/admin/form-tabs.ts`.
+ */
+function fieldNamesFromTreeifiedError(details: unknown): string[] {
+    if (!details || typeof details !== "object") return []
+    const properties = (details as { properties?: unknown }).properties
+    if (!properties || typeof properties !== "object") return []
+    return Object.keys(properties)
 }
 
 interface ProblemFormProps {
@@ -104,11 +132,26 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
         initialDialects[0] ?? "DUCKDB"
     )
 
+    // Tracks the outcome of the last "Run & capture" click per dialect —
+    // feeds the validation checklist's "solution runs clean" row. Cleared
+    // for a dialect whenever its solution text changes, so a stale
+    // "clean" never survives an edit that hasn't been re-run.
+    const [runResults, setRunResults] = useState<
+        Partial<Record<Dialect, "clean" | "error">>
+    >({})
+
     // Convenience accessors for the active tab — keeps render code clean.
     const solutionSql = solutions[activeDialect] ?? ""
     const expectedOutput = expectedOutputs[activeDialect] ?? ""
-    const setSolutionSql = (v: string) =>
+    const setSolutionSql = (v: string) => {
         setSolutions((prev) => ({ ...prev, [activeDialect]: v }))
+        setRunResults((prev) => {
+            if (!(activeDialect in prev)) return prev
+            const next = { ...prev }
+            delete next[activeDialect]
+            return next
+        })
+    }
     const setExpectedOutput = (v: string) =>
         setExpectedOutputs((prev) => ({ ...prev, [activeDialect]: v }))
 
@@ -130,6 +173,13 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [savedAt, setSavedAt] = useState<number | null>(null)
+
+    // Tab strip state — Task 10. `lib/admin/form-tabs.ts` is authoritative
+    // for which tab owns which field; this component only tracks which
+    // tab is active and which field names the last save attempt reported.
+    const [activeTab, setActiveTab] = useState<FormTabId>(FORM_TABS[0].id)
+    const [erroredFields, setErroredFields] = useState<string[]>([])
+    const erroredTabs = useMemo(() => tabsWithErrors(erroredFields), [erroredFields])
 
     // Auto-derive slug from title until the user manually edits the slug field
     useEffect(() => {
@@ -155,6 +205,13 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
         const found = schemas.find((s) => s.id === schemaId)
         return found?.sql ?? ""
     }, [schemaMode, inlineSchemaSql, schemaId, schemas])
+
+    // A schema change invalidates any previously-captured "ran clean"
+    // result for every dialect — the last run happened against different
+    // data. Runs at mount too, which is a no-op (runResults starts empty).
+    useEffect(() => {
+        setRunResults({})
+    }, [activeSchemaSql])
 
     const dbInput = activeSchemaSql.trim().length > 0 ? activeSchemaSql : null
     // Use the active dialect's engine for "Run & capture" so authors
@@ -197,8 +254,10 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
             const json = JSON.stringify(safe, null, 2)
             setExpectedOutput(json)
             setRunStatus(`Captured ${rows.length} row${rows.length === 1 ? "" : "s"}.`)
+            setRunResults((prev) => ({ ...prev, [activeDialect]: "clean" }))
         } catch (e: any) {
             setRunStatus(`Error: ${e?.message ?? "query failed"}`)
+            setRunResults((prev) => ({ ...prev, [activeDialect]: "error" }))
         } finally {
             setRunning(false)
         }
@@ -207,6 +266,7 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
     async function onSubmit(e: React.FormEvent) {
         e.preventDefault()
         setError(null)
+        setErroredFields([])
         setSubmitting(true)
         try {
             // Send only the entries for currently-listed dialects.
@@ -280,7 +340,13 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
             const json = await res.json().catch(() => ({}))
             if (!res.ok) {
                 setError(json.error ?? `Request failed: ${res.status}`)
-                if (json.details) console.error("Validation details:", json.details)
+                if (json.details) {
+                    console.error("Validation details:", json.details)
+                    const fields = fieldNamesFromTreeifiedError(json.details)
+                    setErroredFields(fields)
+                    const target = firstErroredTab(fields)
+                    if (target) setActiveTab(target)
+                }
                 return
             }
             const newSlug = json?.data?.slug ?? slug
@@ -311,6 +377,63 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
         return () => clearTimeout(t)
     }, [savedAt])
 
+    // Validation checklist (Task 10, step 4) — reads state the form
+    // already tracks. No new validation rules: these rows don't gate
+    // `submitting` or change what the server accepts, they only make
+    // existing conditions visible.
+    const checklistItems: ChecklistItem[] = useMemo(() => {
+        const runEntries = dialects.map((d) => ({ dialect: d, result: runResults[d] }))
+        const allClean = runEntries.length > 0 && runEntries.every((e) => e.result === "clean")
+        const anyError = runEntries.some((e) => e.result === "error")
+        const runDetail = runEntries
+            .map(
+                (e) =>
+                    `${DIALECT_LABELS[e.dialect]}: ${
+                        e.result === "clean"
+                            ? "clean"
+                            : e.result === "error"
+                              ? "error"
+                              : "not run yet"
+                    }`
+            )
+            .join(" · ")
+
+        const outputEntries = dialects.map((d) => ({
+            dialect: d,
+            present: Boolean(expectedOutputs[d]?.trim()),
+        }))
+        const allCaptured =
+            outputEntries.length > 0 && outputEntries.every((e) => e.present)
+        const outputDetail = outputEntries
+            .map((e) => `${DIALECT_LABELS[e.dialect]}: ${e.present ? "captured" : "missing"}`)
+            .join(" · ")
+
+        const hasTags = tagSlugs.length > 0
+
+        return [
+            {
+                id: "runs-clean",
+                label: "Solution runs clean on every selected engine",
+                state: allClean ? "pass" : anyError ? "fail" : "pending",
+                detail: runDetail,
+            },
+            {
+                id: "expected-output",
+                label: "Expected output captured and non-empty",
+                state: allCaptured ? "pass" : "pending",
+                detail: outputDetail,
+            },
+            {
+                id: "tags",
+                label: hasTags
+                    ? `Tagged (${tagSlugs.length})`
+                    : "No tags — won't appear under any topic",
+                state: hasTags ? "pass" : "warn",
+                detail: hasTags ? undefined : "Add at least one tag on the Basics tab.",
+            },
+        ]
+    }, [dialects, runResults, expectedOutputs, tagSlugs])
+
     return (
         <form onSubmit={onSubmit} className="space-y-6">
             {error && (
@@ -319,106 +442,134 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                 </div>
             )}
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Basics</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid sm:grid-cols-2 gap-4">
-                        <Field label="Title" htmlFor="title" required>
-                            <Input
-                                id="title"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                placeholder="Top customers by revenue"
-                                required
-                            />
-                        </Field>
-                        <Field label="Slug" htmlFor="slug" description="Lowercase, hyphenated. Used in the URL." required>
-                            <Input
-                                id="slug"
-                                value={slug}
-                                onChange={(e) => {
-                                    setSlug(e.target.value)
-                                    setSlugTouched(true)
-                                }}
-                                placeholder="top-customers-by-revenue"
-                                pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-                                required
-                            />
-                        </Field>
-                    </div>
-                    <div className="grid sm:grid-cols-3 gap-4">
-                        <Field label="Difficulty" htmlFor="difficulty" required>
-                            <select
-                                id="difficulty"
-                                value={difficulty}
-                                onChange={(e) =>
-                                    setDifficulty(e.target.value as Difficulty)
-                                }
-                                className="block w-full h-10 px-3 text-sm rounded-md border border-border bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            >
-                                <option value="EASY">Easy</option>
-                                <option value="MEDIUM">Medium</option>
-                                <option value="HARD">Hard</option>
-                            </select>
-                        </Field>
-                        <Field
-                            label="Status"
-                            htmlFor="status"
-                            description="DRAFT/BETA hide from users. PUBLISHED is live."
-                            required
-                        >
-                            <select
-                                id="status"
-                                value={status}
-                                onChange={(e) =>
-                                    setStatus(e.target.value as ProblemStatus)
-                                }
-                                className="block w-full h-10 px-3 text-sm rounded-md border border-border bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            >
-                                <option value="DRAFT">Draft</option>
-                                <option value="BETA">Beta (admin-only)</option>
-                                <option value="PUBLISHED">Published</option>
-                                <option value="ARCHIVED">Archived</option>
-                            </select>
-                        </Field>
-                        <Field label="Ordered comparison" htmlFor="ordered" description="If checked, row order matters during validation.">
-                            <label className="inline-flex items-center gap-2 h-10">
-                                <input
-                                    id="ordered"
-                                    type="checkbox"
-                                    checked={ordered}
-                                    onChange={(e) => setOrdered(e.target.checked)}
-                                    className="h-4 w-4"
+            <FormTabStrip
+                activeTab={activeTab}
+                erroredTabs={erroredTabs}
+                onSelect={setActiveTab}
+            />
+
+            {/* ---- Basics: title, slug, difficulty, status, ordered,
+                SQL engines, description, tags, discussion mode ----
+                tagSlugs and discussionMode have no dedicated tab in the
+                five-tab design and route to "basics" per
+                lib/admin/form-tabs.ts's FIELD_TAB_MAP — that map is
+                authoritative, this is why they render here rather than in
+                their old standalone cards. */}
+            <div
+                role="tabpanel"
+                id="form-tabpanel-basics"
+                aria-labelledby="form-tab-basics"
+                hidden={activeTab !== "basics"}
+                className="space-y-6"
+            >
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Basics</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="grid sm:grid-cols-2 gap-4">
+                            <Field label="Title" htmlFor="title" required>
+                                <Input
+                                    id="title"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    placeholder="Top customers by revenue"
+                                    required
                                 />
-                                <span className="text-sm">
-                                    Order matters (ORDER BY)
-                                </span>
-                            </label>
-                        </Field>
-                    </div>
-                    <Field
-                        label="SQL engines"
-                        htmlFor="dialect-duckdb"
-                        description="Engines this problem can be solved in. Most are portable — narrow only when the canonical solution uses dialect-specific syntax (JSONB, STRING_AGG, LIST_AGG, etc.)."
-                    >
-                        <div className="flex flex-wrap gap-3">
-                            {(["DUCKDB", "POSTGRES"] as const).map((d) => {
-                                const checked = dialects.includes(d)
-                                const isOnly = checked && dialects.length === 1
-                                return (
-                                    <label
-                                        key={d}
-                                        className="inline-flex items-center gap-2 h-10"
-                                    >
-                                        <input
+                            </Field>
+                            <Field label="Slug" htmlFor="slug" description="Lowercase, hyphenated. Used in the URL." required>
+                                <Input
+                                    id="slug"
+                                    value={slug}
+                                    onChange={(e) => {
+                                        setSlug(e.target.value)
+                                        setSlugTouched(true)
+                                    }}
+                                    placeholder="top-customers-by-revenue"
+                                    pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                                    required
+                                />
+                            </Field>
+                        </div>
+                        <div className="grid sm:grid-cols-3 gap-4">
+                            <SegmentedControl
+                                id="difficulty"
+                                label="Difficulty"
+                                value={difficulty}
+                                onChange={setDifficulty}
+                                options={[
+                                    { value: "EASY", label: "Easy", activeClassName: "bg-easy-bg text-easy-fg" },
+                                    { value: "MEDIUM", label: "Medium", activeClassName: "bg-medium-bg text-medium-fg" },
+                                    { value: "HARD", label: "Hard", activeClassName: "bg-hard-bg text-hard-fg" },
+                                ]}
+                            />
+                            <SegmentedControl
+                                id="status"
+                                label="Status"
+                                description="DRAFT/BETA hide from users. PUBLISHED is live."
+                                value={status}
+                                onChange={setStatus}
+                                options={[
+                                    { value: "DRAFT", label: "Draft" },
+                                    { value: "BETA", label: "Beta" },
+                                    { value: "PUBLISHED", label: "Published" },
+                                    { value: "ARCHIVED", label: "Archived" },
+                                ]}
+                            />
+                            <Field label="Ordered comparison" htmlFor="ordered" description="If checked, row order matters during validation.">
+                                <label className="inline-flex items-center gap-2 h-10">
+                                    <input
+                                        id="ordered"
+                                        type="checkbox"
+                                        checked={ordered}
+                                        onChange={(e) => setOrdered(e.target.checked)}
+                                        className="h-4 w-4"
+                                    />
+                                    <span className="text-sm">
+                                        Order matters (ORDER BY)
+                                    </span>
+                                </label>
+                            </Field>
+                        </div>
+                        <Field
+                            label="SQL engines"
+                            htmlFor="dialect-duckdb"
+                            description="Engines this problem can be solved in. Most are portable — narrow only when the canonical solution uses dialect-specific syntax (JSONB, STRING_AGG, LIST_AGG, etc.)."
+                        >
+                            <div role="group" aria-label="SQL engines" className="flex flex-wrap gap-2">
+                                {(["DUCKDB", "POSTGRES"] as const).map((d) => {
+                                    const checked = dialects.includes(d)
+                                    const isOnly = checked && dialects.length === 1
+                                    return (
+                                        <button
+                                            key={d}
+                                            type="button"
                                             id={`dialect-${d.toLowerCase()}`}
-                                            type="checkbox"
-                                            checked={checked}
+                                            aria-pressed={checked}
                                             disabled={isOnly}
-                                            onChange={(e) => {
-                                                if (e.target.checked) {
+                                            onClick={() => {
+                                                if (checked) {
+                                                    setDialects((prev) =>
+                                                        prev.filter((p) => p !== d)
+                                                    )
+                                                    // Don't delete data on
+                                                    // toggle-off (mistakes
+                                                    // happen). Only filter on
+                                                    // submit. If the active
+                                                    // tab was just removed,
+                                                    // switch to a remaining
+                                                    // dialect.
+                                                    if (activeDialect === d) {
+                                                        const remaining =
+                                                            dialects.filter(
+                                                                (p) => p !== d
+                                                            )
+                                                        if (remaining[0])
+                                                            setActiveDialect(
+                                                                remaining[0]
+                                                            )
+                                                    }
+                                                } else {
                                                     setDialects((prev) =>
                                                         prev.includes(d)
                                                             ? prev
@@ -452,373 +603,403 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                                                             ? { ...prev, [d]: source }
                                                             : prev
                                                     })
-                                                } else {
-                                                    setDialects((prev) =>
-                                                        prev.filter((p) => p !== d)
-                                                    )
-                                                    // Don't delete data on
-                                                    // toggle-off (mistakes
-                                                    // happen). Only filter on
-                                                    // submit. If the active
-                                                    // tab was just removed,
-                                                    // switch to a remaining
-                                                    // dialect.
-                                                    if (activeDialect === d) {
-                                                        const remaining =
-                                                            dialects.filter(
-                                                                (p) => p !== d
-                                                            )
-                                                        if (remaining[0])
-                                                            setActiveDialect(
-                                                                remaining[0]
-                                                            )
-                                                    }
                                                 }
                                             }}
-                                            className="h-4 w-4"
-                                        />
-                                        <span className="text-sm">
-                                            {d === "DUCKDB"
-                                                ? "DuckDB"
-                                                : "Postgres"}
-                                        </span>
-                                    </label>
-                                )
-                            })}
+                                            className={cn(
+                                                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60",
+                                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                                checked
+                                                    ? "border-primary/30 bg-primary/10 text-primary"
+                                                    : "border-border bg-surface text-muted-foreground hover:text-foreground hover:border-border-strong"
+                                            )}
+                                        >
+                                            {checked && <Check className="h-3 w-3" aria-hidden="true" />}
+                                            {DIALECT_LABELS[d]}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </Field>
+                        <Field label="Description" htmlFor="description" description="What the user has to do. Plain text." required>
+                            <Textarea
+                                id="description"
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                rows={5}
+                                placeholder="Return every customer whose country is USA…"
+                                className="font-sans"
+                                required
+                            />
+                        </Field>
+                        <div className="space-y-1.5">
+                            <label className="block text-sm font-medium text-foreground">
+                                Tags
+                            </label>
+                            <TagPicker value={tagSlugs} onChange={setTagSlugs} />
                         </div>
-                    </Field>
-                    <Field label="Description" htmlFor="description" description="What the user has to do. Plain text." required>
-                        <Textarea
-                            id="description"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            rows={5}
-                            placeholder="Return every customer whose country is USA…"
-                            className="font-sans"
-                            required
-                        />
-                    </Field>
-                    <Field
-                        label="Schema description (optional)"
-                        htmlFor="schemaDescription"
-                        description="Short prose about the dataset. Shown when no input tables are detected."
-                    >
-                        <Textarea
-                            id="schemaDescription"
-                            value={schemaDescription}
-                            onChange={(e) => setSchemaDescription(e.target.value)}
-                            rows={2}
-                            className="font-sans"
-                        />
-                    </Field>
-                </CardContent>
-            </Card>
+                        {initial.mode === "edit" && (
+                            <Field
+                                label="Discussion mode"
+                                htmlFor="discussionMode"
+                                description="Controls the learner-facing discussion tab for this problem."
+                                required
+                            >
+                                <select
+                                    id="discussionMode"
+                                    value={discussionMode}
+                                    onChange={(e) =>
+                                        setDiscussionMode(e.target.value as DiscussionMode)
+                                    }
+                                    className="block w-full h-10 px-3 text-sm rounded-md border border-border bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                    <option value="OPEN">
+                                        Open - visible and writable
+                                    </option>
+                                    <option value="LOCKED">
+                                        Locked - visible, read-only
+                                    </option>
+                                    <option value="HIDDEN">
+                                        Hidden - learner tab hidden
+                                    </option>
+                                </select>
+                            </Field>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
 
-            {initial.mode === "edit" && (
+            {/* ---- Schema: existing/inline picker + dataset description ----
+                schemaDescription lives here (not Basics) per FIELD_TAB_MAP:
+                it's dataset-descriptive prose, not a problem setting. */}
+            <div
+                role="tabpanel"
+                id="form-tabpanel-schema"
+                aria-labelledby="form-tab-schema"
+                hidden={activeTab !== "schema"}
+                className="space-y-6"
+            >
                 <Card>
                     <CardHeader>
-                        <CardTitle>Discussion</CardTitle>
+                        <CardTitle>Schema</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <Field
-                            label="Mode"
-                            htmlFor="discussionMode"
-                            description="Controls the learner-facing discussion tab for this problem."
-                            required
-                        >
-                            <select
-                                id="discussionMode"
-                                value={discussionMode}
-                                onChange={(e) =>
-                                    setDiscussionMode(e.target.value as DiscussionMode)
-                                }
-                                className="block w-full h-10 px-3 text-sm rounded-md border border-border bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        <div className="flex items-center gap-1 rounded-md border border-border bg-surface p-1 w-fit">
+                            <ToggleBtn
+                                active={schemaMode === "existing"}
+                                onClick={() => setSchemaMode("existing")}
                             >
-                                <option value="OPEN">
-                                    Open - visible and writable
-                                </option>
-                                <option value="LOCKED">
-                                    Locked - visible, read-only
-                                </option>
-                                <option value="HIDDEN">
-                                    Hidden - learner tab hidden
-                                </option>
-                            </select>
+                                Use existing
+                            </ToggleBtn>
+                            <ToggleBtn
+                                active={schemaMode === "inline"}
+                                onClick={() => setSchemaMode("inline")}
+                                disabled={initial.mode === "edit"}
+                                title={
+                                    initial.mode === "edit"
+                                        ? "Inline-create only available for new problems."
+                                        : undefined
+                                }
+                            >
+                                Create new
+                            </ToggleBtn>
+                        </div>
+
+                        {schemaMode === "existing" ? (
+                            <Field label="Schema" htmlFor="schemaId" required>
+                                <select
+                                    id="schemaId"
+                                    value={schemaId}
+                                    onChange={(e) => setSchemaId(e.target.value)}
+                                    className="block w-full h-10 px-3 text-sm rounded-md border border-border bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    required
+                                >
+                                    <option value="">— Select schema —</option>
+                                    {schemas.map((s) => (
+                                        <option key={s.id} value={s.id}>
+                                            {s.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </Field>
+                        ) : (
+                            <div className="space-y-4">
+                                <Field label="Schema name" htmlFor="inlineName" required>
+                                    <Input
+                                        id="inlineName"
+                                        value={inlineSchemaName}
+                                        onChange={(e) => setInlineSchemaName(e.target.value)}
+                                        placeholder="ecommerce"
+                                        required={schemaMode === "inline"}
+                                    />
+                                </Field>
+                                <Field
+                                    label="DDL + seed data"
+                                    htmlFor="inlineSql"
+                                    description="CREATE TABLE statements followed by INSERT statements. Each statement separated by semicolons."
+                                    required
+                                >
+                                    <Textarea
+                                        id="inlineSql"
+                                        value={inlineSchemaSql}
+                                        onChange={(e) => setInlineSchemaSql(e.target.value)}
+                                        rows={12}
+                                        placeholder={"CREATE TABLE customers (\n  customer_id INTEGER PRIMARY KEY,\n  name VARCHAR\n);\nINSERT INTO customers VALUES (1, 'Alice');\n"}
+                                        required={schemaMode === "inline"}
+                                    />
+                                </Field>
+                            </div>
+                        )}
+                        <Field
+                            label="Schema description (optional)"
+                            htmlFor="schemaDescription"
+                            description="Short prose about the dataset. Shown when no input tables are detected."
+                        >
+                            <Textarea
+                                id="schemaDescription"
+                                value={schemaDescription}
+                                onChange={(e) => setSchemaDescription(e.target.value)}
+                                rows={2}
+                                className="font-sans"
+                            />
                         </Field>
                     </CardContent>
                 </Card>
-            )}
+            </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Schema</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="flex items-center gap-1 rounded-md border border-border bg-surface p-1 w-fit">
-                        <ToggleBtn
-                            active={schemaMode === "existing"}
-                            onClick={() => setSchemaMode("existing")}
-                        >
-                            Use existing
-                        </ToggleBtn>
-                        <ToggleBtn
-                            active={schemaMode === "inline"}
-                            onClick={() => setSchemaMode("inline")}
-                            disabled={initial.mode === "edit"}
-                            title={
-                                initial.mode === "edit"
-                                    ? "Inline-create only available for new problems."
-                                    : undefined
-                            }
-                        >
-                            Create new
-                        </ToggleBtn>
-                    </div>
-
-                    {schemaMode === "existing" ? (
-                        <Field label="Schema" htmlFor="schemaId" required>
-                            <select
-                                id="schemaId"
-                                value={schemaId}
-                                onChange={(e) => setSchemaId(e.target.value)}
-                                className="block w-full h-10 px-3 text-sm rounded-md border border-border bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                required
-                            >
-                                <option value="">— Select schema —</option>
-                                {schemas.map((s) => (
-                                    <option key={s.id} value={s.id}>
-                                        {s.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </Field>
-                    ) : (
-                        <div className="space-y-4">
-                            <Field label="Schema name" htmlFor="inlineName" required>
-                                <Input
-                                    id="inlineName"
-                                    value={inlineSchemaName}
-                                    onChange={(e) => setInlineSchemaName(e.target.value)}
-                                    placeholder="ecommerce"
-                                    required={schemaMode === "inline"}
-                                />
-                            </Field>
-                            <Field
-                                label="DDL + seed data"
-                                htmlFor="inlineSql"
-                                description="CREATE TABLE statements followed by INSERT statements. Each statement separated by semicolons."
-                                required
-                            >
-                                <Textarea
-                                    id="inlineSql"
-                                    value={inlineSchemaSql}
-                                    onChange={(e) => setInlineSchemaSql(e.target.value)}
-                                    rows={12}
-                                    placeholder={"CREATE TABLE customers (\n  customer_id INTEGER PRIMARY KEY,\n  name VARCHAR\n);\nINSERT INTO customers VALUES (1, 'Alice');\n"}
-                                    required={schemaMode === "inline"}
-                                />
-                            </Field>
+            {/* ---- Solution & expected output ----
+                Unchanged Run-and-capture loop and per-dialect
+                solutions/expectedOutputs handling — not redesigned here. */}
+            <div
+                role="tabpanel"
+                id="form-tabpanel-solution"
+                aria-labelledby="form-tab-solution"
+                hidden={activeTab !== "solution"}
+                className="space-y-6"
+            >
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Solution & expected output</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="text-sm text-muted-foreground">
+                            Write the canonical solution per dialect. Most problems are portable —
+                            type once, click <span className="font-medium text-foreground">Copy from {DIALECT_LABELS[activeDialect === "DUCKDB" ? "POSTGRES" : "DUCKDB"]}</span>{" "}
+                            on the other tab if you want the same SQL there. Hit{" "}
+                            <span className="font-medium text-foreground">Run & capture</span>{" "}
+                            to execute against the active dialect&apos;s engine and capture
+                            its expected output as JSON.
                         </div>
-                    )}
-                </CardContent>
-            </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Solution & expected output</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="text-sm text-muted-foreground">
-                        Write the canonical solution per dialect. Most problems are portable —
-                        type once, click <span className="font-medium text-foreground">Copy from {DIALECT_LABELS[activeDialect === "DUCKDB" ? "POSTGRES" : "DUCKDB"]}</span>{" "}
-                        on the other tab if you want the same SQL there. Hit{" "}
-                        <span className="font-medium text-foreground">Run & capture</span>{" "}
-                        to execute against the active dialect&apos;s engine and capture
-                        its expected output as JSON.
-                    </div>
-
-                    {/* Per-dialect tab strip. Tabs only appear when multiple
-                        dialects are selected; otherwise it's just a static
-                        label so the active engine is always clear. */}
-                    {dialects.length > 1 ? (
-                        <div className="inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1">
-                            {dialects.map((d) => {
-                                const active = d === activeDialect
-                                const hasSolution = Boolean(solutions[d]?.trim())
-                                return (
+                        {/* Per-dialect tab strip. Tabs only appear when multiple
+                            dialects are selected; otherwise it's just a static
+                            label so the active engine is always clear. */}
+                        {dialects.length > 1 ? (
+                            <div className="inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1">
+                                {dialects.map((d) => {
+                                    const active = d === activeDialect
+                                    const hasSolution = Boolean(solutions[d]?.trim())
+                                    return (
+                                        <button
+                                            key={d}
+                                            type="button"
+                                            onClick={() => setActiveDialect(d)}
+                                            className={[
+                                                "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer",
+                                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                                active
+                                                    ? "bg-surface-muted text-foreground"
+                                                    : "text-muted-foreground hover:text-foreground",
+                                            ].join(" ")}
+                                        >
+                                            {DIALECT_LABELS[d]}
+                                            {hasSolution && (
+                                                <span
+                                                    title="Has solution"
+                                                    className="h-1.5 w-1.5 rounded-full bg-easy"
+                                                />
+                                            )}
+                                        </button>
+                                    )
+                                })}
+                                {dialects.length === 2 && (
                                     <button
-                                        key={d}
                                         type="button"
-                                        onClick={() => setActiveDialect(d)}
-                                        className={[
-                                            "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer",
-                                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                                            active
-                                                ? "bg-surface-muted text-foreground"
-                                                : "text-muted-foreground hover:text-foreground",
-                                        ].join(" ")}
+                                        onClick={() => {
+                                            const other =
+                                                activeDialect === "DUCKDB"
+                                                    ? "POSTGRES"
+                                                    : "DUCKDB"
+                                            if (solutions[other]) {
+                                                setSolutions((prev) => ({
+                                                    ...prev,
+                                                    [activeDialect]: solutions[other],
+                                                }))
+                                            }
+                                            if (expectedOutputs[other]) {
+                                                setExpectedOutputs((prev) => ({
+                                                    ...prev,
+                                                    [activeDialect]:
+                                                        expectedOutputs[other],
+                                                }))
+                                            }
+                                        }}
+                                        disabled={
+                                            !solutions[
+                                                activeDialect === "DUCKDB"
+                                                    ? "POSTGRES"
+                                                    : "DUCKDB"
+                                            ]
+                                        }
+                                        className="ml-2 inline-flex items-center rounded-sm px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        title={`Copy ${
+                                            DIALECT_LABELS[
+                                                activeDialect === "DUCKDB"
+                                                    ? "POSTGRES"
+                                                    : "DUCKDB"
+                                            ]
+                                        } solution + expected output into ${DIALECT_LABELS[activeDialect]}`}
                                     >
-                                        {DIALECT_LABELS[d]}
-                                        {hasSolution && (
-                                            <span
-                                                title="Has solution"
-                                                className="h-1.5 w-1.5 rounded-full bg-easy"
-                                            />
-                                        )}
+                                        ← Copy from{" "}
+                                        {
+                                            DIALECT_LABELS[
+                                                activeDialect === "DUCKDB"
+                                                    ? "POSTGRES"
+                                                    : "DUCKDB"
+                                            ]
+                                        }
                                     </button>
-                                )
-                            })}
-                            {dialects.length === 2 && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const other =
-                                            activeDialect === "DUCKDB"
-                                                ? "POSTGRES"
-                                                : "DUCKDB"
-                                        if (solutions[other]) {
-                                            setSolutions((prev) => ({
-                                                ...prev,
-                                                [activeDialect]: solutions[other],
-                                            }))
-                                        }
-                                        if (expectedOutputs[other]) {
-                                            setExpectedOutputs((prev) => ({
-                                                ...prev,
-                                                [activeDialect]:
-                                                    expectedOutputs[other],
-                                            }))
-                                        }
-                                    }}
-                                    disabled={
-                                        !solutions[
-                                            activeDialect === "DUCKDB"
-                                                ? "POSTGRES"
-                                                : "DUCKDB"
-                                        ]
-                                    }
-                                    className="ml-2 inline-flex items-center rounded-sm px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                    title={`Copy ${
-                                        DIALECT_LABELS[
-                                            activeDialect === "DUCKDB"
-                                                ? "POSTGRES"
-                                                : "DUCKDB"
-                                        ]
-                                    } solution + expected output into ${DIALECT_LABELS[activeDialect]}`}
-                                >
-                                    ← Copy from{" "}
-                                    {
-                                        DIALECT_LABELS[
-                                            activeDialect === "DUCKDB"
-                                                ? "POSTGRES"
-                                                : "DUCKDB"
-                                        ]
-                                    }
-                                </button>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                            Editing for: {DIALECT_LABELS[activeDialect]} (only dialect)
-                        </div>
-                    )}
-                    <Field label="Solution SQL" htmlFor="solution">
-                        <Textarea
-                            id="solution"
-                            value={solutionSql}
-                            onChange={(e) => setSolutionSql(e.target.value)}
-                            rows={6}
-                            placeholder="SELECT name, SUM(amount) AS total FROM …"
-                        />
-                    </Field>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={captureOutput}
-                            disabled={running || !dbReady}
-                        >
-                            {running ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                                <Play className="h-3.5 w-3.5" />
-                            )}
-                            Run & capture
-                        </Button>
-                        {dbError && (
-                            <span className="text-xs text-destructive">{dbError}</span>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Editing for: {DIALECT_LABELS[activeDialect]} (only dialect)
+                            </div>
                         )}
-                        {!dbError && !dbReady && activeSchemaSql && (
-                            <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                Loading schema engine…
-                            </span>
-                        )}
-                        {runStatus && (
-                            <span
-                                className={`text-xs ${
-                                    runStatus.startsWith("Error")
-                                        ? "text-destructive"
-                                        : "text-muted-foreground"
-                                }`}
-                            >
-                                {runStatus}
-                            </span>
-                        )}
-                    </div>
-                    <Field
-                        label="Expected output (JSON array of rows)"
-                        htmlFor="expectedOutput"
-                        description="Captured automatically from Run & capture. Locked by default — manual edits are an escape hatch only."
-                        required
-                    >
-                        <div className="space-y-2">
+                        <Field label="Solution SQL" htmlFor="solution">
                             <Textarea
-                                id="expectedOutput"
-                                value={expectedOutput}
-                                onChange={(e) => setExpectedOutput(e.target.value)}
-                                rows={10}
-                                placeholder='[{"name":"Alice","total":1234.5}]'
-                                readOnly={!overrideExpected}
-                                required
-                                className={
-                                    !overrideExpected
-                                        ? "bg-surface-muted/40 cursor-not-allowed"
-                                        : ""
-                                }
+                                id="solution"
+                                value={solutionSql}
+                                onChange={(e) => setSolutionSql(e.target.value)}
+                                rows={6}
+                                placeholder="SELECT name, SUM(amount) AS total FROM …"
                             />
-                            <label className="inline-flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-                                <input
-                                    type="checkbox"
-                                    checked={overrideExpected}
-                                    onChange={(e) => setOverrideExpected(e.target.checked)}
-                                    className="h-3.5 w-3.5"
-                                />
-                                Override manually (advanced — prefer Run & capture)
-                            </label>
+                        </Field>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={captureOutput}
+                                disabled={running || !dbReady}
+                            >
+                                {running ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                    <Play className="h-3.5 w-3.5" />
+                                )}
+                                Run & capture
+                            </Button>
+                            {dbError && (
+                                <span className="text-xs text-destructive">{dbError}</span>
+                            )}
+                            {!dbError && !dbReady && activeSchemaSql && (
+                                <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    Loading schema engine…
+                                </span>
+                            )}
+                            {runStatus && (
+                                <span
+                                    className={`text-xs ${
+                                        runStatus.startsWith("Error")
+                                            ? "text-destructive"
+                                            : "text-muted-foreground"
+                                    }`}
+                                >
+                                    {runStatus}
+                                </span>
+                            )}
                         </div>
-                    </Field>
-                </CardContent>
-            </Card>
+                        <Field
+                            label="Expected output (JSON array of rows)"
+                            htmlFor="expectedOutput"
+                            description="Captured automatically from Run & capture. Locked by default — manual edits are an escape hatch only."
+                            required
+                        >
+                            <div className="space-y-2">
+                                <Textarea
+                                    id="expectedOutput"
+                                    value={expectedOutput}
+                                    onChange={(e) => setExpectedOutput(e.target.value)}
+                                    rows={10}
+                                    placeholder='[{"name":"Alice","total":1234.5}]'
+                                    readOnly={!overrideExpected}
+                                    required
+                                    className={
+                                        !overrideExpected
+                                            ? "bg-surface-muted/40 cursor-not-allowed"
+                                            : ""
+                                    }
+                                />
+                                <label className="inline-flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={overrideExpected}
+                                        onChange={(e) => setOverrideExpected(e.target.checked)}
+                                        className="h-3.5 w-3.5"
+                                    />
+                                    Override manually (advanced — prefer Run & capture)
+                                </label>
+                            </div>
+                        </Field>
+                    </CardContent>
+                </Card>
+            </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Hints</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <HintsEditor value={hints} onChange={setHints} />
-                </CardContent>
-            </Card>
+            {/* ---- Hints ---- */}
+            <div
+                role="tabpanel"
+                id="form-tabpanel-hints"
+                aria-labelledby="form-tab-hints"
+                hidden={activeTab !== "hints"}
+                className="space-y-6"
+            >
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Hints</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <HintsEditor value={hints} onChange={setHints} />
+                    </CardContent>
+                </Card>
+            </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Tags</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <TagPicker value={tagSlugs} onChange={setTagSlugs} />
-                </CardContent>
-            </Card>
+            {/* ---- Curriculum ----
+                Placement wiring (curriculumLessonId) lands in Task 11 — this
+                tab exists now so the strip has all five designed tabs and
+                errors routed to "curriculum" have somewhere to land, but
+                there's no field to render yet. */}
+            <div
+                role="tabpanel"
+                id="form-tabpanel-curriculum"
+                aria-labelledby="form-tab-curriculum"
+                hidden={activeTab !== "curriculum"}
+                className="space-y-6"
+            >
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Curriculum</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <EmptyState
+                            title="Curriculum placement is coming soon"
+                            description="Binding this problem to a lesson checkpoint is wired up in a follow-up task."
+                        />
+                    </CardContent>
+                </Card>
+            </div>
+
+            <ValidationChecklist items={checklistItems} />
 
             <div className="flex items-center gap-3 sticky bottom-14 lg:bottom-0 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-background/80 backdrop-blur border-t border-border">
                 <Button type="submit" disabled={submitting}>
