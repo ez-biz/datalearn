@@ -110,8 +110,30 @@ export function CurriculumPlacement({
             if (bucket) bucket.push(lesson)
             else map.set(key, [lesson])
         }
+        // /api/admin/lessons only lists lessons placed in a module
+        // (moduleLessons: { some: {} }), but addCheckpoint's findArticleId
+        // has no such requirement — a problem can stay bound to a lesson
+        // that was later pulled out of its module. Without this, the
+        // <select>'s value matches no <option>, so the browser silently
+        // falls back to "— No lesson (remove binding) —" while the readout
+        // below still says "Currently the checkpoint for X": bound and
+        // unbound on the same panel. Surface it instead of dropping it, in
+        // its own labeled group, rather than changing what addCheckpoint
+        // accepts.
+        if (initialBinding && !lessons.some((l) => l.id === initialBinding.lessonId)) {
+            map.set("No longer in a module", [
+                {
+                    id: initialBinding.lessonId,
+                    slug: initialBinding.lessonSlug,
+                    title: initialBinding.lessonTitle,
+                    trackName: null,
+                    moduleName: null,
+                    checkpointCount: 0,
+                },
+            ])
+        }
         return Array.from(map.entries())
-    }, [lessons])
+    }, [lessons, initialBinding])
 
     const selectedLesson = lessons.find((l) => l.id === value)
     const willReassign =
