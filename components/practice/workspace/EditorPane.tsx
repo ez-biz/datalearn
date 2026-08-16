@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { SqlEditor } from "@/components/sql/SqlEditor"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { SqlEditor, type MonacoEditorInstance } from "@/components/sql/SqlEditor"
 import type { ValidationResult } from "@/lib/sql-validator"
 import {
     DEFAULT_DISPLAY_ROW_CAP,
@@ -15,8 +15,11 @@ import type {
 } from "@/lib/use-problem-db"
 import type { StatusPillStatus } from "@/components/ui/StatusPill"
 import type { CheckpointContext } from "@/lib/workspace/queries"
+import { cn } from "@/lib/utils"
 import { ActionBar } from "./ActionBar"
 import { ResultsPane, type ResultsTab, type RunEntry } from "./ResultsPane"
+import { SqlAccessoryRow } from "./SqlAccessoryRow"
+import type { Segment } from "./MobileSegments"
 
 const DEFAULT_QUERY = "-- Write your SQL query here.\n\nSELECT 1 AS hello;"
 const MAX_RUNS = 10
@@ -39,6 +42,15 @@ interface EditorPaneProps {
     allowedDialects?: Dialect[]
     onDialectChange?: (d: Dialect) => void
     checkpointContext?: CheckpointContext | null
+    /**
+     * Which of the mobile Problem/Code/Result segments is active. Ignored at
+     * `lg` and above, where the code block (editor + action bar) and the
+     * results block are both always visible, stacked exactly as before SP6.
+     * Below `lg` it toggles which of the two blocks below is `hidden` —
+     * never which is mounted, so Monaco's model and the in-flight/last
+     * query result both survive switching segments.
+     */
+    activeSegment?: Segment
 }
 
 /**
@@ -47,6 +59,14 @@ interface EditorPaneProps {
  * Replaces components/sql/SqlPlayground.tsx: the run/submit state machine
  * stays here, the controls moved to ActionBar and the output to ResultsPane,
  * so no single file owns all three again.
+ *
+ * Below `lg` this renders two independently-toggled blocks — "code" (editor
+ * + the mobile accessory row + action bar) and "result" (ResultsPane) — so
+ * WorkspaceLayout's Problem/Code/Result segments can show exactly one of
+ * them full-height. Both blocks stay mounted at every width; only their
+ * `hidden` class changes. At `lg` and up both are always visible, stacked
+ * in the same order as before this task — the desktop composition is
+ * unchanged.
  *
  * min-w-0 on the root is load-bearing — this is a flex child, and without it
  * the column refuses to shrink below its content and clips the action bar.
@@ -69,6 +89,7 @@ export function EditorPane({
     allowedDialects = ["DUCKDB"],
     onDialectChange,
     checkpointContext = null,
+    activeSegment = "code",
 }: EditorPaneProps) {
     const controlled = queryProp !== undefined
     const placeholder = initialSchema
@@ -94,6 +115,20 @@ export function EditorPane({
 
     const queryRef = useRef(query)
     queryRef.current = query
+
+    // Captured once Monaco mounts (SqlEditor's onMount), used by the mobile
+    // accessory row to insert a token at the current cursor/selection.
+    const monacoEditorRef = useRef<MonacoEditorInstance | null>(null)
+    const insertAtCursor = useCallback((text: string) => {
+        const editor = monacoEditorRef.current
+        if (!editor) return
+        const selection = editor.getSelection()
+        if (!selection) return
+        editor.executeEdits("sql-accessory-row", [
+            { range: selection, text, forceMoveMarkers: true },
+        ])
+        editor.focus()
+    }, [])
 
     const recordRun = (sql: string, rows: number, ms: number) => {
         runSeq.current += 1
@@ -251,41 +286,71 @@ export function EditorPane({
 
     return (
         <div className="flex h-full min-w-0 flex-col gap-3">
-            <div className="min-h-0 min-w-0 flex-1">
-                <SqlEditor
-                    value={query}
-                    onChange={(v) => setQuery(v || "")}
+            {/* Code: editor + mobile accessory row + action bar. Below `lg`
+                visible only on the "code" segment; at `lg`+ always visible,
+                identical to the pre-SP6 layout. */}
+            <div
+                className={cn(
+                    "min-h-0 min-w-0 flex-1 flex-col gap-3",
+                    activeSegment === "code" ? "flex" : "hidden",
+                    "lg:flex"
+                )}
+            >
+                <div className="min-h-0 min-w-0 flex-1">
+                    <SqlEditor
+                        value={query}
+                        onChange={(v) => setQuery(v || "")}
+                        onRun={handleRun}
+                        onSubmit={
+                            showSubmit && !submissionDisabledReason
+                                ? handleSubmit
+                                : undefined
+                        }
+                        running={loading}
+                        runDisabled={runDisabled}
+                        dialect={dialect}
+                        allowedDialects={allowedDialects}
+                        onDialectChange={onDialectChange}
+                        onEditorReady={(editor) => {
+                            monacoEditorRef.current = editor
+                        }}
+                    />
+                </div>
+
+                <SqlAccessoryRow onInsert={insertAtCursor} className="lg:hidden" />
+
+                <ActionBar
                     onRun={handleRun}
-                    onSubmit={
-                        showSubmit && !submissionDisabledReason
-                            ? handleSubmit
-                            : undefined
-                    }
-                    running={loading}
+                    onSubmit={handleSubmit}
+                    onReset={onReset}
+                    showSubmit={showSubmit}
                     runDisabled={runDisabled}
-                    dialect={dialect}
-                    allowedDialects={allowedDialects}
-                    onDialectChange={onDialectChange}
+                    submitDisabled={submitDisabled}
+                    submitting={submitting}
+                    loading={loading}
+                    dbReady={dbReady}
+                    runTitle={runTitle}
+                    submitTitle={submitTitle}
+                    modKey={modKey}
+                    checkpointContext={checkpointContext}
                 />
             </div>
 
-            <ActionBar
-                onRun={handleRun}
-                onSubmit={handleSubmit}
-                onReset={onReset}
-                showSubmit={showSubmit}
-                runDisabled={runDisabled}
-                submitDisabled={submitDisabled}
-                submitting={submitting}
-                loading={loading}
-                dbReady={dbReady}
-                runTitle={runTitle}
-                submitTitle={submitTitle}
-                modKey={modKey}
-                checkpointContext={checkpointContext}
-            />
-
-            <div className="flex h-[34vh] min-h-[260px] min-w-0 flex-col">
+            {/* Result: below `lg` visible only on the "result" segment, full
+                height. At `lg`+ always visible at the fixed 34vh it has had
+                since SP5. */}
+            <div
+                className={cn(
+                    "min-h-0 min-w-0 flex-col",
+                    activeSegment === "result" ? "flex flex-1" : "hidden",
+                    // Reset grow/shrink/basis individually (rather than the
+                    // `flex-none` shorthand) so `h-[34vh]` governs sizing
+                    // exactly as it did before this task: a shorthand's
+                    // flex-basis: 0 would win over an explicit height on a
+                    // column flex item and collapse this pane at `lg`+.
+                    "lg:flex lg:h-[34vh] lg:min-h-[260px] lg:grow-0 lg:shrink lg:basis-auto"
+                )}
+            >
                 <ResultsPane
                     tab={tab}
                     onTabChange={setTab}

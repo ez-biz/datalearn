@@ -14,6 +14,11 @@ const DIALECT_LABEL: Record<Dialect, string> = {
     POSTGRES: "Postgres",
 }
 
+/** The editor instance Monaco hands `onMount` — reused here so callers that
+ *  need to drive the editor (the mobile accessory row's insert-at-cursor)
+ *  don't have to import `monaco-editor` themselves just for the type. */
+export type MonacoEditorInstance = Parameters<OnMount>[0]
+
 interface SqlEditorProps {
     value: string
     onChange: (value: string | undefined) => void
@@ -27,6 +32,10 @@ interface SqlEditorProps {
     allowedDialects?: Dialect[]
     /** Called when learner picks a different engine. */
     onDialectChange?: (d: Dialect) => void
+    /** Hands the caller the live Monaco editor instance once mounted, so it
+     *  can drive edits (e.g. inserting a SQL token at the cursor) without
+     *  this component needing to know about anything beyond the editor. */
+    onEditorReady?: (editor: MonacoEditorInstance) => void
 }
 
 export function SqlEditor({
@@ -39,6 +48,7 @@ export function SqlEditor({
     dialect = "DUCKDB",
     allowedDialects = ["DUCKDB"],
     onDialectChange,
+    onEditorReady,
 }: SqlEditorProps) {
     const { resolvedTheme } = useTheme()
     const [mounted, setMounted] = useState(false)
@@ -68,6 +78,7 @@ export function SqlEditor({
                 onSubmitRef.current?.()
             }
         )
+        onEditorReady?.(editor)
     }
 
     return (
