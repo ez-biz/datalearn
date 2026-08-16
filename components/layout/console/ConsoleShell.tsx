@@ -10,6 +10,7 @@ import { SignInDialogButton } from "@/components/auth/SignInDialog"
 import { Footer } from "@/components/layout/Footer"
 import { UserMenu } from "@/components/layout/UserMenu"
 import { cookies } from "next/headers"
+import { ConsoleAdminRail } from "./ConsoleAdminRail"
 import { ConsoleAdminSidebar } from "./ConsoleAdminSidebar"
 import { ConsoleChrome } from "./ConsoleChrome"
 import { MobileSignInMenu } from "./MobileSignInMenu"
@@ -72,6 +73,12 @@ export async function ConsoleShell({ children }: { children: React.ReactNode }) 
     // as defense in depth; it no longer needs these counts since it renders
     // no chrome of its own.
     let adminSidebarSlot: React.ReactNode = null
+    // The collapsed counterpart of adminSidebarSlot (see ConsoleChrome: it
+    // swaps between the two based on the persisted collapse cookie, same as
+    // it already does for ConsoleRail/ConsoleSidebar). Built alongside
+    // adminSidebarSlot, from the same viewer, so the two are never able to
+    // disagree about which admin destinations the signed-in role can see.
+    let adminRailSlot: React.ReactNode = null
     const role = session?.user?.role
     if (session?.user?.id && (role === "ADMIN" || role === "MODERATOR")) {
         const userId = session.user.id
@@ -90,9 +97,10 @@ export async function ConsoleShell({ children }: { children: React.ReactNode }) 
                   ])
                 : [0, 0, await discussionQueueCountPromise]
 
+        const viewer = { role, canViewDiscussionQueue }
         adminSidebarSlot = (
             <ConsoleAdminSidebar
-                viewer={{ role, canViewDiscussionQueue }}
+                viewer={viewer}
                 badges={{
                     openReports: openReportCount,
                     articleQueue: articleQueueCount,
@@ -100,6 +108,7 @@ export async function ConsoleShell({ children }: { children: React.ReactNode }) 
                 }}
             />
         )
+        adminRailSlot = <ConsoleAdminRail viewer={viewer} />
     }
 
     // UserMenu is the sole reviewed account surface — the sidebar header,
@@ -154,6 +163,7 @@ export async function ConsoleShell({ children }: { children: React.ReactNode }) 
             tabBarAccountSlot={accountMenu("tabbar")}
             signInSlot={signInSlot}
             adminSidebarSlot={adminSidebarSlot}
+            adminRailSlot={adminRailSlot}
             footerSlot={<Footer />}
         >
             {children}
