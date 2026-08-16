@@ -41,7 +41,7 @@ export default async function ArticlePage({ params }: Props) {
     const toc = extractToc(article.content)
 
     return (
-        <Container width="md" className="py-10 sm:py-14">
+        <Container width="lg" className="py-10 sm:py-14">
             <div className="flex gap-8">
                 <article className="flex-1 min-w-0 max-w-3xl mx-auto lg:mx-0">
                     <Link
