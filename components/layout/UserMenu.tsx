@@ -36,7 +36,7 @@ type Role = "USER" | "CONTRIBUTOR" | "MODERATOR" | "ADMIN"
 type MenuPlacement = "header" | "rail" | "tabbar"
 
 const PLACEMENT_CLASS: Record<MenuPlacement, string> = {
-    header: "top-[calc(100%+8px)] right-0",
+    header: "top-[calc(100%+8px)] left-0",
     rail: "bottom-0 left-[calc(100%+8px)]",
     tabbar: "bottom-[calc(100%+8px)] right-0",
 }
