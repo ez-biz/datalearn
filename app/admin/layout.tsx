@@ -32,10 +32,12 @@ export default async function AdminLayout({
     //
     // ADMIN-only, matching ADMIN_NAV (lib/admin/admin-nav-model.ts): all
     // four shortcuts create content — problems, articles, tracks, contests —
-    // and every one of those nav items is `adminOnly: true`, hidden from
-    // moderators. Showing the same shortcuts to a moderator would dangle an
-    // affordance they cannot use; the destination pages redirect them home,
-    // but the bar shouldn't advertise actions its viewer can't take.
+    // and every one of those nav items is hidden from moderators (none of
+    // them sets requiresDiscussionQueuePermission, the only way a MODERATOR
+    // gets past isItemVisible's role check). Showing the same shortcuts to
+    // a moderator would dangle an affordance they cannot use; the
+    // destination pages redirect them home, but the bar shouldn't advertise
+    // actions its viewer can't take.
     return (
         <>
             {role === "ADMIN" && (

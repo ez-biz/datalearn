@@ -158,8 +158,8 @@ test("a MODERATOR with discussion permission receives no admin-only links in the
     await expect(adminNav.getByText("Problems", { exact: true })).toHaveCount(0)
     await expect(adminNav.getByText("API keys", { exact: true })).toHaveCount(0)
     await expect(adminNav.getByText("Moderators", { exact: true })).toHaveCount(0)
-    // Bonus: Reports is also adminOnly (no requiresDiscussionQueuePermission
-    // flag), so it should be filtered too.
+    // Bonus: Reports has no requiresDiscussionQueuePermission flag either,
+    // so it should be filtered too.
     await expect(adminNav.getByText("Reports", { exact: true })).toHaveCount(0)
 
     await expect(

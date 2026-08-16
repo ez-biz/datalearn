@@ -35,7 +35,6 @@ export interface AdminNavItem {
     /** Defaults to "prefix". */
     match?: "exact" | "prefix"
     badgeKey?: AdminBadgeKey
-    adminOnly: boolean
     requiresDiscussionQueuePermission?: boolean
 }
 
@@ -55,7 +54,6 @@ export const ADMIN_NAV: AdminNavGroup[] = [
                 icon: LayoutDashboard,
                 href: "/admin",
                 match: "exact",
-                adminOnly: true,
             },
         ],
     },
@@ -67,28 +65,24 @@ export const ADMIN_NAV: AdminNavGroup[] = [
                 label: "Problems",
                 icon: Database,
                 href: "/admin/problems",
-                adminOnly: true,
             },
             {
                 key: "schemas",
                 label: "Schemas",
                 icon: FileCode,
                 href: "/admin/schemas",
-                adminOnly: true,
             },
             {
                 key: "topics",
                 label: "Topics",
                 icon: FolderOpen,
                 href: "/admin/topics",
-                adminOnly: true,
             },
             {
                 key: "tracks",
                 label: "Tracks",
                 icon: Route,
                 href: "/admin/tracks",
-                adminOnly: true,
             },
             {
                 key: "articles",
@@ -96,14 +90,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
                 icon: BookOpen,
                 href: "/admin/articles",
                 badgeKey: "articleQueue",
-                adminOnly: true,
             },
             {
                 key: "tags",
                 label: "Tags",
                 icon: Tag,
                 href: "/admin/tags",
-                adminOnly: true,
             },
         ],
     },
@@ -115,14 +107,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
                 label: "Daily",
                 icon: CalendarCheck2,
                 href: "/admin/daily",
-                adminOnly: true,
             },
             {
                 key: "contests",
                 label: "Contests",
                 icon: Trophy,
                 href: "/admin/contests",
-                adminOnly: true,
             },
         ],
     },
@@ -135,7 +125,6 @@ export const ADMIN_NAV: AdminNavGroup[] = [
                 icon: Flag,
                 href: "/admin/reports",
                 badgeKey: "openReports",
-                adminOnly: true,
             },
             {
                 key: "discussions",
@@ -143,7 +132,6 @@ export const ADMIN_NAV: AdminNavGroup[] = [
                 icon: MessageSquareText,
                 href: "/admin/discussions",
                 badgeKey: "discussionQueue",
-                adminOnly: false,
                 requiresDiscussionQueuePermission: true,
             },
         ],
@@ -156,21 +144,18 @@ export const ADMIN_NAV: AdminNavGroup[] = [
                 label: "Moderators",
                 icon: ShieldCheck,
                 href: "/admin/moderators",
-                adminOnly: true,
             },
             {
                 key: "contributors",
                 label: "Contributors",
                 icon: Users,
                 href: "/admin/contributors",
-                adminOnly: true,
             },
             {
                 key: "api-keys",
                 label: "API keys",
                 icon: Key,
                 href: "/admin/api-keys",
-                adminOnly: true,
             },
         ],
     },
