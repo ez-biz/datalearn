@@ -32,8 +32,10 @@ interface ActionBarProps {
  *
  * Below `lg`, Run and Submit grow to equal-width 46px touch targets and take
  * the row's first line on their own (flex-wrap pushes Reset and the
- * checkpoint link to a second line). At `lg`+ both reset to their original
- * `size="sm"` dimensions — unchanged from before this task.
+ * checkpoint link to a second line). Reset also grows to a 46px touch
+ * target below `lg` — same floor as Run/Submit, just not flex-1 since it
+ * doesn't need to stretch to fill the row. At `lg`+ all three reset to
+ * their original `size="sm"` dimensions — unchanged from before this task.
  */
 export function ActionBar({
     onRun,
@@ -110,6 +112,7 @@ export function ActionBar({
                     onClick={onReset}
                     disabled={loading || submitting}
                     title="Reset draft (clears editor and removes saved local draft)"
+                    className="h-[46px] lg:h-8"
                 >
                     <RotateCcw className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Reset</span>
