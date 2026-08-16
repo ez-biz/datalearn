@@ -249,13 +249,19 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
         const error = e as { code?: string; message?: string }
         if (error.message === "SCHEMA_NOT_FOUND") {
             return NextResponse.json(
-                { error: "schemaId does not match any SqlSchema." },
+                {
+                    error: "schemaId does not match any SqlSchema.",
+                    code: "SCHEMA_NOT_FOUND",
+                },
                 { status: 400 }
             )
         }
         if (error.message === "SLUG_TAKEN") {
             return NextResponse.json(
-                { error: "A problem with that slug already exists." },
+                {
+                    error: "A problem with that slug already exists.",
+                    code: "SLUG_TAKEN",
+                },
                 { status: 409 }
             )
         }
@@ -268,7 +274,10 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
         ) {
             const missing = error.message.slice("TAGS_NOT_FOUND:".length)
             return NextResponse.json(
-                { error: `Unknown tag slug(s): ${missing}.` },
+                {
+                    error: `Unknown tag slug(s): ${missing}.`,
+                    code: "TAGS_NOT_FOUND",
+                },
                 { status: 400 }
             )
         }
@@ -283,6 +292,7 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
                 {
                     error:
                         "PUBLISHED problems require non-empty solutions and expectedOutputs for every listed dialect.",
+                    code: "PUBLISHED_DIALECT_MAP_INCOMPLETE",
                     missing: missing.split(",").filter(Boolean),
                 },
                 { status: 400 }
