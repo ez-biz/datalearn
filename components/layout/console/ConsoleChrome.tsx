@@ -1,6 +1,8 @@
 "use client"
 
 import { usePathname } from "next/navigation"
+import { ConsoleAdminRailFrame } from "./ConsoleAdminRailFrame"
+import { ConsoleAdminSidebarFrame } from "./ConsoleAdminSidebarFrame"
 import { ConsoleRail } from "./ConsoleRail"
 import { ConsoleSidebar, type TrackProgress } from "./ConsoleSidebar"
 import { isAppRoute, isFocusRoute } from "./focus-route"
@@ -20,6 +22,25 @@ interface ConsoleChromeProps {
     /** Account menu trigger for the mobile "You" tab. */
     tabBarAccountSlot: React.ReactNode
     signInSlot: React.ReactNode
+    /**
+     * The admin sidebar, passed in rather than imported — same reason as
+     * footerSlot below. ConsoleAdminSidebar is a server component that pulls
+     * in the full ADMIN_NAV item list; importing it directly into this
+     * client component would drag that list into the browser bundle for
+     * every visitor, not just the admins this ever renders for. Null on
+     * every render where ConsoleShell didn't build one (i.e. the signed-in
+     * user isn't ADMIN/MODERATOR) — ConsoleChrome only ever reads it when
+     * `admin` is true, so that's never actually reached for a learner route.
+     */
+    adminSidebarSlot: React.ReactNode
+    /**
+     * The collapsed counterpart of adminSidebarSlot — same rationale, same
+     * "server component built in ConsoleShell" origin. Rendered instead of
+     * the learner ConsoleRail when the sidebar is collapsed on an admin
+     * route, so collapsing never hides the admin nav behind the learner
+     * rail (see ConsoleAdminRail's header comment).
+     */
+    adminRailSlot: React.ReactNode
     /**
      * The site <Footer />, passed in rather than imported.
      *
@@ -42,6 +63,8 @@ export function ConsoleChrome({
     railAccountSlot,
     tabBarAccountSlot,
     signInSlot,
+    adminSidebarSlot,
+    adminRailSlot,
     footerSlot,
     children,
 }: ConsoleChromeProps) {
@@ -49,6 +72,15 @@ export function ConsoleChrome({
     const pathname = usePathname()
     const focus = isFocusRoute(pathname)
     const app = isAppRoute(pathname)
+    // Admin is NOT a fourth shell mode. It is a normal route that swaps which
+    // nav the existing sidebar renders, so isFocusRoute/isAppRoute — and the
+    // test asserting they are disjoint — are untouched.
+    //
+    // Segment-aware, not a raw prefix check: a raw `pathname.startsWith("/admin")`
+    // would also match a sibling CMS page at e.g. /admin-faq (reachable via
+    // app/[slug]), sending a non-admin visitor down the admin branch with no
+    // adminSidebarSlot to render there.
+    const admin = pathname === "/admin" || pathname.startsWith("/admin/")
 
     return (
         <div className="flex h-dvh overflow-hidden print:block print:h-auto print:overflow-visible">
@@ -82,7 +114,17 @@ export function ConsoleChrome({
             {!focus && (
                 <header className="flex shrink-0 print:hidden">
                     {collapsed ? (
-                        <ConsoleRail onToggle={toggle} accountSlot={railAccountSlot} />
+                        admin ? (
+                            <ConsoleAdminRailFrame onToggle={toggle} accountSlot={railAccountSlot}>
+                                {adminRailSlot}
+                            </ConsoleAdminRailFrame>
+                        ) : (
+                            <ConsoleRail onToggle={toggle} accountSlot={railAccountSlot} />
+                        )
+                    ) : admin ? (
+                        <ConsoleAdminSidebarFrame headerSlot={headerSlot} onToggle={toggle}>
+                            {adminSidebarSlot}
+                        </ConsoleAdminSidebarFrame>
                     ) : (
                         <ConsoleSidebar
                             trackProgress={trackProgress}
@@ -112,17 +154,19 @@ export function ConsoleChrome({
 
                 pb-14 clears the 56px fixed MobileTabBar; focus routes render no
                 tab bar, so they must not carry it. App routes retain that
-                mobile clearance below `lg`, but clamp this outer container at
-                `lg` because the workspace panes own their scrolling. Their
-                footer is omitted at every width: inside a clamped application
-                view it would be unreachable, not merely out of the way. */}
+                mobile clearance at every width, but clamp this outer
+                container's scroll at every width too — the workspace panes
+                own their scrolling below `lg` as well as above it, once the
+                segmented mobile panes land. Their footer is omitted at every
+                width: inside a clamped application view it would be
+                unreachable, not merely out of the way. */}
             <div
                 id="app-scroll"
                 className={
                     focus
                         ? "flex flex-1 flex-col overflow-y-auto print:overflow-visible"
                         : app
-                          ? "flex flex-1 flex-col overflow-y-auto pb-14 lg:overflow-hidden lg:pb-0 print:overflow-visible print:pb-0"
+                          ? "flex flex-1 flex-col overflow-hidden pb-14 lg:pb-0 print:overflow-visible print:pb-0"
                           : "flex flex-1 flex-col overflow-y-auto pb-14 lg:pb-0 print:overflow-visible print:pb-0"
                 }
             >
@@ -135,7 +179,7 @@ export function ConsoleChrome({
                             tabIndex={-1}
                             className={
                                 app
-                                    ? "flex flex-1 flex-col focus:outline-none lg:min-h-0"
+                                    ? "flex min-h-0 flex-1 flex-col focus:outline-none"
                                     : "flex flex-1 flex-col focus:outline-none"
                             }
                         >

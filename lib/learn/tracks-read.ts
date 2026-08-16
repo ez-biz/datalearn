@@ -54,6 +54,31 @@ export function rollUpItems(
     }
 }
 
+/**
+ * One module's rolled-up progress, for the signed-in home dashboard's
+ * ModuleProgress card. `position` is 0-indexed straight from the DB —
+ * render it through `modulePrefix` (components/learn/reader/lesson-nav.ts)
+ * rather than restating the +1 to display it; a previous SP6 task shipped
+ * a bug where a panel that hand-rolled `position + 1` disagreed with the
+ * reader's own modulePrefix for the same module.
+ */
+export type ModuleProgressSummary = {
+    id: string
+    slug: string
+    position: number
+    name: string
+    /** Free — Module.description, added to the existing select alongside
+     *  the fields below. Consumed by the signed-out home's path preview
+     *  (components/home/marketing/PathPreview.tsx) for its row subtext. */
+    description: string
+    percent: number
+    /** Free — rollUpModule already computes these in the loop below; this
+     *  just exposes them instead of discarding them. Same reasoning as
+     *  `percent` itself. */
+    lessonsTotal: number
+    problemsTotal: number
+}
+
 export type TrackSummary = {
     slug: string
     name: string
@@ -70,6 +95,12 @@ export type TrackSummary = {
     /** First unsolved problem on a track with no modules (older TrackItem
      *  model); null whenever the track has modules. */
     nextItemSlug: string | null
+    /** Per-module rollups, in track order. Empty for an item-only track
+     *  (no modules) or a modules-track with none yet — the dashboard's
+     *  ModuleProgress card renders nothing on empty, not six empty cards.
+     *  Computed from rows this query already fetches (modules -> lessons ->
+     *  checkpoints -> problem); no additional query. */
+    modules: ModuleProgressSummary[]
 }
 
 /**
@@ -130,6 +161,9 @@ export const getTrackSummariesForUser = cache(
                     select: {
                         id: true,
                         slug: true,
+                        name: true,
+                        description: true,
+                        position: true,
                         lessons: {
                             where: { article: { status: "PUBLISHED" } },
                             orderBy: { position: "asc" },
@@ -207,6 +241,7 @@ export const getTrackSummariesForUser = cache(
 
         return tracks.map((track) => {
             const moduleRollups: ModuleRollup[] = []
+            const moduleSummaries: ModuleProgressSummary[] = []
             const modulesForResume: Array<{
                 slug: string
                 lessons: Array<{ slug: string; completed: boolean }>
@@ -223,16 +258,26 @@ export const getTrackSummariesForUser = cache(
                     })),
                 }))
 
-                moduleRollups.push(
-                    rollUpModule({
-                        moduleId: module.id,
-                        lessons: lessons.map((l) => ({
-                            articleId: l.articleId,
-                            completed: l.completed,
-                        })),
-                        problems: lessons.flatMap((l) => l.problems),
-                    }),
-                )
+                const moduleRollup = rollUpModule({
+                    moduleId: module.id,
+                    lessons: lessons.map((l) => ({
+                        articleId: l.articleId,
+                        completed: l.completed,
+                    })),
+                    problems: lessons.flatMap((l) => l.problems),
+                })
+                moduleRollups.push(moduleRollup)
+
+                moduleSummaries.push({
+                    id: module.id,
+                    slug: module.slug,
+                    position: module.position,
+                    name: module.name,
+                    description: module.description,
+                    percent: moduleRollup.percent,
+                    lessonsTotal: moduleRollup.lessonsTotal,
+                    problemsTotal: moduleRollup.problemsTotal,
+                })
 
                 modulesForResume.push({
                     slug: module.slug,
@@ -273,6 +318,7 @@ export const getTrackSummariesForUser = cache(
                         : (track.items.find(
                               (i) => !solvedProblemIds.has(i.problem.id),
                           )?.problem.slug ?? null),
+                modules: moduleSummaries,
             }
         })
     },

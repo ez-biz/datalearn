@@ -115,15 +115,23 @@ actions/                 Server actions (validateSubmission, getProblems, ...)
 components/
   ui/                    Hand-rolled primitives (Button, Card, Badge, Input, ...)
   layout/                Navbar, Footer, ThemeProvider, MobileNav
+    console/             ConsoleShell (server) / ConsoleChrome (client) shell;
+                         ConsoleAdminSidebar + ConsoleAdminRail render the
+                         admin nav from lib/admin/admin-nav-model.ts
   practice/              ProblemClient, ProblemPanel, PracticeList, HistoryPanel,
                          discussion UI
   sql/                   SqlPlayground, SqlEditor, ResultTable, ValidationResult
-  admin/                 AdminNav, ProblemForm, moderation/settings clients
+  admin/                 ProblemForm, AdminQuickActions, moderation/settings clients
 lib/
   prisma.ts              Prisma client singleton
   auth.ts                NextAuth setup (GitHub + Google + Prisma adapter)
   api-auth.ts            requireAdmin() — session OR bearer; withAdmin() route wrapper
   admin-validation.ts    Zod schemas for /api/admin/* payloads
+  admin/                 admin-nav-model.ts (ADMIN_NAV + visibility/active-key
+                         logic), admin-nav-match.ts (closure-free path
+                         matching for client leaves), form-tabs.ts,
+                         metric-delta.ts, problems-filter.ts — all pure,
+                         unit-tested
   discussions/           Discussion settings, rate limits, permissions,
                          reputation, query shaping
   duckdb.ts              DuckDB-WASM bootstrap

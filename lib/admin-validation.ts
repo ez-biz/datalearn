@@ -319,6 +319,16 @@ export const ProblemUpdateInputBase = z.object({
         .optional(),
     /** @deprecated v0.4.2 — use `solutions`. */
     solutionSql: z.string().max(20_000).optional().nullable(),
+    /**
+     * Task 11 (SP7) — the article `id` of the lesson this problem should
+     * become a checkpoint of, via the existing `LessonCheckpoint` relation
+     * (`lib/admin-curriculum.ts`'s `addCheckpoint`/`removeCheckpoint`, never
+     * a direct write). `null` clears an existing binding; `undefined`
+     * (the field omitted) leaves the binding untouched. NOT accepted on
+     * create — the target must already exist as a queryable problem slug
+     * before it can be looked up inside `addCheckpoint`.
+     */
+    curriculumLessonId: z.string().min(1).optional().nullable(),
 })
 
 export const ProblemUpdateInput = ProblemUpdateInputBase

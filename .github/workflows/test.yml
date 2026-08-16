@@ -146,8 +146,20 @@ jobs:
       - name: Test console nav model
         run: npm run test:console-nav
 
+      - name: Test admin nav model
+        run: npm run test:admin-nav
+
+      - name: Admin metric deltas
+        run: npm run test:metric-delta
+
       - name: Test problems panel model
         run: npm run test:problems-panel
+
+      - name: Admin problems filter
+        run: npm run test:problems-filter
+
+      - name: Admin form tabs
+        run: npm run test:form-tabs
 
       - name: Test catalog model
         run: npm run test:catalog-model
@@ -163,6 +175,12 @@ jobs:
 
       - name: Test approach sort
         run: npm run test:approach-sort
+
+      - name: Test weak spots
+        run: npm run test:weak-spots
+
+      - name: Test today's plan
+        run: npm run test:today-plan
 
       - name: Test lesson nav model
         run: npm run test:lesson-nav

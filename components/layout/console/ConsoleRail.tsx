@@ -2,10 +2,10 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Moon, PanelLeft, Sun } from "lucide-react"
-import { useHydratedTheme } from "@/lib/use-hydrated-theme"
+import { PanelLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { FOOTER_NAV, PRIMARY_NAV, isNavItemActive, type NavItem } from "./nav-model"
+import { ThemeIcon } from "./ThemeToggle"
 
 interface ConsoleRailProps {
     onToggle: () => void
@@ -52,28 +52,6 @@ function RailItem({ item, pathname }: { item: NavItem; pathname: string }) {
         >
             <Icon className="h-[17px] w-[17px]" aria-hidden />
         </Link>
-    )
-}
-
-/** Same visual footprint as RailItem's interactive state, but for an action
- *  rather than a NavItem. */
-function ThemeIcon() {
-    const { isDark, toggle } = useHydratedTheme()
-
-    return (
-        <button
-            type="button"
-            onClick={toggle}
-            aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
-            title={isDark ? "Switch to light theme" : "Switch to dark theme"}
-            className={cn(CELL, "text-text-dim hover:bg-panel-hover hover:text-foreground")}
-        >
-            {isDark ? (
-                <Moon className="h-[17px] w-[17px]" aria-hidden />
-            ) : (
-                <Sun className="h-[17px] w-[17px]" aria-hidden />
-            )}
-        </button>
     )
 }
 

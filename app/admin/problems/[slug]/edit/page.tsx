@@ -24,9 +24,41 @@ export default async function EditProblemPage({ params }: Props) {
         include: {
             tags: { select: { slug: true } },
             discussionState: { select: { mode: true } },
+            // Task 11 (SP7) — the problem's own checkpoint binding, read
+            // straight off the existing `LessonCheckpoint` relation (no new
+            // columns). `moduleLessons` is taken 1-deep purely to label the
+            // picker with a track/module breadcrumb; an Article can belong
+            // to more than one Module, but the checkpoint binding itself is
+            // per-problem, not per-placement.
+            lessonCheckpoint: {
+                select: {
+                    position: true,
+                    article: {
+                        select: {
+                            id: true,
+                            slug: true,
+                            title: true,
+                            moduleLessons: {
+                                take: 1,
+                                orderBy: { position: "asc" },
+                                select: {
+                                    module: {
+                                        select: {
+                                            name: true,
+                                            track: { select: { name: true, slug: true } },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
         },
     })
     if (!problem) notFound()
+
+    const checkpointPlacement = problem.lessonCheckpoint?.article.moduleLessons[0]?.module
 
     return (
         <AdminListShell
@@ -76,6 +108,16 @@ export default async function EditProblemPage({ params }: Props) {
                     // when the new maps are missing entries.
                     expectedOutput: problem.expectedOutput,
                     solutionSql: problem.solutionSql ?? "",
+                    curriculumBinding: problem.lessonCheckpoint
+                        ? {
+                              lessonId: problem.lessonCheckpoint.article.id,
+                              lessonSlug: problem.lessonCheckpoint.article.slug,
+                              lessonTitle: problem.lessonCheckpoint.article.title,
+                              trackName: checkpointPlacement?.track.name ?? null,
+                              moduleName: checkpointPlacement?.name ?? null,
+                              position: problem.lessonCheckpoint.position,
+                          }
+                        : null,
                 }}
             />
         </AdminListShell>

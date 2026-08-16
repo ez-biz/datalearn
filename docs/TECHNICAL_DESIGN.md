@@ -127,7 +127,7 @@ Data Learn is a single Next.js 16 application backed by Postgres. The runtime ar
 datalearn/
 ├── app/                          App Router pages (RSC by default)
 │   ├── layout.tsx                Root layout: Inter + JetBrains Mono, ConsoleShell (left sidebar/rail chrome), Footer, ThemeProvider, Vercel Analytics
-│   ├── page.tsx                  Homepage — branches on auth(): UserHome dashboard for signed-in, marketing for anonymous
+│   ├── page.tsx                  Homepage — branches on auth(): SignedInHome dashboard for signed-in, marketing home for anonymous
 │   ├── globals.css               Tailwind v4 entry, HSL token system, prefers-reduced-motion clamp
 │   ├── practice/
 │   │   ├── page.tsx              Problem list (filters by difficulty, search, status)
@@ -154,14 +154,16 @@ datalearn/
 ├── components/
 │   ├── ui/                       Hand-rolled primitives (Button, Card, Badge, Input, Skeleton, Logo, Container, EmptyState)
 │   ├── layout/                   Footer, ThemeProvider, UserMenu (avatar dropdown)
-│   │   └── console/              ConsoleShell (server), ConsoleChrome (client), ConsoleSidebar, ConsoleRail, MobileTabBar, MobileSignInMenu, nav-model.ts, sidebar-cookie.ts, useSidebarCollapse.ts
+│   │   └── console/              ConsoleShell (server), ConsoleChrome (client), ConsoleSidebar, ConsoleRail, ConsoleAdminSidebar/ConsoleAdminRail (admin nav, gated on role), MobileTabBar, MobileSignInMenu, nav-model.ts, sidebar-cookie.ts, useSidebarCollapse.ts
 │   ├── practice/                 ProblemClient (workspace state), ProblemPanel, PracticeList, HistoryPanel, RelatedArticlesPanel, ReportDialog
 │   ├── lists/                    CreateListButton (popover), ListDetail (rename/delete/reorder/sort), AddToListButton (workspace popover), AddProblemsPicker (search-and-add)
 │   ├── sql/                      SqlPlayground (Monaco + Run/Submit), SqlEditor, ResultTable, ValidationResult, SqlPlaygroundSkeleton
-│   ├── home/                     UserHome (logged-in dashboard with continue / progress / recommended / recent cards)
+│   ├── home/
+│   │   ├── dashboard/             SignedInHome (assembles seven cards: ResumeCard, TodayPlan, ModuleProgress, RecentSubmissions, StreakCard, DailyCard, WeakSpotsCard) — logged-in homepage
+│   │   └── marketing/             Hero, PathPreview, HowItWorks, Proof — anonymous homepage
 │   ├── profile/                  ProfileSidebar, ActivityHeatmap, SolvedDonut, SkillsByTag, PlaceholderCard
 │   ├── learn/                    Cross-link panels, article rendering
-│   └── admin/                    AdminNav, ProblemForm, HintsEditor, TagPicker, ArticleEditor, ContributorsClient, ApiKeysClient
+│   └── admin/                    ProblemForm, AdminQuickActions, HintsEditor, TagPicker, ArticleEditor, ContributorsClient, ApiKeysClient
 ├── lib/
 │   ├── auth.ts                   NextAuth setup; signIn callback guards account-link takeover
 │   ├── api-auth.ts               requireAdmin / requireContributor; Bearer + session paths; Origin/CSRF gate
@@ -170,6 +172,7 @@ datalearn/
 │   ├── use-problem-db.ts         Shared per-page DB hook (one connection, schema bootstrapped once)
 │   ├── sql-validator.ts          Pure validator: epsilon for floats, ordered/unordered modes
 │   ├── admin-validation.ts       Zod schemas — kept Prisma-free (imported by mcp-server/)
+│   ├── admin/                    admin-nav-model.ts (ADMIN_NAV + visibility/active-key logic, pure) with admin-nav-match.ts split out for closure-free client-leaf imports; form-tabs.ts, metric-delta.ts, problems-filter.ts — all pure, unit-tested
 │   ├── schema-parser.ts          Server-side parser for SqlSchema.sql → TableInfo[] (skips DuckDB roundtrip)
 │   ├── profile-stats.ts          Pure helpers: toDayKey / buildHeatmap / computeStreaks
 │   ├── article-versions.ts       Snapshot-on-publish for ArticleVersion / ProblemVersion
@@ -498,15 +501,23 @@ Single async function. Composes 8 cheap parallel Prisma calls per profile load:
 - **`SkillsByTag`** — top tertile = Advanced, middle = Intermediate, bottom = Fundamental, computed from the user's own ranked-by-count distribution (no global thresholds — works for new users).
 - **`PlaceholderCard`** — sized placeholders for the deferred sections (Contests, Languages/DBs, Work, Education, Resume, Links) so the layout doesn't collapse and a "Coming soon" pill makes it clear the slot is intentional, not broken.
 
-### 10.4 Logged-in homepage (`components/home/UserHome.tsx`)
+### 10.4 Homepage (`components/home/`)
 
-Branches `app/page.tsx` on `auth()`. For signed-in users the homepage is a four-card dashboard:
-- **Continue / Recently solved** — last attempted problem, deep-linked.
-- **Your progress** — bars per difficulty (uses the same data source as `/profile`).
-- **Recommended next** — first PUBLISHED problem the user hasn't solved.
-- **Recent activity** — last 5 submissions.
+`app/page.tsx` branches on `auth()`. The pure logic and the per-user read live in `lib/home/` (`home-read.ts::getHomeData` — the bounded-query composite read; `today-plan.ts`; `weak-spots.ts`), Prisma-free and framework-agnostic apart from that one read.
 
-Anonymous traffic still gets the full marketing page unchanged.
+**Signed-in** (`components/home/dashboard/`) — `SignedInHome` assembles seven presentational cards into a two-column layout (`lg` and up; single column below):
+
+- **`ResumeCard`** — deep-link back into the active track's next lesson.
+- **`TodayPlan`** — today's lesson/daily/problem, de-duplicated by `buildTodayPlan`.
+- **`ModuleProgress`** — per-module bars for the active track.
+- **`RecentSubmissions`** — last submissions, always renders (honest empty state, never null).
+- **`StreakCard`** — current/longest streak + week grid, from the same `buildHeatmap` series `/profile` uses.
+- **`DailyCard`** — today's daily-problem status.
+- **`WeakSpotsCard`** — topics with the lowest accept rate.
+
+`SignedInHome` itself owns the greeting, the "X of Y solved" subtitle, and an inline `ProgressByDifficulty` card — both driven by `home.catalogTotals` (from `getCatalogProblems`, the same read `/practice` renders from), so the dashboard's solved counts can never disagree with the catalog page's, numerator or denominator.
+
+**Signed-out** (`components/home/marketing/`) — `Hero`, `PathPreview`, `HowItWorks`, `Proof`.
 
 ### 10.5 Avatar dropdown (`components/layout/UserMenu.tsx`)
 
