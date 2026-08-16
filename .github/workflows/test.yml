@@ -182,6 +182,9 @@ jobs:
       - name: Test today's plan
         run: npm run test:today-plan
 
+      - name: Test active track selection
+        run: npm run test:active-track
+
       - name: Test lesson nav model
         run: npm run test:lesson-nav
 

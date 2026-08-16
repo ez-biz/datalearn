@@ -101,6 +101,20 @@ export type TrackSummary = {
      *  Computed from rows this query already fetches (modules -> lessons ->
      *  checkpoints -> problem); no additional query. */
     modules: ModuleProgressSummary[]
+    /** Most recent of this viewer's lesson completions and accepted
+     *  submissions *within this track* — the max of every completed
+     *  LessonProgress.completedAt for an article in one of this track's
+     *  lessons, and every ACCEPTED Submission.createdAt for a problem
+     *  reachable from this track (a checkpoint problem or, for an
+     *  item-only track, a TrackItem problem). Null when the viewer has
+     *  never touched this track, or when userId is null (anonymous
+     *  viewers never get an activity signal). Free — both queries below
+     *  already fetch these rows for completedArticleIds/solvedProblemIds;
+     *  this just also keeps their timestamps instead of discarding them,
+     *  so no additional query and no additional round trip. Consumed by
+     *  lib/home/active-track.ts's pickActiveTrack to choose which track
+     *  the signed-in home dashboard features. */
+    lastActivityAt: Date | null
 }
 
 /**
@@ -212,6 +226,13 @@ export const getTrackSummariesForUser = cache(
 
         const completedArticleIds = new Set<string>()
         const solvedProblemIds = new Set<string>()
+        // articleId -> that completion's completedAt, problemId -> that
+        // ACCEPTED submission's createdAt. Feed lastActivityAt below; kept
+        // separate from the two Sets above rather than folding in because
+        // most callers (rollup/resume) only need membership, not the
+        // timestamp.
+        const completedArticleAt = new Map<string, Date>()
+        const solvedProblemAt = new Map<string, Date>()
 
         if (userId) {
             if (articleIds.length) {
@@ -221,9 +242,15 @@ export const getTrackSummariesForUser = cache(
                         articleId: { in: articleIds },
                         completedAt: { not: null },
                     },
-                    select: { articleId: true },
+                    select: { articleId: true, completedAt: true },
                 })
-                for (const row of progress) completedArticleIds.add(row.articleId)
+                for (const row of progress) {
+                    completedArticleIds.add(row.articleId)
+                    // completedAt can't actually be null here — the where
+                    // clause above already filters on `not: null` — but the
+                    // generated type is still `Date | null`, so guard it.
+                    if (row.completedAt) completedArticleAt.set(row.articleId, row.completedAt)
+                }
             }
             if (problemIds.length) {
                 const accepted = await prisma.submission.findMany({
@@ -232,10 +259,24 @@ export const getTrackSummariesForUser = cache(
                         status: "ACCEPTED",
                         problemId: { in: problemIds },
                     },
-                    select: { problemId: true },
+                    select: { problemId: true, createdAt: true },
                     distinct: ["problemId"],
+                    // Required for correctness, not just nicety: `distinct`
+                    // with no `orderBy` leaves it undefined which row per
+                    // problemId survives, so a naively-added createdAt would
+                    // be an arbitrary submission's timestamp rather than the
+                    // newest. Postgres implements distinct+orderBy as
+                    // PARTITION BY problemId ORDER BY createdAt DESC, first
+                    // row per partition — so this guarantees the row kept
+                    // for each problemId is its most recent ACCEPTED
+                    // submission, which is exactly what "last activity"
+                    // needs.
+                    orderBy: { createdAt: "desc" },
                 })
-                for (const row of accepted) solvedProblemIds.add(row.problemId)
+                for (const row of accepted) {
+                    solvedProblemIds.add(row.problemId)
+                    solvedProblemAt.set(row.problemId, row.createdAt)
+                }
             }
         }
 
@@ -246,6 +287,10 @@ export const getTrackSummariesForUser = cache(
                 slug: string
                 lessons: Array<{ slug: string; completed: boolean }>
             }> = []
+            let lastActivityAt: Date | null = null
+            const noteActivity = (at: Date | undefined) => {
+                if (at && (!lastActivityAt || at > lastActivityAt)) lastActivityAt = at
+            }
 
             for (const module of track.modules) {
                 const lessons = module.lessons.map((l) => ({
@@ -257,6 +302,11 @@ export const getTrackSummariesForUser = cache(
                         solved: solvedProblemIds.has(c.problem.id),
                     })),
                 }))
+
+                for (const l of lessons) {
+                    noteActivity(completedArticleAt.get(l.articleId))
+                    for (const p of l.problems) noteActivity(solvedProblemAt.get(p.problemId))
+                }
 
                 const moduleRollup = rollUpModule({
                     moduleId: module.id,
@@ -287,6 +337,10 @@ export const getTrackSummariesForUser = cache(
                     })),
                 })
             }
+
+            // Item-only tracks have no lessons to loop over above, so their
+            // activity comes solely from solved TrackItem problems.
+            for (const item of track.items) noteActivity(solvedProblemAt.get(item.problem.id))
 
             // A track with no modules is authored under the older TrackItem
             // model, which the detail page still renders. Before this
@@ -319,6 +373,7 @@ export const getTrackSummariesForUser = cache(
                               (i) => !solvedProblemIds.has(i.problem.id),
                           )?.problem.slug ?? null),
                 modules: moduleSummaries,
+                lastActivityAt,
             }
         })
     },
