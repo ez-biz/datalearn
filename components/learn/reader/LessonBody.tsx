@@ -53,7 +53,7 @@ export function LessonBody({
     className,
 }: LessonBodyProps) {
     return (
-        <div className={cn("mx-auto w-full max-w-[76ch]", className)}>
+        <div className={cn("mx-auto w-full max-w-[84ch]", className)}>
             {metaSlot}
             <h1 className="mt-2 text-[27px] font-semibold leading-tight tracking-[-0.025em] text-foreground lg:text-[34px]">
                 {title}

@@ -138,7 +138,7 @@ export default async function LessonPage({ params }: Props) {
                     className="min-w-0 flex-1 bg-panel-raised px-5 pt-8 focus:outline-none sm:px-8 lg:px-14"
                 >
                     {isUnpublished && (
-                        <p className="mx-auto mb-6 max-w-[76ch] rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning-text">
+                        <p className="mx-auto mb-6 max-w-[84ch] rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning-text">
                             {unpublishedLabel} — not visible to learners.
                         </p>
                     )}
@@ -169,7 +169,7 @@ export default async function LessonPage({ params }: Props) {
                         35px of margin. `lg:pb-14` is plain breathing room,
                         there being no bar at that width.
                     */}
-                    <div className="mx-auto w-full max-w-[76ch] pb-24 lg:pb-14">
+                    <div className="mx-auto w-full max-w-[84ch] pb-24 lg:pb-14">
                         <CheckpointBlock checkpoints={lesson.checkpoints} />
                         <LessonPrevNext trackSlug={slug} prev={prev} next={next} />
 
