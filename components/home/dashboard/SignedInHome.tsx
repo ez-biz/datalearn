@@ -88,7 +88,11 @@ export function SignedInHome({ name, home, stats, daily }: SignedInHomeProps) {
 
                 <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
                     <div className="flex flex-col gap-6 lg:col-span-2">
-                        <ResumeCard plan={home.plan} activeTrack={home.activeTrack} />
+                        <ResumeCard
+                            plan={home.plan}
+                            activeTrack={home.activeTrack}
+                            catalogTotals={home.catalogTotals}
+                        />
                         <TodayPlan plan={home.plan} />
                         <ModuleProgress activeTrack={home.activeTrack} />
                         <RecentSubmissions recent={stats.recent} />
