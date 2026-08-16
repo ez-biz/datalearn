@@ -266,7 +266,10 @@ export const PATCH = withAdmin(async (req, _principal, ctx: Ctx) => {
             )
         }
         if (error.message === "PROBLEM_NOT_FOUND") {
-            return NextResponse.json({ error: "Not found." }, { status: 404 })
+            return NextResponse.json(
+                { error: "Not found.", code: "PROBLEM_NOT_FOUND" },
+                { status: 404 }
+            )
         }
         if (
             typeof error.message === "string" &&
