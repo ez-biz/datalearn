@@ -81,12 +81,18 @@ async function createPostgresSession(
         ? await resolvePgliteDataDir({ slug: problemSlug, schemaSql })
         : ({ mode: "memory", reason: "no problem slug" } as const)
 
-    let pg: PGliteType | null = await createPostgresResources(
+    // `connect` remembers whatever persistence the *previous* call settled
+    // on (see createPostgresResourceFactory) so a session that already
+    // recovered into memory mode doesn't repeat the failed idb ladder on
+    // every subsequent reset().
+    const connect = createPostgresResourceFactory(
         initPGlite,
         statements,
         persistence,
         telemetry
     )
+
+    let pg: PGliteType | null = await connect()
     let disposed = false
     let resetPromise: Promise<void> | null = null
 
@@ -97,12 +103,7 @@ async function createPostgresSession(
             pg = null
             if (current) await current.close()
             if (!disposed) {
-                const next = await createPostgresResources(
-                    initPGlite,
-                    statements,
-                    persistence,
-                    telemetry
-                )
+                const next = await connect()
                 if (disposed) {
                     await next.close()
                     return
@@ -216,7 +217,8 @@ export async function createPostgresResources(
     statements: string[],
     persistence: ResolvedDataDir,
     telemetry?: SqlEngineTelemetrySession,
-    deleteIndexedDb: (name: string) => Promise<void> = deleteBrowserIndexedDb
+    deleteIndexedDb: (name: string) => Promise<void> = deleteBrowserIndexedDb,
+    onPersistenceResolved?: (persistence: ResolvedDataDir) => void
 ): Promise<PGliteType> {
     const { pg, persistence: effectivePersistence } =
         await initPostgresConnection(
@@ -225,6 +227,7 @@ export async function createPostgresResources(
             telemetry,
             deleteIndexedDb
         )
+    onPersistenceResolved?.(effectivePersistence)
 
     if (
         effectivePersistence.mode === "indexeddb" &&
@@ -262,6 +265,42 @@ export async function createPostgresResources(
     }
 
     return pg
+}
+
+/**
+ * Wraps `createPostgresResources` so repeated calls — the initial connect
+ * plus every `reset()` for the life of a session — reuse whatever
+ * persistence the *previous* call settled on, rather than the persistence
+ * the session started with.
+ *
+ * Without this, a session that already recovered into memory mode (its
+ * persisted IndexedDB cluster was corrupt and even the fresh-cluster retry
+ * failed) would repeat the *entire* failed ladder on every subsequent
+ * reset: another doomed idb init, another delete, another doomed retry,
+ * another fallback — two guaranteed-to-fail inits and a delete added to
+ * exactly the sessions that can least afford the extra latency. Tracking
+ * the settled persistence in this closure means a degraded session just
+ * stays in memory mode from then on.
+ */
+export function createPostgresResourceFactory(
+    initPGlite: (options?: { dataDir?: string }) => Promise<PGliteType>,
+    statements: string[],
+    initialPersistence: ResolvedDataDir,
+    telemetry?: SqlEngineTelemetrySession,
+    deleteIndexedDb: (name: string) => Promise<void> = deleteBrowserIndexedDb
+): () => Promise<PGliteType> {
+    let persistence = initialPersistence
+    return () =>
+        createPostgresResources(
+            initPGlite,
+            statements,
+            persistence,
+            telemetry,
+            deleteIndexedDb,
+            (resolved) => {
+                persistence = resolved
+            }
+        )
 }
 
 /**
@@ -401,6 +440,15 @@ function deleteBrowserIndexedDb(name: string): Promise<void> {
             )
         }
     })
+
+    // If `deletion` rejects only after the timeout below has already won
+    // the race, nothing else observes that rejection — attach a trailing
+    // no-op catch so it doesn't surface as unhandled-rejection console
+    // noise. This runs on a separate derived promise and doesn't change
+    // what `Promise.race` below observes from `deletion` itself, so a
+    // rejection that arrives *before* the timeout still loses the race
+    // and still propagates to the caller's warning log.
+    deletion.catch(() => {})
 
     return Promise.race([
         deletion,

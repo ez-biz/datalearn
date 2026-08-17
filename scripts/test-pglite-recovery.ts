@@ -10,7 +10,10 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
 import type { PGlite as PGliteType } from "@electric-sql/pglite"
-import { createPostgresResources } from "../lib/sql-engine/browser-session"
+import {
+    createPostgresResourceFactory,
+    createPostgresResources,
+} from "../lib/sql-engine/browser-session"
 import type { ResolvedDataDir } from "../lib/sql-engine/schema-cache-key"
 import type {
     SqlEngineRecoveryOutcome,
@@ -233,5 +236,51 @@ describe("PGlite corrupt-cache recovery", () => {
         assert.equal(calls[0]?.dataDir, undefined)
         assert.equal(deleteCalls.length, 0)
         assert.equal(events.length, 0)
+    })
+})
+
+describe("createPostgresResourceFactory — persistence carried across reset()", () => {
+    it("a session that degraded to memory mode stays in memory mode on the next connect() — no repeat deletion or idb attempt", async () => {
+        const { initPGlite, calls } = makeInitPGlite([
+            // First connect(): idb attempt fails, retry against a fresh
+            // cluster also fails, falls back to memory mode.
+            { ok: false, error: new Error("corrupt") },
+            { ok: false, error: new Error("still corrupt") },
+            { ok: true },
+            // Second connect() (simulating reset()): should go straight
+            // to memory mode with a single call, since the factory
+            // should have remembered the degraded persistence.
+            { ok: true },
+        ])
+        const { deleteIndexedDb, calls: deleteCalls } = makeDeleteIndexedDb()
+        const { telemetry, events } = makeTelemetry()
+
+        const connect = createPostgresResourceFactory(
+            initPGlite,
+            SCHEMA_STATEMENTS,
+            INDEXEDDB_PERSISTENCE,
+            telemetry,
+            deleteIndexedDb
+        )
+
+        const first = await connect()
+        assert.ok(first)
+        assert.equal(calls.length, 3)
+        assert.equal(deleteCalls.length, 1)
+        assert.deepEqual(
+            events.map((e) => e.recoveryOutcome),
+            ["memory-fallback"]
+        )
+
+        const second = await connect()
+        assert.ok(second)
+
+        // Exactly one more init call, straight to memory mode — not
+        // another 3-call ladder and not another deletion.
+        assert.equal(calls.length, 4)
+        assert.equal(calls[3]?.dataDir, undefined)
+        assert.equal(deleteCalls.length, 1)
+        // No new recovery event — reusing memory mode isn't a recovery.
+        assert.equal(events.length, 1)
     })
 })
