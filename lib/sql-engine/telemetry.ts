@@ -8,6 +8,7 @@ export const SQL_ENGINE_TELEMETRY_VERSION = 1
 export const SQL_ENGINE_TELEMETRY_EVENT_NAMES = [
     "engine.init.start",
     "engine.init.ready",
+    "engine.init.recovered",
     "engine.firstQuery.ready",
     "engine.dispose",
 ] as const
@@ -26,6 +27,16 @@ export type SqlEngineTelemetryEventName =
  */
 export type SqlEngineBundleSource = "self" | "cdn"
 
+/**
+ * How a POSTGRES session recovered from a PGlite init failure, attached
+ * only to `engine.init.recovered`. `"idb-retry"` — the persisted
+ * IndexedDB cluster was corrupt; deleting it and re-initializing against
+ * a fresh cluster with the same data dir succeeded. `"memory-fallback"`
+ * — the retry also failed, so the session fell back to an ephemeral
+ * in-memory database so the learner isn't stuck.
+ */
+export type SqlEngineRecoveryOutcome = "idb-retry" | "memory-fallback"
+
 export type SqlEngineTelemetryEvent = {
     version: typeof SQL_ENGINE_TELEMETRY_VERSION
     name: SqlEngineTelemetryEventName
@@ -37,6 +48,7 @@ export type SqlEngineTelemetryEvent = {
     problemSlug?: string
     queryElapsedMs?: number
     bundleSource?: SqlEngineBundleSource
+    recoveryOutcome?: SqlEngineRecoveryOutcome
 }
 
 type TelemetryStorage = Pick<Storage, "getItem">
@@ -51,6 +63,7 @@ type BuildSqlEngineTelemetryEventInput = {
     problemSlug?: string
     queryElapsedMs?: number
     bundleSource?: SqlEngineBundleSource
+    recoveryOutcome?: SqlEngineRecoveryOutcome
 }
 
 type SamplingOptions = {
@@ -80,6 +93,7 @@ export type SqlEngineTelemetrySession = {
         details?: {
             queryElapsedMs?: number
             bundleSource?: SqlEngineBundleSource
+            recoveryOutcome?: SqlEngineRecoveryOutcome
         }
     ) => void
 }
@@ -103,6 +117,7 @@ export function buildSqlEngineTelemetryEvent({
     problemSlug,
     queryElapsedMs,
     bundleSource,
+    recoveryOutcome,
 }: BuildSqlEngineTelemetryEventInput): SqlEngineTelemetryEvent {
     return {
         version: SQL_ENGINE_TELEMETRY_VERSION,
@@ -117,6 +132,7 @@ export function buildSqlEngineTelemetryEvent({
             ? { queryElapsedMs: toRoundedNonNegativeNumber(queryElapsedMs) }
             : {}),
         ...(bundleSource ? { bundleSource } : {}),
+        ...(recoveryOutcome ? { recoveryOutcome } : {}),
     }
 }
 
@@ -155,6 +171,7 @@ export function createSqlEngineTelemetrySession({
                     nowMs: now(),
                     queryElapsedMs: details?.queryElapsedMs,
                     bundleSource: details?.bundleSource,
+                    recoveryOutcome: details?.recoveryOutcome,
                 })
             )
         },
@@ -246,7 +263,10 @@ export function isSqlEngineTelemetryEvent(
             isFiniteNonNegative(event.queryElapsedMs)) &&
         (event.bundleSource === undefined ||
             event.bundleSource === "self" ||
-            event.bundleSource === "cdn")
+            event.bundleSource === "cdn") &&
+        (event.recoveryOutcome === undefined ||
+            event.recoveryOutcome === "idb-retry" ||
+            event.recoveryOutcome === "memory-fallback")
     )
 }
 
