@@ -45,7 +45,12 @@ export async function createSqlEngineSession({
 
     const session =
         dialect === "POSTGRES"
-            ? await createPostgresSession(schema, statements, problemSlug)
+            ? await createPostgresSession(
+                  schema,
+                  statements,
+                  problemSlug,
+                  telemetry
+              )
             : await createDuckDbSession(statements)
 
     // For DUCKDB, attach where the bundle was fetched from so we can
@@ -68,7 +73,8 @@ export async function createSqlEngineSession({
 async function createPostgresSession(
     schemaSql: string,
     statements: string[],
-    problemSlug: string | undefined
+    problemSlug: string | undefined,
+    telemetry: SqlEngineTelemetrySession
 ): Promise<SqlEngineSession> {
     const { initPGlite } = await import("@/lib/pglite")
     const persistence = problemSlug
@@ -78,7 +84,8 @@ async function createPostgresSession(
     let pg: PGliteType | null = await createPostgresResources(
         initPGlite,
         statements,
-        persistence
+        persistence,
+        telemetry
     )
     let disposed = false
     let resetPromise: Promise<void> | null = null
@@ -93,7 +100,8 @@ async function createPostgresSession(
                 const next = await createPostgresResources(
                     initPGlite,
                     statements,
-                    persistence
+                    persistence,
+                    telemetry
                 )
                 if (disposed) {
                     await next.close()
@@ -203,23 +211,29 @@ async function createDuckDbSession(
     }
 }
 
-async function createPostgresResources(
+export async function createPostgresResources(
     initPGlite: (options?: { dataDir?: string }) => Promise<PGliteType>,
     statements: string[],
-    persistence: ResolvedDataDir
+    persistence: ResolvedDataDir,
+    telemetry?: SqlEngineTelemetrySession,
+    deleteIndexedDb: (name: string) => Promise<void> = deleteBrowserIndexedDb
 ): Promise<PGliteType> {
-    const dataDir =
-        persistence.mode === "indexeddb"
-            ? `idb://${persistence.name}`
-            : undefined
+    const { pg, persistence: effectivePersistence } =
+        await initPostgresConnection(
+            initPGlite,
+            persistence,
+            telemetry,
+            deleteIndexedDb
+        )
 
-    const pg = await initPGlite({ dataDir })
-
-    if (persistence.mode === "indexeddb" && (await isPersistedSchemaReady(pg))) {
+    if (
+        effectivePersistence.mode === "indexeddb" &&
+        (await isPersistedSchemaReady(pg))
+    ) {
         if (process.env.NODE_ENV !== "production") {
             console.debug(
                 "[sql-engine] PGlite cache hit",
-                { dataDir: persistence.name }
+                { dataDir: effectivePersistence.name }
             )
         }
         return pg
@@ -227,9 +241,15 @@ async function createPostgresResources(
 
     if (process.env.NODE_ENV !== "production") {
         console.debug("[sql-engine] PGlite fresh init", {
-            mode: persistence.mode,
-            dataDir: persistence.mode === "indexeddb" ? persistence.name : null,
-            reason: persistence.mode === "memory" ? persistence.reason : "first-time",
+            mode: effectivePersistence.mode,
+            dataDir:
+                effectivePersistence.mode === "indexeddb"
+                    ? effectivePersistence.name
+                    : null,
+            reason:
+                effectivePersistence.mode === "memory"
+                    ? effectivePersistence.reason
+                    : "first-time",
         })
     }
 
@@ -237,11 +257,157 @@ async function createPostgresResources(
         pg.exec(statement)
     )
 
-    if (persistence.mode === "indexeddb") {
+    if (effectivePersistence.mode === "indexeddb") {
         await writePersistedSchemaMetadata(pg)
     }
 
     return pg
+}
+
+/**
+ * Connects to Postgres, self-healing a corrupt persisted IndexedDB
+ * cluster rather than surfacing a dead end.
+ *
+ * PGlite throws when the WASM module loads fine but Postgres refuses to
+ * start against its data directory — typically a partial/interrupted
+ * first write to IndexedDB. Because every reload re-opens the same
+ * store, that failure is otherwise permanent for the learner. Recovery
+ * ladder, each rung only reached if the previous one failed:
+ *   1. Init against the persisted `idb://` data dir (the normal path).
+ *   2. Delete that IndexedDB database and retry once with the *same*
+ *      data dir — a fresh cluster, so persistence keeps working on the
+ *      next visit.
+ *   3. Fall back to memory mode (`dataDir: undefined`) so the learner
+ *      can still solve the problem, just without caching.
+ * If step 3 also fails, the error propagates — there is nothing further
+ * to fall back to.
+ *
+ * Memory-mode sessions (no problem slug, cache opted out, IndexedDB/
+ * WebCrypto unavailable, or key derivation failed) skip straight past
+ * this ladder: there is no persisted store to be corrupt, so a failure
+ * there is not recoverable and must surface immediately.
+ */
+async function initPostgresConnection(
+    initPGlite: (options?: { dataDir?: string }) => Promise<PGliteType>,
+    persistence: ResolvedDataDir,
+    telemetry: SqlEngineTelemetrySession | undefined,
+    deleteIndexedDb: (name: string) => Promise<void>
+): Promise<{ pg: PGliteType; persistence: ResolvedDataDir }> {
+    if (persistence.mode !== "indexeddb") {
+        const pg = await initPGlite({ dataDir: undefined })
+        return { pg, persistence }
+    }
+
+    const dataDir = `idb://${persistence.name}`
+
+    try {
+        const pg = await initPGlite({ dataDir })
+        return { pg, persistence }
+    } catch (firstError) {
+        if (process.env.NODE_ENV !== "production") {
+            console.warn(
+                "[sql-engine] PGlite init failed against its persisted data dir, attempting recovery",
+                { dataDir: persistence.name, error: errorMessage(firstError) }
+            )
+        }
+
+        const idbName = pgliteIdbDatabaseName(persistence.name)
+        await deleteIndexedDb(idbName).catch((deleteError) => {
+            if (process.env.NODE_ENV !== "production") {
+                console.warn(
+                    "[sql-engine] failed to delete corrupt PGlite IndexedDB store",
+                    { idbName, error: errorMessage(deleteError) }
+                )
+            }
+        })
+
+        try {
+            const pg = await initPGlite({ dataDir })
+            telemetry?.emit("engine.init.recovered", {
+                recoveryOutcome: "idb-retry",
+            })
+            return { pg, persistence }
+        } catch (secondError) {
+            if (process.env.NODE_ENV !== "production") {
+                console.warn(
+                    "[sql-engine] PGlite retry against a fresh data dir also failed, falling back to memory mode",
+                    { dataDir: persistence.name, error: errorMessage(secondError) }
+                )
+            }
+
+            const pg = await initPGlite({ dataDir: undefined })
+            telemetry?.emit("engine.init.recovered", {
+                recoveryOutcome: "memory-fallback",
+            })
+            return {
+                pg,
+                persistence: {
+                    mode: "memory",
+                    reason: "recovered after corrupt IndexedDB cache",
+                },
+            }
+        }
+    }
+}
+
+/**
+ * Root Emscripten mount path PGlite's IDBFS backend uses for every
+ * `idb://` data dir. Determined by reading the compiled package at
+ * `node_modules/@electric-sql/pglite/dist/index.js` (v0.5.4): the IdbFs
+ * class mounts IDBFS at `` `${K}/${this.dataDir}` `` where `K` is the
+ * module-level constant `"/pglite"` (`chunk-TDKVRJ2S.js`, `var
+ * I="/pglite"`) and `this.dataDir` is whatever follows `idb://` in the
+ * `dataDir` option. Emscripten's IDBFS then opens the browser's actual
+ * IndexedDB database using that *mount path* as its name
+ * (`IDBFS.getDB(mount.mountpoint, ...)` -> `indexedDB.open(mountpoint,
+ * ...)`), not the bare name after the `idb://` prefix. So the real
+ * IndexedDB database for `idb://datalearn-pglite-foo-abc123` is named
+ * `/pglite/datalearn-pglite-foo-abc123`, not `datalearn-pglite-foo-abc123`
+ * and not `idb://datalearn-pglite-foo-abc123`. Deleting the wrong name
+ * would silently no-op, leaving the corrupt store in place and making
+ * every retry fail identically.
+ */
+const PGLITE_IDB_MOUNT_ROOT = "/pglite"
+
+function pgliteIdbDatabaseName(name: string): string {
+    return `${PGLITE_IDB_MOUNT_ROOT}/${name}`
+}
+
+const DELETE_INDEXED_DB_TIMEOUT_MS = 3000
+
+/**
+ * Deletes a browser IndexedDB database by name. Used as the production
+ * default for `createPostgresResources`'s injectable `deleteIndexedDb`
+ * parameter — tests inject a fake instead of touching real IndexedDB.
+ */
+function deleteBrowserIndexedDb(name: string): Promise<void> {
+    if (typeof indexedDB === "undefined") return Promise.resolve()
+
+    const deletion = new Promise<void>((resolve, reject) => {
+        const request = indexedDB.deleteDatabase(name)
+        request.onsuccess = () => resolve()
+        request.onerror = () =>
+            reject(
+                request.error ??
+                    new Error(`Failed to delete IndexedDB database "${name}"`)
+            )
+        request.onblocked = () => {
+            // Doesn't reject — the request just waits for other open
+            // connections to close, which could hang indefinitely if the
+            // failed PGlite instance left one open. The timeout below
+            // caps how long we wait for it.
+            console.warn(
+                `[sql-engine] IndexedDB delete blocked for "${name}" — a stale connection may still be open`
+            )
+        }
+    })
+
+    return Promise.race([
+        deletion,
+        new Promise<void>((resolve) => {
+            setTimeout(resolve, DELETE_INDEXED_DB_TIMEOUT_MS)
+        }),
+    ])
 }
 
 const PERSISTED_SCHEMA_TABLE = "_dl_pglite_meta"

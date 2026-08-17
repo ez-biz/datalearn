@@ -16,6 +16,7 @@ export async function POST(request: Request) {
             schemaStatementCount: event.schemaStatementCount,
             elapsedMs: event.elapsedMs,
             queryElapsedMs: event.queryElapsedMs ?? null,
+            recoveryOutcome: event.recoveryOutcome ?? null,
         })
     }
 
