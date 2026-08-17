@@ -20,6 +20,7 @@
 import { prisma } from "@/lib/prisma"
 import { computeWeakSpots, type WeakSpot } from "@/lib/home/weak-spots"
 import { buildTodayPlan, type PlanInput, type PlanRow } from "@/lib/home/today-plan"
+import { pickActiveTrack } from "@/lib/home/active-track"
 import {
     getTrackSummariesForUser,
     type TrackSummary,
@@ -34,7 +35,11 @@ export type HomeData = {
     streak: StreakInfo
     /** Exactly 7 buckets, oldest first, for the week grid. */
     week: DayBucket[]
-    /** Track with the most progress, or null when there are no tracks. */
+    /** The track pickActiveTrack (lib/home/active-track.ts) features: the
+     *  most recently active track with work left, falling back to the
+     *  most recently active finished one if every track is finished, or
+     *  deterministically to the first track if none has ever been
+     *  touched. Null only when there are no visible tracks at all. */
     activeTrack: TrackSummary | null
     /** Whole-catalog totals, counted from the same `catalog` array
      *  `nextProblem` is chosen from — both `total`/`byDifficulty` (the
@@ -54,24 +59,6 @@ export type HomeData = {
         byDifficulty: { EASY: number; MEDIUM: number; HARD: number }
         solvedByDifficulty: { EASY: number; MEDIUM: number; HARD: number }
     }
-}
-
-/**
- * The track to feature on the dashboard: whichever visible track has the
- * most progress. Ties keep the earlier one in getTrackSummariesForUser's
- * order (newest-created first, then name). A learner with no progress on
- * any track still gets one featured — the first in that same order — so the
- * dashboard always has something to anchor on rather than showing nothing
- * until progress exists. Returns null only when there are no visible tracks
- * at all.
- */
-function pickActiveTrack(tracks: TrackSummary[]): TrackSummary | null {
-    if (tracks.length === 0) return null
-    const withProgress = tracks.filter((t) => t.rollup.percent > 0)
-    if (withProgress.length === 0) return tracks[0]
-    return withProgress.reduce((best, t) =>
-        t.rollup.percent > best.rollup.percent ? t : best
-    )
 }
 
 /**
