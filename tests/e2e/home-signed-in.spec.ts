@@ -13,11 +13,12 @@ import { prisma, seedUser, sessionCookie, type SeededUser } from "./fixtures/db"
  *
  * Local Postgres (unlike CI, which seeds no curriculum at all) can carry a
  * real, PUBLISHED, module-bearing track (`analyst-interview-prep`, from
- * `seed-analyst-track.ts`). `pickActiveTrack` (lib/home/home-read.ts) falls
- * back to the first visible track for a learner with zero progress on
- * anything, so that ambient track would otherwise leak into test 1's
- * "no curriculum" assertion and make it fail locally while passing in CI —
- * exactly the kind of environment-dependent flake this suite must not have.
+ * `seed-analyst-track.ts`). `pickActiveTrack` (lib/home/active-track.ts)
+ * falls back to the first visible track for a learner with zero progress on
+ * anything (and zero activity to rank by), so that ambient track would
+ * otherwise leak into test 1's "no curriculum" assertion and make it fail
+ * locally while passing in CI — exactly the kind of environment-dependent
+ * flake this suite must not have.
  *
  * Test 1 does NOT mutate ambient rows to neutralize this — an earlier
  * version snapshotted every PUBLISHED module-bearing track, flipped it to

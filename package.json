@@ -90,6 +90,7 @@
     "test:approach-sort": "node --import tsx --test scripts/test-approach-sort.ts",
     "test:weak-spots": "node --import tsx --test scripts/test-weak-spots.ts",
     "test:today-plan": "node --import tsx --test scripts/test-today-plan.ts",
+    "test:active-track": "node --import tsx --test scripts/test-active-track.ts",
     "test:approaches": "node --import tsx --test scripts/test-approaches.ts",
     "test:lesson-nav": "node --import tsx --test scripts/test-lesson-nav.ts",
     "test:reading-progress": "node --import tsx --test scripts/test-reading-progress.ts scripts/test-reader-progress-persistence.ts",
