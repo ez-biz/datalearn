@@ -9,7 +9,9 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
 import {
+    PGLITE_ADOPTION_DONE_STORAGE_KEY,
     PGLITE_NAMESPACE_PREFIX,
+    adoptUnknownPgliteDatabases,
     evictStalePgliteDatabases,
     isOwnedPgliteDatabaseName,
     planPgliteEviction,
@@ -340,5 +342,174 @@ describe("evictStalePgliteDatabases — end-to-end wiring", () => {
             remaining.map((e) => e.name).sort(),
             [current, `${PGLITE_NAMESPACE_PREFIX}new`].sort()
         )
+    })
+})
+
+const PGLITE_MOUNT_PREFIX = "/pglite/"
+
+// Mirrors browser-session.ts's parsePgliteIdbDatabaseName without importing
+// it — this test file deliberately stays browser-module-free, same as the
+// rest of it.
+function fromIdbDatabaseName(idbName: string): string | null {
+    return idbName.startsWith(PGLITE_MOUNT_PREFIX)
+        ? idbName.slice(PGLITE_MOUNT_PREFIX.length)
+        : null
+}
+
+describe("adoptUnknownPgliteDatabases", () => {
+    it("adopts an unknown in-namespace database with an epoch lastUsedAt", async () => {
+        const storage = fakeStorage()
+        const orphan = `${PGLITE_NAMESPACE_PREFIX}orphan`
+        await adoptUnknownPgliteDatabases({
+            storage,
+            listIndexedDbNames: async () => [`${PGLITE_MOUNT_PREFIX}${orphan}`],
+            fromIdbDatabaseName,
+            currentVersion: V1,
+        })
+        assert.deepEqual(readPgliteRegistry(storage), [
+            { name: orphan, version: V1, lastUsedAt: 0 },
+        ])
+    })
+
+    it("ignores names outside our namespace and names outside the PGlite mount entirely", async () => {
+        const storage = fakeStorage()
+        await adoptUnknownPgliteDatabases({
+            storage,
+            listIndexedDbNames: async () => [
+                `${PGLITE_MOUNT_PREFIX}some-other-app-db`, // under our mount, wrong namespace
+                "some-unrelated-idb-db", // not under our mount at all
+            ],
+            fromIdbDatabaseName,
+            currentVersion: V1,
+        })
+        assert.deepEqual(readPgliteRegistry(storage), [])
+    })
+
+    it("does not duplicate or clobber a name already present in the registry", async () => {
+        const known = `${PGLITE_NAMESPACE_PREFIX}known`
+        const storage = fakeStorage({
+            "dl:pglite-registry": JSON.stringify([entry(known, V1, 500)]),
+        })
+        await adoptUnknownPgliteDatabases({
+            storage,
+            listIndexedDbNames: async () => [`${PGLITE_MOUNT_PREFIX}${known}`],
+            fromIdbDatabaseName,
+            currentVersion: V1,
+        })
+        assert.deepEqual(readPgliteRegistry(storage), [entry(known, V1, 500)])
+    })
+
+    it("skips cleanly and adopts nothing when indexedDB.databases() is unavailable (null)", async () => {
+        const storage = fakeStorage()
+        await assert.doesNotReject(
+            adoptUnknownPgliteDatabases({
+                storage,
+                listIndexedDbNames: async () => null,
+                fromIdbDatabaseName,
+            })
+        )
+        assert.deepEqual(readPgliteRegistry(storage), [])
+        assert.equal(storage.getItem(PGLITE_ADOPTION_DONE_STORAGE_KEY), "1")
+    })
+
+    it("skips cleanly and still marks itself done when indexedDB.databases() throws", async () => {
+        const storage = fakeStorage()
+        await assert.doesNotReject(
+            adoptUnknownPgliteDatabases({
+                storage,
+                listIndexedDbNames: async () => {
+                    throw new Error("databases() unsupported in this browser")
+                },
+                fromIdbDatabaseName,
+            })
+        )
+        assert.deepEqual(readPgliteRegistry(storage), [])
+        assert.equal(storage.getItem(PGLITE_ADOPTION_DONE_STORAGE_KEY), "1")
+    })
+
+    it("runs only once — a second call does not invoke listIndexedDbNames again", async () => {
+        const storage = fakeStorage()
+        const orphan = `${PGLITE_NAMESPACE_PREFIX}orphan`
+        let calls = 0
+        const listIndexedDbNames = async () => {
+            calls += 1
+            return [`${PGLITE_MOUNT_PREFIX}${orphan}`]
+        }
+
+        await adoptUnknownPgliteDatabases({
+            storage,
+            listIndexedDbNames,
+            fromIdbDatabaseName,
+            currentVersion: V1,
+        })
+        await adoptUnknownPgliteDatabases({
+            storage,
+            listIndexedDbNames,
+            fromIdbDatabaseName,
+            currentVersion: V1,
+        })
+
+        assert.equal(calls, 1)
+        assert.deepEqual(readPgliteRegistry(storage), [
+            { name: orphan, version: V1, lastUsedAt: 0 },
+        ])
+    })
+
+    it("never throws and never touches storage when storage is unavailable", async () => {
+        await assert.doesNotReject(
+            adoptUnknownPgliteDatabases({
+                storage: null,
+                listIndexedDbNames: async () => {
+                    throw new Error("must not be called")
+                },
+                fromIdbDatabaseName,
+            })
+        )
+    })
+})
+
+describe("evictStalePgliteDatabases — adoption wiring", () => {
+    it("adopts an unknown database and immediately subjects it to the normal cap/eviction pass", async () => {
+        const current = `${PGLITE_NAMESPACE_PREFIX}current`
+        const orphan = `${PGLITE_NAMESPACE_PREFIX}orphan`
+        const storage = fakeStorage()
+        const { deleteIndexedDb, calls } = fakeDeleter()
+
+        await evictStalePgliteDatabases(current, {
+            storage,
+            now: () => 1000,
+            deleteIndexedDb,
+            toIdbDatabaseName,
+            currentVersion: V1,
+            cap: 0,
+            listIndexedDbNames: async () => [`${PGLITE_MOUNT_PREFIX}${orphan}`],
+            fromIdbDatabaseName,
+        })
+
+        // Adopted with lastUsedAt: 0, then evicted by the cap=0 pass since
+        // it isn't the current session's database.
+        assert.deepEqual(calls, [`${PGLITE_MOUNT_PREFIX}${orphan}`])
+        const remaining = readPgliteRegistry(storage)
+        assert.deepEqual(remaining.map((e) => e.name), [current])
+    })
+
+    it("skips adoption entirely when listIndexedDbNames/fromIdbDatabaseName are omitted, unchanged from prior behavior", async () => {
+        const current = `${PGLITE_NAMESPACE_PREFIX}current`
+        const storage = fakeStorage()
+        const { deleteIndexedDb, calls } = fakeDeleter()
+
+        await evictStalePgliteDatabases(current, {
+            storage,
+            now: () => 1000,
+            deleteIndexedDb,
+            toIdbDatabaseName,
+            currentVersion: V1,
+            cap: 20,
+        })
+
+        assert.deepEqual(calls, [])
+        assert.deepEqual(readPgliteRegistry(storage), [
+            { name: current, version: V1, lastUsedAt: 1000 },
+        ])
     })
 })

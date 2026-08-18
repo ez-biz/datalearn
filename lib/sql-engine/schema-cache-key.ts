@@ -20,7 +20,13 @@ export const PGLITE_CACHE_VERSION = "v1"
 
 export const PGLITE_CACHE_OPT_OUT_KEY = "dl:pglite-cache:off"
 
-const CACHE_KEY_NAMESPACE = "datalearn-pglite"
+/**
+ * Exported so `lib/sql-engine/pglite-eviction.ts` can derive its owned-name
+ * prefix from this constant instead of hand-copying it — a future rename
+ * here would otherwise silently desync eviction's namespace check from the
+ * names this module actually mints.
+ */
+export const CACHE_KEY_NAMESPACE = "datalearn-pglite"
 
 export type SchemaCacheKeyInput = {
     slug: string

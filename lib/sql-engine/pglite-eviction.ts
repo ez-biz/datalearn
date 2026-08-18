@@ -11,30 +11,35 @@
  *   - bumping `PGLITE_CACHE_VERSION` re-keys every cached database at once,
  *     orphaning all of them.
  *
- * We generate every database name ourselves, so rather than depend on
- * `indexedDB.databases()` (unavailable/unreliable in some browsers, where a
- * fallback that silently does nothing would be worse than no feature at
- * all) we keep our own registry in `localStorage`, following the `dl:`
- * key-prefix convention used elsewhere in this codebase (`dl:pglite-cache:
- * off`, `dl:dialect:<slug>`).
+ * We generate every database name ourselves, so the registry's steady-state
+ * source of truth is `localStorage` — not `indexedDB.databases()`, which is
+ * unavailable/unreliable in some browsers — following the `dl:` key-prefix
+ * convention used elsewhere in this codebase (`dl:pglite-cache:off`,
+ * `dl:dialect:<slug>`). Ongoing bookkeeping only ever learns about a
+ * database when a session actually uses it (`recordPgliteDatabaseUse`).
+ *
+ * That leaves databases created before this module shipped — or any this
+ * registry otherwise never observed — invisible to it. `adoptUnknownPglite
+ * Databases` is a one-time, best-effort bootstrap for exactly that case: it
+ * *may* call `indexedDB.databases()` to discover them, but only to adopt
+ * their names into the registry, never to delete anything directly, and it
+ * silently skips (never retried) when that API is missing or throws — see
+ * its doc comment.
  *
  * The policy itself (`planPgliteEviction`) is a pure function over an
  * in-memory list of registry entries — no localStorage, no IndexedDB, no
  * PGlite — so it unit-tests without a browser (see
  * `scripts/test-pglite-eviction.ts`). `evictStalePgliteDatabases` is the
  * thin, best-effort side-effecting wrapper actually wired into session
- * creation; every failure mode inside it is swallowed, because eviction is
- * a storage optimization and must never block a learner from getting a
- * working SQL session.
- *
- * Note: because this registry only ever learns about a database when a
- * session actually uses it, it has no visibility into databases created
- * before this module shipped (or any it otherwise never observed). Those
- * pre-existing orphans are not retroactively swept — see the doc comment
- * on `evictStalePgliteDatabases` for the exact first-visit behavior.
+ * creation; every failure mode inside it (and inside the adoption scan it
+ * runs first) is swallowed, because eviction is a storage optimization and
+ * must never block a learner from getting a working SQL session.
  */
 
-import { PGLITE_CACHE_VERSION } from "@/lib/sql-engine/schema-cache-key"
+import {
+    CACHE_KEY_NAMESPACE,
+    PGLITE_CACHE_VERSION,
+} from "@/lib/sql-engine/schema-cache-key"
 
 /**
  * localStorage key for the eviction registry. Follows the `dl:` prefix
@@ -59,13 +64,14 @@ export const PGLITE_REGISTRY_STORAGE_KEY = "dl:pglite-registry"
 export const PGLITE_REGISTRY_CAP = 20
 
 /**
- * Every name this module manages starts with this prefix — the same
- * namespace `schema-cache-key.ts` mints names under
- * (`datalearn-pglite-<slug>-<hash>`). Anything else is not ours and must
- * never be touched, whether that means evicting it or even tracking it in
- * our own bookkeeping.
+ * Every name this module manages starts with this prefix — derived from
+ * `CACHE_KEY_NAMESPACE` (`schema-cache-key.ts`), the same namespace that
+ * module mints names under (`datalearn-pglite-<slug>-<hash>`), rather than
+ * a hand-copied literal that could silently drift from it. Anything else is
+ * not ours and must never be touched, whether that means evicting it or
+ * even tracking it in our own bookkeeping.
  */
-export const PGLITE_NAMESPACE_PREFIX = "datalearn-pglite-"
+export const PGLITE_NAMESPACE_PREFIX = `${CACHE_KEY_NAMESPACE}-`
 
 export type PgliteRegistryEntry = {
     /**
@@ -151,6 +157,112 @@ export function recordPgliteDatabaseUse(
     const withoutName = entries.filter((entry) => entry.name !== name)
     withoutName.push({ name, version, lastUsedAt: now })
     return withoutName
+}
+
+/**
+ * localStorage key recording that the one-time adoption scan
+ * (`adoptUnknownPgliteDatabases`) has already run in this browser, so it
+ * never re-runs on a later session init — whether the previous attempt
+ * adopted something, adopted nothing, or skipped because `indexedDB.
+ * databases()` was unavailable or threw.
+ */
+export const PGLITE_ADOPTION_DONE_STORAGE_KEY = "dl:pglite-registry-adopted"
+
+export type AdoptUnknownPgliteDatabasesDeps = {
+    /** Same injection contract as `EvictStalePgliteDatabasesDeps.storage`. */
+    storage?: StorageLike | null
+    /**
+     * Lists every real browser IndexedDB database name on origin (via
+     * `indexedDB.databases()`), or `null` if that API isn't available.
+     * Production callers should pass `listBrowserIndexedDbNames` from
+     * `browser-session.ts`. May also reject — treated the same as `null`.
+     */
+    listIndexedDbNames: () => Promise<string[] | null>
+    /**
+     * Reverses `EvictStalePgliteDatabasesDeps.toIdbDatabaseName`: given a
+     * real IndexedDB database name, returns the logical PGlite data-dir
+     * name it mounts, or `null` if the raw name isn't one of ours at all.
+     * Production callers should pass `parsePgliteIdbDatabaseName` from
+     * `browser-session.ts`.
+     */
+    fromIdbDatabaseName: (idbName: string) => string | null
+    /** Defaults to `PGLITE_CACHE_VERSION`. */
+    currentVersion?: string
+}
+
+/**
+ * One-time, best-effort bootstrap that backfills the registry with
+ * PGlite databases this session never explicitly recorded — most likely
+ * because they were created before this eviction feature shipped, or
+ * during a session that crashed before recording its use. Without this,
+ * a learner who already has dozens of orphaned clusters gets no cleanup
+ * until they happen to revisit every stale problem individually.
+ *
+ * Contract, deliberately narrow:
+ *   - **Adopts only — never deletes.** This function only ever adds
+ *     entries to the registry; the normal `planPgliteEviction` LRU/
+ *     stale-version rules decide what (if anything) gets evicted, on this
+ *     or some future call to `evictStalePgliteDatabases`.
+ *   - **Strict namespace check.** A raw IndexedDB name that doesn't parse
+ *     to one of our names via `fromIdbDatabaseName` + `isOwnedPgliteDatabase
+ *     Name` is left alone — not adopted, not touched.
+ *   - **Silent skip, not a dependency.** If `listIndexedDbNames` resolves
+ *     to `null` or rejects, this is a no-op. The registry (built from real
+ *     session use) remains the source of truth regardless; this scan is
+ *     pure upside when it works and a no-op when it doesn't.
+ *   - **Runs once per browser.** Gated on `PGLITE_ADOPTION_DONE_STORAGE_KEY`,
+ *     set before the scan is even attempted so a browser that lacks the
+ *     API (or throws) isn't retried on every subsequent session init.
+ *
+ * An adopted entry has no real last-used time, so it's stamped with epoch
+ * (`lastUsedAt: 0`) rather than `now`. That makes it look maximally stale
+ * under the cap's LRU comparison — a plausible eviction candidate — without
+ * ever outranking (or tying) a database we *know* is current, since every
+ * real `recordPgliteDatabaseUse` timestamp is a `Date.now()` value far
+ * greater than zero. It's stamped with `currentVersion` rather than a
+ * sentinel "unknown" version: we have no way to recover which
+ * `PGLITE_CACHE_VERSION` an adopted database was actually built under (that
+ * version is folded into its name's hash, not recoverable from the name
+ * itself), so treating it as neither provably current nor provably stale —
+ * just an ordinary candidate ranked last by recency — is the honest
+ * default; the epoch timestamp alone is enough to make it evictable first.
+ */
+export async function adoptUnknownPgliteDatabases(
+    deps: AdoptUnknownPgliteDatabasesDeps
+): Promise<void> {
+    try {
+        const storage =
+            deps.storage === undefined ? getBrowserLocalStorage() : deps.storage
+        if (!storage) return
+        if (storage.getItem(PGLITE_ADOPTION_DONE_STORAGE_KEY) === "1") return
+
+        // Mark done before attempting anything below — even a throw or an
+        // unavailable API means "don't try again on the next session."
+        storage.setItem(PGLITE_ADOPTION_DONE_STORAGE_KEY, "1")
+
+        const rawNames = await deps.listIndexedDbNames()
+        if (rawNames === null) return
+
+        const currentVersion = deps.currentVersion ?? PGLITE_CACHE_VERSION
+        const existing = readPgliteRegistry(storage)
+        const known = new Set(existing.map((entry) => entry.name))
+
+        const adopted: PgliteRegistryEntry[] = []
+        for (const rawName of rawNames) {
+            const name = deps.fromIdbDatabaseName(rawName)
+            if (name === null) continue
+            if (!isOwnedPgliteDatabaseName(name)) continue
+            if (known.has(name)) continue
+            known.add(name)
+            adopted.push({ name, version: currentVersion, lastUsedAt: 0 })
+        }
+
+        if (adopted.length === 0) return
+        writePgliteRegistry(storage, [...existing, ...adopted])
+    } catch {
+        // Best-effort — a one-time convenience sweep, never a requirement.
+        // Must never block or fail session creation.
+    }
 }
 
 export type PgliteEvictionPlan = {
@@ -250,6 +362,17 @@ export type EvictStalePgliteDatabasesDeps = {
     toIdbDatabaseName: (name: string) => string
     cap?: number
     currentVersion?: string
+    /**
+     * Optional pair enabling the one-time adoption scan (see
+     * `adoptUnknownPgliteDatabases`). Both must be provided to run it;
+     * omitting either (e.g. existing tests exercising eviction alone)
+     * simply skips adoption for that call — the rest of eviction proceeds
+     * exactly as before. Production callers should pass
+     * `listBrowserIndexedDbNames` and `parsePgliteIdbDatabaseName` from
+     * `browser-session.ts`.
+     */
+    listIndexedDbNames?: () => Promise<string[] | null>
+    fromIdbDatabaseName?: (idbName: string) => string | null
 }
 
 /**
@@ -264,16 +387,13 @@ export type EvictStalePgliteDatabasesDeps = {
  * eviction still runs (to reclaim other stale/excess entries) but nothing
  * is exempted as "in use."
  *
- * First-visit behavior after this ships: the registry starts empty, and
- * this module only ever learns about a database when a session actually
- * uses it (it deliberately does not call `indexedDB.databases()` — see the
- * module doc comment). So a learner who already has many accumulated
- * databases sees no immediate cleanup: none of those pre-existing
- * databases are evicted on their first visit, because none of them are in
- * the registry yet. Revisiting a previously-cached problem records that
- * one database going forward, making it eligible for future eviction
- * bookkeeping; growth is bounded from this point on, but old databases the
- * learner never revisits stay orphaned indefinitely, same as today.
+ * Before any of that, this runs the one-time adoption scan
+ * (`adoptUnknownPgliteDatabases`) when `listIndexedDbNames` and
+ * `fromIdbDatabaseName` are both supplied, so databases this registry never
+ * explicitly recorded — most likely pre-existing the registry itself — get
+ * a chance to be backfilled and then immediately considered by the same
+ * plan/evict pass below, rather than only bounding growth from here
+ * forward.
  */
 export async function evictStalePgliteDatabases(
     currentName: string | null,
@@ -287,6 +407,15 @@ export async function evictStalePgliteDatabases(
         const now = (deps.now ?? Date.now)()
         const cap = deps.cap ?? PGLITE_REGISTRY_CAP
         const currentVersion = deps.currentVersion ?? PGLITE_CACHE_VERSION
+
+        if (deps.listIndexedDbNames && deps.fromIdbDatabaseName) {
+            await adoptUnknownPgliteDatabases({
+                storage,
+                listIndexedDbNames: deps.listIndexedDbNames,
+                fromIdbDatabaseName: deps.fromIdbDatabaseName,
+                currentVersion,
+            })
+        }
 
         const existing = readPgliteRegistry(storage)
         const withCurrent =
