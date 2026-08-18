@@ -23,7 +23,7 @@ describe("cohortRetention", () => {
                 cohortDay: "2026-03-01",
                 cohortSize: 2,
                 retained: 1,
-                rate: 50,
+                rate: 0.5,
             },
         ])
     })
@@ -37,7 +37,7 @@ describe("cohortRetention", () => {
         )
 
         assert.equal(result[0].retained, 1)
-        assert.equal(result[0].rate, 100)
+        assert.equal(result[0].rate, 1)
     })
 
     it("returns null retention and rate for a cohort younger than its bucket", () => {
@@ -105,6 +105,22 @@ describe("cohortRetention", () => {
             cohortSize: 0,
             retained: 0,
             rate: null,
+        })
+    })
+
+    it("deduplicates cohort user IDs before counting retention", () => {
+        const result = cohortRetention(
+            new Map([["2026-03-01", ["returning", "returning", "inactive"]]]),
+            new Map([["returning", new Set(["2026-03-08"])]]),
+            7,
+            TODAY
+        )
+
+        assert.deepEqual(result[0], {
+            cohortDay: "2026-03-01",
+            cohortSize: 2,
+            retained: 1,
+            rate: 0.5,
         })
     })
 

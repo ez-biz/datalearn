@@ -6,6 +6,7 @@ export interface CohortRetention {
     cohortDay: string
     cohortSize: number
     retained: number | null
+    /** Retained share from 0 through 1, or null when unknown; never percentage points. */
     rate: number | null
 }
 
@@ -28,7 +29,8 @@ export function cohortRetention(
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([cohortDay, userIds]) => {
             const bucketDay = dayAfter(cohortDay, bucketDays)
-            const cohortSize = userIds.length
+            const cohortUserIds = new Set(userIds)
+            const cohortSize = cohortUserIds.size
 
             if (bucketDay > todayKey) {
                 return {
@@ -39,7 +41,7 @@ export function cohortRetention(
                 }
             }
 
-            const retained = userIds.filter((userId) =>
+            const retained = [...cohortUserIds].filter((userId) =>
                 [...(activityByUser.get(userId) ?? [])].some(
                     (activityDay) => activityDay >= bucketDay
                 )
@@ -49,7 +51,7 @@ export function cohortRetention(
                 cohortDay,
                 cohortSize,
                 retained,
-                rate: cohortSize === 0 ? null : (retained / cohortSize) * 100,
+                rate: cohortSize === 0 ? null : retained / cohortSize,
             }
         })
 }
