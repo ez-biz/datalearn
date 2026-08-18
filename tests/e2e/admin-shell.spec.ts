@@ -41,6 +41,7 @@ const PROBLEM_TITLE = "E2E Admin Shell Badge Problem"
 
 let admin: SeededUser
 let moderator: SeededUser
+let reportFixtureProblemId: string
 
 test.describe.configure({ mode: "serial" })
 
@@ -81,11 +82,15 @@ test.beforeAll(async () => {
         },
     })
 
-    // Test 3 fixture: an unresolved ProblemReport guarantees the ADMIN-only
-    // "openReports" badge count is >= 1 regardless of what else is in the
-    // database (the count itself is a global, unscoped aggregate — see
-    // ConsoleShell.tsx — so this test only asserts "positive", never an
-    // exact number).
+    // Test 4 fixture (the problem, not the report): the report itself is
+    // deliberately NOT created here. Its unresolved row would make the
+    // ADMIN-only "openReports" badge count (a global, unscoped aggregate —
+    // see ConsoleShell.tsx) non-zero for every test in this file, including
+    // the zero-state test below, which must run against a genuinely empty
+    // queue. Same reasoning as admin-problem-form.spec.ts's curriculum
+    // empty-state test: the fixture that would poison an "is it really
+    // empty" assertion is created inside the test that needs it non-empty,
+    // not in beforeAll.
     const schema = await prisma.sqlSchema.create({
         data: {
             name: `${PREFIX}-schema`,
@@ -107,14 +112,7 @@ test.beforeAll(async () => {
             solutionSql: "SELECT id FROM t",
         },
     })
-    await prisma.problemReport.create({
-        data: {
-            problemId: problem.id,
-            userId: admin.id,
-            kind: "WRONG_ANSWER",
-            message: `${PREFIX} badge-count fixture report`,
-        },
-    })
+    reportFixtureProblemId = problem.id
 })
 
 test.afterAll(async () => {
@@ -167,7 +165,68 @@ test("a MODERATOR with discussion permission receives no admin-only links in the
     ).toBeVisible()
 })
 
+test("the reports badge doesn't render when the queue is empty", async ({ page }) => {
+    // The "openReports" count is a global, unscoped aggregate (ConsoleShell.tsx:
+    // prisma.problemReport.count({ where: { resolvedAt: null } })), so this can
+    // only assert the true zero state if nothing else in the database has an
+    // unresolved report right now — this file's own report fixture is created
+    // below, inside "badge counts render when non-zero", specifically so it
+    // doesn't exist yet at this point in the (serial) run. Same skip-locally/
+    // fail-in-CI pattern as admin-problem-form.spec.ts's curriculum empty-state
+    // test and admin-overview.spec.ts's queue-stack test: CI seeds no
+    // ProblemReport rows, so a non-zero count there means some other spec
+    // started leaving one behind.
+    const ambientUnresolved = await prisma.problemReport.count({
+        where: { resolvedAt: null },
+    })
+    if (ambientUnresolved > 0) {
+        if (process.env.CI) {
+            throw new Error(
+                `Expected zero unresolved ProblemReport rows in CI but found ` +
+                    `${ambientUnresolved} — this test's "queue is empty" premise depends ` +
+                    "on that assumption; investigate what started leaving unresolved " +
+                    "reports behind in CI before trusting this test's pass/fail again."
+            )
+        }
+        test.skip(
+            true,
+            `skipped: ${ambientUnresolved} ambient unresolved ProblemReport row(s) ` +
+                "present locally — can't prove the zero-badge state without resolving " +
+                "rows this suite doesn't own."
+        )
+    }
+
+    await page.context().addCookies([sessionCookie(admin.sessionToken, BASE_URL)])
+    await page.goto("/admin")
+
+    const adminNav = page.getByRole("navigation", { name: "Admin" })
+    const reportsLink = adminNav.locator('a[href="/admin/reports"]')
+    await expect(reportsLink).toBeVisible()
+
+    // The honest empty state: AdminSidebarLink only renders the badge span
+    // at all when badgeCount > 0 (components/layout/console/AdminSidebarLink.tsx)
+    // — there is no "0" badge — so a badge hardcoded to a positive constant
+    // would fail this the same way a query that ignored resolvedAt would fail
+    // the non-zero test below.
+    await expect(reportsLink.locator("span.tabular-nums")).toHaveCount(0)
+})
+
 test("badge counts render when non-zero", async ({ page }) => {
+    // Test 4 fixture: an unresolved ProblemReport guarantees the ADMIN-only
+    // "openReports" badge count is >= 1 regardless of what else is in the
+    // database (the count itself is a global, unscoped aggregate — see
+    // ConsoleShell.tsx — so this test only asserts "positive", never an exact
+    // number). Created here, not in beforeAll, so the zero-state test above
+    // still sees an empty queue — see its own comment.
+    await prisma.problemReport.create({
+        data: {
+            problemId: reportFixtureProblemId,
+            userId: admin.id,
+            kind: "WRONG_ANSWER",
+            message: `${PREFIX} badge-count fixture report`,
+        },
+    })
+
     await page.context().addCookies([sessionCookie(admin.sessionToken, BASE_URL)])
     await page.goto("/admin")
 
