@@ -73,8 +73,8 @@ export const getCheckpointContext = cache(
         const article = checkpoint.article
         if (!allowDraft && article.status !== "PUBLISHED") return null
 
-        const module = lowestModule(article.moduleLessons, allowDraft)
-        if (!module) return null
+        const mod = lowestModule(article.moduleLessons, allowDraft)
+        if (!mod) return null
 
         const position = resolveCheckpointPosition(
             article.checkpoints.map((c) => ({
@@ -89,9 +89,9 @@ export const getCheckpointContext = cache(
             ...position,
             lessonSlug: article.slug,
             lessonTitle: article.title,
-            trackSlug: module.track?.slug ?? "",
-            moduleTitle: module.name,
-            modulePosition: module.position,
+            trackSlug: mod.track?.slug ?? "",
+            moduleTitle: mod.name,
+            modulePosition: mod.position,
         }
     }
 )

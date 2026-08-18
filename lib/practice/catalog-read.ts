@@ -150,7 +150,7 @@ export const getCatalogProblems = cache(
 
         return problems.map((p) => {
             const article = p.lessonCheckpoint?.article
-            const module =
+            const mod =
                 article && (allowDraft || article.status === "PUBLISHED")
                     ? lowestModule(article.moduleLessons, allowDraft)
                     : null
@@ -162,9 +162,9 @@ export const getCatalogProblems = cache(
                 difficulty: p.difficulty as CatalogProblem["difficulty"],
                 solved: solved.has(p.id),
                 attempted: attempted.has(p.id),
-                moduleId: module?.id ?? null,
-                modulePosition: module?.position ?? null,
-                moduleTitle: module?.name ?? null,
+                moduleId: mod?.id ?? null,
+                modulePosition: mod?.position ?? null,
+                moduleTitle: mod?.name ?? null,
                 topicTags: p.tags
                     .filter((t) => t.kind !== "COMPANY")
                     .map((t) => ({ slug: t.slug, name: t.name })),

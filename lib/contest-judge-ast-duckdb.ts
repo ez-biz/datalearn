@@ -62,8 +62,8 @@ async function loadDuckDBInstance(): Promise<DuckDBInstanceType> {
         "specifier",
         "return import(specifier)"
     ) as (specifier: string) => Promise<DuckDBApi>
-    const module = await dynamicImport("@duckdb/node-api")
-    return module.DuckDBInstance
+    const duckdbModule = await dynamicImport("@duckdb/node-api")
+    return duckdbModule.DuckDBInstance
 }
 
 export function walkDuckDBAst(
