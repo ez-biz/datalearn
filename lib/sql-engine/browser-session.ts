@@ -2,6 +2,7 @@ import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm"
 import type { PGlite as PGliteType } from "@electric-sql/pglite"
 import { checkReadOnlyQuery } from "@/lib/sql-restrict"
 import { normalizeSqlRows } from "@/lib/sql-engine/normalize"
+import { evictStalePgliteDatabases } from "@/lib/sql-engine/pglite-eviction"
 import { applyRowCap, toRowLimitedSql } from "@/lib/sql-engine/result-cap"
 import {
     resolvePgliteDataDir,
@@ -80,6 +81,19 @@ async function createPostgresSession(
     const persistence = problemSlug
         ? await resolvePgliteDataDir({ slug: problemSlug, schemaSql })
         : ({ mode: "memory", reason: "no problem slug" } as const)
+
+    // Best-effort registry bookkeeping + eviction of stale/excess cached
+    // PGlite databases. Never blocks or fails session creation — see
+    // evictStalePgliteDatabases's doc comment. Runs before `connect` below
+    // so a fresh cluster never gets deleted out from under this session:
+    // the current database name is always passed through as exempt.
+    await evictStalePgliteDatabases(
+        persistence.mode === "indexeddb" ? persistence.name : null,
+        {
+            deleteIndexedDb: deleteBrowserIndexedDb,
+            toIdbDatabaseName: pgliteIdbDatabaseName,
+        }
+    )
 
     // `connect` remembers whatever persistence the *previous* call settled
     // on (see createPostgresResourceFactory) so a session that already
@@ -408,7 +422,12 @@ async function initPostgresConnection(
  */
 const PGLITE_IDB_MOUNT_ROOT = "/pglite"
 
-function pgliteIdbDatabaseName(name: string): string {
+/**
+ * Exported so `lib/sql-engine/pglite-eviction.ts` can reuse this exact
+ * derivation instead of re-deriving it — see that module's
+ * `EvictStalePgliteDatabasesDeps.toIdbDatabaseName` doc comment.
+ */
+export function pgliteIdbDatabaseName(name: string): string {
     return `${PGLITE_IDB_MOUNT_ROOT}/${name}`
 }
 
@@ -418,8 +437,10 @@ const DELETE_INDEXED_DB_TIMEOUT_MS = 3000
  * Deletes a browser IndexedDB database by name. Used as the production
  * default for `createPostgresResources`'s injectable `deleteIndexedDb`
  * parameter — tests inject a fake instead of touching real IndexedDB.
+ * Also exported for `pglite-eviction.ts` to reuse for its own deletes,
+ * rather than duplicating the blocked/timeout handling below.
  */
-function deleteBrowserIndexedDb(name: string): Promise<void> {
+export function deleteBrowserIndexedDb(name: string): Promise<void> {
     if (typeof indexedDB === "undefined") return Promise.resolve()
 
     const deletion = new Promise<void>((resolve, reject) => {
