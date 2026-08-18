@@ -260,6 +260,9 @@ jobs:
       - name: Test admin nav model
         run: npm run test:admin-nav
 
+      - name: Test analytics failure taxonomy
+        run: npm run test:analytics-failure-taxonomy
+
       - name: Test analytics funnel maths
         run: npm run test:analytics-funnel
 
