@@ -43,6 +43,13 @@ describe("windowBounds", () => {
 
         assert.equal(bounds.end.getTime() - bounds.start.getTime(), 30 * DAY_MS)
     })
+
+    it("rejects an invalid end day", () => {
+        assert.throws(
+            () => windowBounds(7, new Date("invalid")),
+            RangeError
+        )
+    })
 })
 
 describe("previousWindowBounds", () => {
@@ -102,5 +109,12 @@ describe("dailySeries", () => {
 
     it("rejects an oversized window instead of silently clamping", () => {
         assert.throws(() => dailySeries([], 366, END_DAY), RangeError)
+    })
+
+    it("rejects an invalid end day", () => {
+        assert.throws(
+            () => dailySeries([], 7, new Date("invalid")),
+            RangeError
+        )
     })
 })

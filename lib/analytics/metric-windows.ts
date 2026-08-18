@@ -21,6 +21,12 @@ export function assertWindow(windowDays: number): void {
     }
 }
 
+function assertFiniteDate(endDay: Date): void {
+    if (!Number.isFinite(endDay.getTime())) {
+        throw new RangeError("endDay must be a valid date")
+    }
+}
+
 function utcMidnight(date: Date): Date {
     return new Date(
         Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
@@ -29,6 +35,7 @@ function utcMidnight(date: Date): Date {
 
 export function windowBounds(windowDays: number, endDay: Date): WindowBounds {
     assertWindow(windowDays)
+    assertFiniteDate(endDay)
 
     const end = utcMidnight(endDay)
     end.setUTCDate(end.getUTCDate() + 1)
@@ -57,5 +64,6 @@ export function dailySeries(
     endDay: Date
 ): DayBucket[] {
     assertWindow(windowDays)
+    assertFiniteDate(endDay)
     return buildHeatmap(dates, windowDays, endDay)
 }
