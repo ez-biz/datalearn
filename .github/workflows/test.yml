@@ -260,6 +260,9 @@ jobs:
       - name: Test admin nav model
         run: npm run test:admin-nav
 
+      - name: Test analytics window maths
+        run: npm run test:analytics-windows
+
       - name: Admin metric deltas
         run: npm run test:metric-delta
 
