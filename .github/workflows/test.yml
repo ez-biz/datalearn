@@ -260,6 +260,9 @@ jobs:
       - name: Test admin nav model
         run: npm run test:admin-nav
 
+      - name: Test analytics counter drift
+        run: npm run test:analytics-counter-drift
+
       - name: Test analytics failure taxonomy
         run: npm run test:analytics-failure-taxonomy
 
