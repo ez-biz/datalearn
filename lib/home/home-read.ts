@@ -85,18 +85,18 @@ async function resolvePlanResume(
     const curriculum = await getTrackCurriculumForUser(activeTrack.slug, userId)
     if (!curriculum) return null
 
-    const module = curriculum.modules.find((m) => m.slug === moduleSlug)
-    if (!module) return null
+    const mod = curriculum.modules.find((m) => m.slug === moduleSlug)
+    if (!mod) return null
 
-    const lesson = module.lessons.find((l) => l.slug === lessonSlug)
+    const lesson = mod.lessons.find((l) => l.slug === lessonSlug)
     if (!lesson) return null
 
     return {
         trackSlug: activeTrack.slug,
         lessonSlug: lesson.slug,
         lessonTitle: lesson.title,
-        moduleTitle: module.name,
-        modulePosition: module.position,
+        moduleTitle: mod.name,
+        modulePosition: mod.position,
     }
 }
 

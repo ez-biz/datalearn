@@ -36,9 +36,9 @@ export type ResumeTarget = { moduleSlug: string; lessonSlug: string } | null
  * components/learn/tracks/TrackSummaryCard.tsx's `isComplete`.
  */
 export function findResume(modules: ResumeModule[]): ResumeTarget {
-    for (const module of modules) {
-        const lesson = module.lessons.find((l) => !l.completed)
-        if (lesson) return { moduleSlug: module.slug, lessonSlug: lesson.slug }
+    for (const mod of modules) {
+        const lesson = mod.lessons.find((l) => !l.completed)
+        if (lesson) return { moduleSlug: mod.slug, lessonSlug: lesson.slug }
     }
     return null
 }
