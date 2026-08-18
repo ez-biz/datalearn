@@ -66,4 +66,20 @@ describe("writeDailySnapshot", () => {
         assert.equal(snapshots.length, 1)
         assert.deepEqual(metrics(snapshots[0]), firstMetrics)
     })
+
+    it("allows concurrent writes for one day without creating or rewriting a second snapshot", async () => {
+        await writeDailySnapshot(DAY)
+        const first = await prisma.metricSnapshot.findUniqueOrThrow({
+            where: { day: DAY },
+        })
+        const firstMetrics = metrics(first)
+
+        await Promise.all(Array.from({ length: 4 }, () => writeDailySnapshot(DAY)))
+
+        const snapshots = await prisma.metricSnapshot.findMany({
+            where: { day: DAY },
+        })
+        assert.equal(snapshots.length, 1)
+        assert.deepEqual(metrics(snapshots[0]), firstMetrics)
+    })
 })

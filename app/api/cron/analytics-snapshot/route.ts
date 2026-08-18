@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { writeDailySnapshot } from "@/lib/analytics/analytics-read"
-import { toDayKey } from "@/lib/profile-stats"
+import { snapshotDayForRun } from "@/lib/analytics/snapshot-day"
 
 function isAuthorized(req: NextRequest): boolean {
     const secret = process.env.CRON_SECRET
@@ -12,9 +12,9 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "forbidden" }, { status: 403 })
     }
 
-    // This captures the live state at the first run in the current UTC day.
-    // Retried runs cannot rewrite that day's snapshot.
-    const day = toDayKey(new Date())
+    // An authorized invocation belongs to the UTC day when it starts. A
+    // later retry cannot rewrite that day's first successfully persisted row.
+    const day = snapshotDayForRun(new Date())
     await writeDailySnapshot(day)
 
     return NextResponse.json({ ok: true, day })

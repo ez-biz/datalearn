@@ -79,7 +79,7 @@ model MetricSnapshot {
 }
 ```
 
-`day` as the primary key makes the daily write idempotent: the first run creates the UTC-day row and later retries leave it unchanged. The row records the live state at that first run; without state history, a prior-day count cannot be reconstructed honestly.
+`day` as the primary key makes the daily write idempotent: the first successful persisted write creates the UTC-day row and later retries leave it unchanged. Its aggregate counts are read in one repeatable-read database snapshot; without state history, a prior-day count cannot be reconstructed honestly.
 
 **Rule for implementers:** a metric belongs in `MetricSnapshot` only if it cannot be recomputed from immutable rows. Adding a recomputable metric to this table is a defect, not an optimisation.
 
@@ -208,7 +208,7 @@ Reads are admin-only, so concurrency is one or two users. With the §3 indexes, 
 
 **Bounded windows:** the maximum queryable range is 365 days, matching the heatmap window. Unbounded ranges are rejected rather than silently truncated.
 
-Vercel Hobby permits 100 cron jobs per project at a minimum interval of once per day with ±59 min precision — verified against Vercel's cron limits documentation. A third daily cron is within limits, and daily is the intended cadence. The cron writes the current UTC-day key on its first successful run; jitter changes that point-in-time but retries cannot mutate it.
+Vercel Hobby permits 100 cron jobs per project at a minimum interval of once per day with ±59 min precision — verified against Vercel's cron limits documentation. A third daily cron is within limits, and daily is the intended cadence. An authorized invocation captures its UTC day when it starts, reads a consistent state vector, and the first successful persisted write for that key wins; jitter changes that point-in-time but retries cannot mutate it.
 
 ## 11. Phasing
 

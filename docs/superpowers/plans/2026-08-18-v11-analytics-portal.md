@@ -43,6 +43,7 @@ Every task's requirements implicitly include this section.
 | --- | --- |
 | `prisma/schema.prisma` | Five additive indexes + the `MetricSnapshot` model |
 | `lib/analytics/metric-windows.ts` | Window validation, UTC day ranges, previous-period bounds, daily series |
+| `lib/analytics/snapshot-day.ts` | UTC key captured at snapshot invocation start |
 | `lib/analytics/retention.ts` | Cohort retention with insufficient-history detection |
 | `lib/analytics/funnel.ts` | Funnel step counts and conversion rates |
 | `lib/analytics/failure-taxonomy.ts` | Free-text `Submission.reason` → `FailureCategory` |
@@ -126,8 +127,8 @@ Append to `prisma/schema.prisma`:
 /// source of truth that can only drift.
 ///
 /// `day` is a YYYY-MM-DD UTC key from lib/profile-stats.ts `toDayKey`,
-/// and is the primary key so the first daily write is idempotent:
-/// retries preserve that original point-in-time value.
+/// and is the primary key so the first successfully persisted daily write is
+/// idempotent: retries preserve that original point-in-time value.
 model MetricSnapshot {
   day               String   @id
   registeredUsers   Int
@@ -1588,8 +1589,9 @@ export async function getCounterDriftReport(): Promise<DriftReport> {
 }
 
 /**
- * Write the point-in-time snapshot for `day`. The primary-key upsert creates
- * it once; a retry preserves the original value rather than rewriting it.
+ * Write the point-in-time snapshot for `day`. Read all counts under one
+ * repeatable-read database snapshot, then create the primary-key row once;
+ * a retry preserves the original value rather than rewriting it.
  *
  * Only non-recomputable state belongs here. Anything derivable from a
  * createdAt/completedAt timestamp is computed live instead.
@@ -1601,7 +1603,7 @@ export async function writeDailySnapshot(day: string): Promise<void> {
         publishedArticles,
         publishedTracks,
         lessonsInProgress,
-    ] = await Promise.all([
+    ] = await prisma.$transaction([
         prisma.user.count(),
         prisma.sQLProblem.count({ where: { status: "PUBLISHED" } }),
         prisma.article.count({ where: { status: "PUBLISHED" } }),
@@ -1609,7 +1611,7 @@ export async function writeDailySnapshot(day: string): Promise<void> {
         prisma.lessonProgress.count({
             where: { completedAt: null, percent: { gt: 0 } },
         }),
-    ])
+    ], { isolationLevel: "RepeatableRead" })
 
     const values = {
         registeredUsers,
@@ -1639,7 +1641,7 @@ Create `app/api/cron/analytics-snapshot/route.ts`, following the `CRON_SECRET` p
 ```ts
 import { NextResponse, type NextRequest } from "next/server"
 import { writeDailySnapshot } from "@/lib/analytics/analytics-read"
-import { toDayKey } from "@/lib/profile-stats"
+import { snapshotDayForRun } from "@/lib/analytics/snapshot-day"
 
 function isAuthorized(req: NextRequest): boolean {
     const secret = process.env.CRON_SECRET
@@ -1651,9 +1653,9 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "forbidden" }, { status: 403 })
     }
 
-    // Capture live state at the first run in the current UTC day. A retry
-    // cannot rewrite it, so the point-in-time value stays internally honest.
-    const day = toDayKey(new Date())
+    // An authorized invocation belongs to the UTC day when it starts. A retry
+    // cannot rewrite that day's first successfully persisted snapshot.
+    const day = snapshotDayForRun(new Date())
 
     await writeDailySnapshot(day)
 
@@ -1695,7 +1697,7 @@ psql postgresql://anchitgupta@localhost:5432/datalearn -c \
   "SELECT count(*) FROM \"MetricSnapshot\" WHERE day = '<current UTC day>';"
 ```
 
-Expected: `1`. Two rows means the upsert key is wrong; changing source state between the two calls must not rewrite the row.
+Expected: `1`. Two rows means the upsert key is wrong; changing source state between the two calls must not rewrite the row. The count vector itself is read under one repeatable-read transaction.
 
 Also verify the gate rejects an unauthenticated call:
 

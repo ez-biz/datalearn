@@ -312,21 +312,27 @@ export async function getCounterDriftReport(): Promise<DriftReport> {
 }
 
 export async function writeDailySnapshot(day: string): Promise<void> {
+    // Keep the aggregate vector internally consistent even while mutable
+    // platform state changes. The upsert stays outside this transaction so
+    // concurrent retries retain ordinary first-write-wins behavior.
     const [
         registeredUsers,
         publishedProblems,
         publishedArticles,
         publishedTracks,
         lessonsInProgress,
-    ] = await Promise.all([
-        prisma.user.count(),
-        prisma.sQLProblem.count({ where: { status: "PUBLISHED" } }),
-        prisma.article.count({ where: { status: "PUBLISHED" } }),
-        prisma.track.count({ where: { status: "PUBLISHED" } }),
-        prisma.lessonProgress.count({
-            where: { completedAt: null, percent: { gt: 0 } },
-        }),
-    ])
+    ] = await prisma.$transaction(
+        [
+            prisma.user.count(),
+            prisma.sQLProblem.count({ where: { status: "PUBLISHED" } }),
+            prisma.article.count({ where: { status: "PUBLISHED" } }),
+            prisma.track.count({ where: { status: "PUBLISHED" } }),
+            prisma.lessonProgress.count({
+                where: { completedAt: null, percent: { gt: 0 } },
+            }),
+        ],
+        { isolationLevel: "RepeatableRead" }
+    )
 
     const data = {
         registeredUsers,
