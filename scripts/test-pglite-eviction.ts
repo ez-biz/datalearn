@@ -385,6 +385,52 @@ describe("adoptUnknownPgliteDatabases", () => {
         assert.deepEqual(readPgliteRegistry(storage), [])
     })
 
+    // Adoption feeds a delete path (eviction), so the namespace/mount
+    // boundary must be an exact prefix match, not "contains somewhere."
+    // These three pin that boundary independently of the happy-path cases
+    // above, which use fixtures containing the prefix nowhere at all and
+    // so would keep passing even if `startsWith` were loosened to
+    // `includes`.
+    it("never adopts a name that contains the namespace prefix without starting with it", async () => {
+        const storage = fakeStorage()
+        const foreignButContainsOurNamespace = `evil-${PGLITE_NAMESPACE_PREFIX}foo`
+        await adoptUnknownPgliteDatabases({
+            storage,
+            listIndexedDbNames: async () => [
+                `${PGLITE_MOUNT_PREFIX}${foreignButContainsOurNamespace}`,
+            ],
+            fromIdbDatabaseName,
+            currentVersion: V1,
+        })
+        assert.deepEqual(readPgliteRegistry(storage), [])
+    })
+
+    it("never adopts a raw IndexedDB name that embeds the PGlite mount path without starting with it", async () => {
+        const storage = fakeStorage()
+        const foreignButEmbedsOurMountPath = `/evil${PGLITE_MOUNT_PREFIX}${PGLITE_NAMESPACE_PREFIX}foo`
+        await adoptUnknownPgliteDatabases({
+            storage,
+            listIndexedDbNames: async () => [foreignButEmbedsOurMountPath],
+            fromIdbDatabaseName,
+            currentVersion: V1,
+        })
+        assert.deepEqual(readPgliteRegistry(storage), [])
+    })
+
+    it("never adopts a near-miss of the namespace prefix missing the trailing separator", async () => {
+        const storage = fakeStorage()
+        const nearMissPrefix = "datalearn-pglite2-foo" // no "-" after "pglite"
+        await adoptUnknownPgliteDatabases({
+            storage,
+            listIndexedDbNames: async () => [
+                `${PGLITE_MOUNT_PREFIX}${nearMissPrefix}`,
+            ],
+            fromIdbDatabaseName,
+            currentVersion: V1,
+        })
+        assert.deepEqual(readPgliteRegistry(storage), [])
+    })
+
     it("does not duplicate or clobber a name already present in the registry", async () => {
         const known = `${PGLITE_NAMESPACE_PREFIX}known`
         const storage = fakeStorage({
