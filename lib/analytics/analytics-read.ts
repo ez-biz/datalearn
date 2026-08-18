@@ -339,6 +339,6 @@ export async function writeDailySnapshot(day: string): Promise<void> {
     await prisma.metricSnapshot.upsert({
         where: { day },
         create: { day, ...data },
-        update: data,
+        update: {},
     })
 }
