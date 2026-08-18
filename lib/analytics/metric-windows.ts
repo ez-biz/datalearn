@@ -1,5 +1,7 @@
 import { buildHeatmap, type DayBucket } from "../profile-stats"
 
+export type { DayBucket } from "../profile-stats"
+
 export const MAX_WINDOW_DAYS = 365
 
 export interface WindowBounds {

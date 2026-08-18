@@ -12,6 +12,7 @@ import {
     previousWindowBounds,
     windowBounds,
 } from "../lib/analytics/metric-windows"
+import type { DayBucket } from "../lib/analytics/metric-windows"
 import { buildHeatmap, toDayKey } from "../lib/profile-stats"
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -23,7 +24,7 @@ describe("assertWindow", () => {
     })
 
     it("rejects non-integers and values outside the supported range", () => {
-        for (const value of [366, 0, -1, 7.5]) {
+        for (const value of [366, 0, -7, 7.5]) {
             assert.throws(() => assertWindow(value), RangeError)
         }
     })
@@ -59,7 +60,7 @@ describe("previousWindowBounds", () => {
 
 describe("dailySeries", () => {
     it("returns seven zero-filled days for an empty window", () => {
-        assert.deepEqual(dailySeries([], 7, END_DAY), [
+        const expected: DayBucket[] = [
             { date: "2026-03-09", count: 0 },
             { date: "2026-03-10", count: 0 },
             { date: "2026-03-11", count: 0 },
@@ -67,7 +68,9 @@ describe("dailySeries", () => {
             { date: "2026-03-13", count: 0 },
             { date: "2026-03-14", count: 0 },
             { date: "2026-03-15", count: 0 },
-        ])
+        ]
+
+        assert.deepEqual(dailySeries([], 7, END_DAY), expected)
     })
 
     it("keeps a 23:59:59Z timestamp on its UTC day", () => {
