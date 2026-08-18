@@ -292,8 +292,8 @@ export const getTrackSummariesForUser = cache(
                 if (at && (!lastActivityAt || at > lastActivityAt)) lastActivityAt = at
             }
 
-            for (const module of track.modules) {
-                const lessons = module.lessons.map((l) => ({
+            for (const curriculumModule of track.modules) {
+                const lessons = curriculumModule.lessons.map((l) => ({
                     articleId: l.article.id,
                     slug: l.article.slug,
                     completed: completedArticleIds.has(l.article.id),
@@ -309,7 +309,7 @@ export const getTrackSummariesForUser = cache(
                 }
 
                 const moduleRollup = rollUpModule({
-                    moduleId: module.id,
+                    moduleId: curriculumModule.id,
                     lessons: lessons.map((l) => ({
                         articleId: l.articleId,
                         completed: l.completed,
@@ -319,18 +319,18 @@ export const getTrackSummariesForUser = cache(
                 moduleRollups.push(moduleRollup)
 
                 moduleSummaries.push({
-                    id: module.id,
-                    slug: module.slug,
-                    position: module.position,
-                    name: module.name,
-                    description: module.description,
+                    id: curriculumModule.id,
+                    slug: curriculumModule.slug,
+                    position: curriculumModule.position,
+                    name: curriculumModule.name,
+                    description: curriculumModule.description,
                     percent: moduleRollup.percent,
                     lessonsTotal: moduleRollup.lessonsTotal,
                     problemsTotal: moduleRollup.problemsTotal,
                 })
 
                 modulesForResume.push({
-                    slug: module.slug,
+                    slug: curriculumModule.slug,
                     lessons: lessons.map((l) => ({
                         slug: l.slug,
                         completed: l.completed,
