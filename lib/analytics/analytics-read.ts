@@ -311,7 +311,7 @@ export async function getCounterDriftReport(): Promise<DriftReport> {
     )
 }
 
-export async function writeDailySnapshot(day: string) {
+export async function writeDailySnapshot(day: string): Promise<void> {
     const [
         registeredUsers,
         publishedProblems,
@@ -336,7 +336,7 @@ export async function writeDailySnapshot(day: string) {
         lessonsInProgress,
     }
 
-    return prisma.metricSnapshot.upsert({
+    await prisma.metricSnapshot.upsert({
         where: { day },
         create: { day, ...data },
         update: data,
