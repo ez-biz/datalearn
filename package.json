@@ -98,7 +98,8 @@
     "test:scroll-restoration": "node --import tsx --test scripts/test-scroll-restoration.ts",
     "check:mcp-bundle-isolation": "tsx scripts/check-mcp-bundle-isolation.ts",
     "check:theme-utilities": "node --import tsx --test scripts/test-theme-utilities.ts && tsx scripts/check-theme-utilities.ts",
-    "check:token-parity": "./scripts/check-token-theme-parity.sh"
+    "check:token-parity": "./scripts/check-token-theme-parity.sh",
+    "check:ci-coverage": "node --import tsx --test scripts/test-check-ci-coverage.ts && tsx scripts/check-ci-coverage.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

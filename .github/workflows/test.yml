@@ -74,6 +74,8 @@ jobs:
         # adding a new one fails the build. Errors always fail regardless of
         # this flag.
         run: npm run lint -- --max-warnings 91
+      - name: Check CI coverage of test/check/audit/verify scripts
+        run: npm run check:ci-coverage
 
       - name: Apply migrations
         run: npx prisma migrate deploy
@@ -83,6 +85,16 @@ jobs:
 
       - name: Seed visual lesson
         run: npm run seed:visual
+
+      # Deliberately NOT seeding prisma/seed-analyst-track.ts here, despite
+      # repeated proposals (most recently during SP6). Every curriculum test
+      # now creates and cleans up its own fixture on purpose. Seeding a
+      # shared curriculum track would reintroduce the ambient-data coupling
+      # that caused several failures this month: tests that passed locally
+      # and failed in CI, and tests that silently skipped locally because a
+      # seeded track happened to already be present. A curriculum-free CI is
+      # what makes the self-fixturing discipline enforceable -- this is a
+      # decision, not an oversight.
 
       - name: Verify pass-rate counters
         run: npm run verify:pass-rate
@@ -105,6 +117,13 @@ jobs:
       - name: Test SQL engine warmup registry
         run: npm run test:sql-engine-warmup
 
+      - name: Test SQL engine internals (result cap, runtime controls, JSON/time validator, dialect audit helpers)
+        run: |
+            npm run test:sql-engine-result-cap
+            npm run test:sql-engine-runtime-controls
+            npm run test:sql-validator-json-time
+            npm run test:dialect-audit
+
       - name: Test solution resolver
         run: npm run test:solutions
 
@@ -119,6 +138,11 @@ jobs:
 
       - name: Test tracks actions
         run: npm run test:tracks
+
+      - name: Test time-zone helpers and topic lane
+        run: |
+            npm run test:time-ist
+            npm run test:topic-lane
 
       - name: Test curriculum progress
         run: npm run test:curriculum-progress
@@ -138,8 +162,82 @@ jobs:
       - name: Test checkpoint backfill
         run: npm run test:checkpoint-backfill
 
+      - name: Test contest core (status, admin validation, locks, leaderboard, play, contests, custom contests)
+        run: |
+            npm run test:contest-status
+            npm run test:contest-admin-validation
+            npm run test:contest-locks
+            npm run test:contest-leaderboard
+            npm run test:contest-play
+            npm run test:contests
+            npm run test:custom-contests
+
+      - name: Test contest judge engine (validator, engines, queue, escape, warmup, hidden validator, submit)
+        run: |
+            npm run test:contest-judge-validator
+            npm run test:contest-judge-engines
+            npm run test:contest-judge-queue
+            npm run test:contest-judge-escape
+            npm run test:contest-judge-warmup
+            npm run test:contest-hidden-validator
+            npm run test:contest-submit
+
       - name: Test article publish validation
         run: npm run test:article-publish-validation
+
+      - name: Test content rendering (directives, mermaid sanitization, discussion helpers)
+        run: |
+            npm run test:directive-renderer
+            npm run test:mermaid-sanitization
+            npm run test:discussion
+
+      - name: Test asset & upload housekeeping (gc, quota race, phase-1 atomicity, delete retry)
+        run: |
+            npm run test:asset-gc
+            npm run test:upload-phase1-atomicity
+            npm run test:upload-quota-race
+            npm run test:admin-asset-delete-retry
+
+      - name: Audit tags & admin audit log
+        run: |
+            npm run audit:tags
+            npm run test:admin-audit-log
+
+      # test:uploads, test:admin-asset-delete and test:asset-delete-references
+      # exercise real HTTP routes (multipart upload, admin delete, in-use
+      # delete) via fetch, so -- like "Test article publish routes" below --
+      # they need a live server. Unlike that step, they can't reuse the
+      # production `npm run start` server: they authenticate through the
+      # X-Test-User-Id bypass in lib/api-auth.ts and the DATALEARN_FAKE_BLOB
+      # fake-blob-store path in lib/uploads/blob.ts, both of which are
+      # intentionally disabled whenever NODE_ENV === "production" (verified
+      # locally: the same three tests get a 502 blob-write-failed against a
+      # `next start` server, and pass against `next dev`). So this step
+      # boots its own dev-mode server on a scratch port instead, and removes
+      # its build output afterwards so it can't leak into the production
+      # `next build` a few steps down.
+      - name: Test uploads and asset deletion (needs a non-production server)
+        run: |
+            DATALEARN_FAKE_BLOB=1 npm run dev -- -p 3102 &
+            SERVER_PID=$!
+            trap "kill $SERVER_PID" EXIT
+
+            for i in {1..30}; do
+              if curl -fsS http://localhost:3102/api/health >/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+
+            curl -fsS http://localhost:3102/api/health >/dev/null
+            TEST_BASE_URL=http://localhost:3102 npm run test:uploads
+            TEST_BASE_URL=http://localhost:3102 npm run test:admin-asset-delete
+            TEST_BASE_URL=http://localhost:3102 npm run test:asset-delete-references
+
+            kill $SERVER_PID
+            wait $SERVER_PID 2>/dev/null || true
+            trap - EXIT
+            rm -rf .next
 
       - name: Check MCP bundle isolation
         run: npm run check:mcp-bundle-isolation
