@@ -255,7 +255,7 @@ test("a hand-thrown error with no Zod details also marks its tab and jumps to it
     // Flipping to PUBLISHED trips PUBLISHED_DIALECT_MAP_INCOMPLETE — a
     // hand-thrown route error carrying `{ error, missing }` and no
     // `details` at all.
-    await page.getByRole("button", { name: "Published", exact: true }).click()
+    await page.getByRole("radio", { name: "Published", exact: true }).click()
 
     await page.getByRole("tab", { name: "Curriculum" }).click()
     await expect(page.locator("#form-tabpanel-curriculum")).toBeVisible()
