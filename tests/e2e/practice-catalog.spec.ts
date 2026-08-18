@@ -42,7 +42,7 @@ test.describe("practice catalog", () => {
         await page.goto("/practice")
         const first = page.getByRole("row").nth(1)
         const before = await first.innerText()
-        await page.getByRole("button", { name: /newest/i }).click()
+        await page.getByRole("radio", { name: /newest/i }).click()
         await expect(first).not.toHaveText(before)
     })
 
