@@ -41,7 +41,7 @@ Every task's requirements implicitly include this section.
 
 | File | Responsibility |
 | --- | --- |
-| `prisma/schema.prisma` | Four additive indexes + the `MetricSnapshot` model |
+| `prisma/schema.prisma` | Five additive indexes + the `MetricSnapshot` model |
 | `lib/analytics/metric-windows.ts` | Window validation, UTC day ranges, previous-period bounds, daily series |
 | `lib/analytics/retention.ts` | Cohort retention with insufficient-history detection |
 | `lib/analytics/funnel.ts` | Funnel step counts and conversion rates |
@@ -91,7 +91,7 @@ No UI. Verified by unit suites plus an idempotent cron invocation.
 **Interfaces:**
 - Produces: `MetricSnapshot` model with fields `day` (String, `@id`), `registeredUsers`, `publishedProblems`, `publishedArticles`, `publishedTracks`, `lessonsInProgress` (all `Int`), `createdAt` (DateTime).
 
-- [ ] **Step 1: Add the four indexes**
+- [ ] **Step 1: Add the five indexes**
 
 In `prisma/schema.prisma`, add to `model Submission` alongside its existing `@@index` lines:
 
@@ -126,7 +126,8 @@ Append to `prisma/schema.prisma`:
 /// source of truth that can only drift.
 ///
 /// `day` is a YYYY-MM-DD UTC key from lib/profile-stats.ts `toDayKey`,
-/// and is the primary key so the daily write is an idempotent upsert.
+/// and is the primary key so the first daily write is idempotent:
+/// retries preserve that original point-in-time value.
 model MetricSnapshot {
   day               String   @id
   registeredUsers   Int
@@ -1587,8 +1588,8 @@ export async function getCounterDriftReport(): Promise<DriftReport> {
 }
 
 /**
- * Write the point-in-time snapshot for `day`. Upsert on the primary key,
- * so a retried or re-run cron cannot double-count.
+ * Write the point-in-time snapshot for `day`. The primary-key upsert creates
+ * it once; a retry preserves the original value rather than rewriting it.
  *
  * Only non-recomputable state belongs here. Anything derivable from a
  * createdAt/completedAt timestamp is computed live instead.
@@ -1621,7 +1622,7 @@ export async function writeDailySnapshot(day: string): Promise<void> {
     await prisma.metricSnapshot.upsert({
         where: { day },
         create: { day, ...values },
-        update: values,
+        update: {},
     })
 }
 ```
@@ -1640,8 +1641,6 @@ import { NextResponse, type NextRequest } from "next/server"
 import { writeDailySnapshot } from "@/lib/analytics/analytics-read"
 import { toDayKey } from "@/lib/profile-stats"
 
-const MS_PER_DAY = 86_400_000
-
 function isAuthorized(req: NextRequest): boolean {
     const secret = process.env.CRON_SECRET
     return Boolean(secret) && req.headers.get("authorization") === `Bearer ${secret}`
@@ -1652,10 +1651,9 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "forbidden" }, { status: 403 })
     }
 
-    // Snapshot the previous COMPLETE day. Vercel Hobby cron timing has
-    // up to 59 minutes of jitter, so today would be partial and the value
-    // would depend on when the job happened to fire.
-    const day = toDayKey(new Date(Date.now() - MS_PER_DAY))
+    // Capture live state at the first run in the current UTC day. A retry
+    // cannot rewrite it, so the point-in-time value stays internally honest.
+    const day = toDayKey(new Date())
 
     await writeDailySnapshot(day)
 
@@ -1690,14 +1688,14 @@ curl -s -H "Authorization: Bearer localdev" http://localhost:3000/api/cron/analy
 curl -s -H "Authorization: Bearer localdev" http://localhost:3000/api/cron/analytics-snapshot
 ```
 
-Expected: both return `{"ok":true,"day":"<yesterday>"}`. Then confirm exactly one row exists:
+Expected: both return `{"ok":true,"day":"<current UTC day>"}`. Then confirm exactly one row exists for that day:
 
 ```bash
 psql postgresql://anchitgupta@localhost:5432/datalearn -c \
   'SELECT count(*) FROM "MetricSnapshot";'
 ```
 
-Expected: `1`. Two rows means the upsert key is wrong.
+Expected: `1`. Two rows means the upsert key is wrong; changing source state between the two calls must not rewrite the row.
 
 Also verify the gate rejects an unauthenticated call:
 
