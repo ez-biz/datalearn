@@ -235,6 +235,7 @@ jobs:
             TEST_BASE_URL=http://localhost:3102 npm run test:asset-delete-references
 
             kill $SERVER_PID
+            wait $SERVER_PID 2>/dev/null || true
             trap - EXIT
             rm -rf .next
 
