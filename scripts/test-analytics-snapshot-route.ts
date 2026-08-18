@@ -9,6 +9,11 @@ test("analytics snapshot cron route requires its bearer secret and returns the c
     const unauthorized = await fetch(`${BASE}/api/cron/analytics-snapshot`)
     assert.equal(unauthorized.status, 403)
 
+    const incorrectSecret = await fetch(`${BASE}/api/cron/analytics-snapshot`, {
+        headers: { Authorization: "Bearer incorrect-secret" },
+    })
+    assert.equal(incorrectSecret.status, 403)
+
     const dayBeforeRequest = toDayKey(new Date())
     const authorized = await fetch(`${BASE}/api/cron/analytics-snapshot`, {
         headers: { Authorization: "Bearer analytics-test-secret" },
