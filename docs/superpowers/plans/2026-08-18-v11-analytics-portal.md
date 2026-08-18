@@ -1692,7 +1692,7 @@ Expected: both return `{"ok":true,"day":"<current UTC day>"}`. Then confirm exac
 
 ```bash
 psql postgresql://anchitgupta@localhost:5432/datalearn -c \
-  'SELECT count(*) FROM "MetricSnapshot";'
+  "SELECT count(*) FROM \"MetricSnapshot\" WHERE day = '<current UTC day>';"
 ```
 
 Expected: `1`. Two rows means the upsert key is wrong; changing source state between the two calls must not rewrite the row.
