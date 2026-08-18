@@ -107,6 +107,15 @@ describe("failure taxonomy metadata", () => {
 })
 
 describe("tallyFailures", () => {
+    it("initializes every category to zero for no failure reasons", () => {
+        const tally = tallyFailures([])
+
+        for (const category of FAILURE_CATEGORIES) {
+            assert.ok(Object.hasOwn(tally, category))
+            assert.equal(tally[category], 0)
+        }
+    })
+
     it("initializes zero-count categories and counts repeated validator failures", () => {
         const rowCountReason = failedReason(
             [{ id: 1, value: "one" }],
