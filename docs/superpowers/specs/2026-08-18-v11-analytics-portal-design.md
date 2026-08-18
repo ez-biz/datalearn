@@ -34,7 +34,8 @@ Adding an events table remains a legitimate phase 2, but it needs a privacy-poli
 Derivable today, with no schema change beyond indexes:
 
 - **Sign-ups per day** — `User.createdAt`
-- **Active users per day** — distinct `Submission.userId`; separately, distinct `LessonProgress.userId`
+- **Practice-active users per day** — distinct `Submission.userId` (append-only, so a true daily series)
+- **Learn activity** — lessons completed per day from `LessonProgress.completedAt`, plus a trailing-window count of active learners from `updatedAt`. Not a per-day series; see §6 for why `updatedAt` cannot support one.
 - **Submissions per day, and acceptance rate** — `Submission.createdAt`, `Submission.status`
 - **Per-problem attempts, distinct solvers, acceptance rate** — `Submission` grouped by `problemId`
 - **First-try acceptance per problem** — each user's earliest submission per problem
@@ -91,7 +92,8 @@ Add:
 - `Submission @@index([createdAt])` — daily series and active-user counts
 - `Submission @@index([problemId, status])` — per-problem acceptance
 - `User @@index([createdAt])` — sign-up series and cohorts
-- `LessonProgress @@index([completedAt])` — completions series (the existing `[userId, completedAt]` is `userId`-leading and cannot serve a global range)
+- `LessonProgress @@index([completedAt])` — completions series and the snapshot's in-progress count (the existing `[userId, completedAt]` is `userId`-leading and cannot serve a global range)
+- `LessonProgress @@index([updatedAt])` — the trailing-window learn-activity count (see §6)
 
 One migration, additive, no data change.
 
@@ -148,7 +150,16 @@ Read-time classification is chosen over a new `reasonCode` column deliberately: 
 
 A learner can read an entire track without submitting once. Counting only submissions would render that engagement as zero — undercounting exactly what the curriculum work shipped.
 
-The portal therefore reports **practice activity** (distinct users with a `Submission`) and **learn activity** (distinct users with `LessonProgress` movement) as two distinct series, and never sums them into a single "active users" headline. Where a combined figure is genuinely wanted, it is labelled as a union of distinct users and computed as one query, not by adding the two series — adding them would double-count anyone who did both.
+The portal therefore reports **practice activity** and **learn activity** separately, and never sums them into a single "active users" headline. Where a combined figure is genuinely wanted, it is labelled as a union of distinct users and computed as one query, not by adding the two — adding them would double-count anyone who did both.
+
+**The two are not symmetrical, because the underlying columns are not.** `Submission` is append-only, so practice activity supports a genuine per-day series from `createdAt`. `LessonProgress` is one mutable row per `(userId, articleId)`: `updatedAt` is `@updatedAt` and is overwritten on every progress write, and there is no `createdAt`. A learner who read a lesson on 1 March and returned on 10 March leaves a single row stamped 10 March — the earlier visit is gone.
+
+A per-day series built from `updatedAt` would therefore decay backwards: accurate for today, and undercounting every earlier day by exactly the learners who came back. That is a fabricated trend, so it is not built. Learn activity is reported as:
+
+- **Lessons completed per day** — from `completedAt`, which `lib/curriculum-write.ts` sets once via `COALESCE(existing, …)` and never unsets. Genuinely immutable, so it is a real historical series.
+- **Learners active in lessons over the window** — one trailing-window figure from `updatedAt`, not a per-day breakdown. This aggregate *is* correct: for a window ending today no row can be stamped later, so "distinct users with a row in the window" is exactly "users who touched a lesson in the window."
+
+The window figure carries no sparkline and no per-day delta, because neither would be honest.
 
 ## 7. Module structure
 

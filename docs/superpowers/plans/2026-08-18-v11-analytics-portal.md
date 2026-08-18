@@ -110,7 +110,10 @@ Add to `model LessonProgress` (it already has `@@index([userId, completedAt])`, 
 
 ```prisma
   @@index([completedAt])
+  @@index([updatedAt])
 ```
+
+Both are needed and they serve different queries: `completedAt` backs the lessons-completed series and the snapshot's in-progress count, `updatedAt` backs the trailing-window learn-activity count. See Task 7 for why `updatedAt` supports only a window aggregate and not a per-day series.
 
 - [ ] **Step 2: Add the `MetricSnapshot` model**
 
@@ -1275,11 +1278,26 @@ export type PlatformSeries = {
     signups: DayBucket[]
     submissions: DayBucket[]
     accepted: DayBucket[]
-    /** Distinct users with a submission, per day. */
+    /** Distinct users with a submission, per day. Submission is
+     *  append-only, so this is a genuine historical series. */
     practiceActive: DayBucket[]
-    /** Distinct users with lesson progress, per day. Never summed with
-     *  practiceActive — a user doing both would be double-counted. */
-    learnActive: DayBucket[]
+    /** Lessons completed per day. `completedAt` is write-once — see the
+     *  COALESCE in lib/curriculum-write.ts — so this is also genuine. */
+    lessonsCompleted: DayBucket[]
+    /**
+     * Distinct learners who touched a lesson anywhere in the window.
+     *
+     * A WINDOW TOTAL, deliberately not a series. LessonProgress holds one
+     * mutable row per (userId, articleId) with `updatedAt @updatedAt` and
+     * no createdAt, so a row records only its most recent touch. A per-day
+     * breakdown would be accurate for today and undercount every earlier
+     * day by exactly the learners who came back — a fabricated trend.
+     *
+     * The window aggregate is sound: for a window ending today no row can
+     * be stamped later, so "distinct users with a row in the window" is
+     * exactly "users who touched a lesson in the window".
+     */
+    learnActiveInWindow: number
 }
 
 export type ProblemPerformanceRow = {
@@ -1301,7 +1319,7 @@ export async function getPlatformSeries(
     const { start, end } = windowBounds(windowDays, endDay)
     const range = { gte: start, lt: end }
 
-    const [users, submissions, lessons] = await Promise.all([
+    const [users, submissions, completions, learnActiveRows] = await Promise.all([
         prisma.user.findMany({
             where: { createdAt: range },
             select: { createdAt: true },
@@ -1310,9 +1328,18 @@ export async function getPlatformSeries(
             where: { createdAt: range },
             select: { createdAt: true, status: true, userId: true },
         }),
+        // completedAt is nullable; a range filter excludes nulls, so this
+        // returns only genuine completions.
+        prisma.lessonProgress.findMany({
+            where: { completedAt: range },
+            select: { completedAt: true },
+        }),
+        // Window total only — see the comment on learnActiveInWindow for
+        // why this must not be broken down by day.
         prisma.lessonProgress.findMany({
             where: { updatedAt: range },
-            select: { updatedAt: true, userId: true },
+            select: { userId: true },
+            distinct: ["userId"],
         }),
     ])
 
@@ -1333,11 +1360,14 @@ export async function getPlatformSeries(
             windowDays,
             endDay
         ),
-        learnActive: distinctUsersPerDay(
-            lessons.map((l) => ({ userId: l.userId, at: l.updatedAt })),
+        lessonsCompleted: dailySeries(
+            completions
+                .map((c) => c.completedAt)
+                .filter((d): d is Date => d !== null),
             windowDays,
             endDay
         ),
+        learnActiveInWindow: learnActiveRows.length,
     }
 }
 
@@ -2077,26 +2107,40 @@ export async function PlatformSection({ windowDays }: { windowDays: number }) {
             </section>
 
             {/* Practice and learn activity are never summed: a learner who
-                did both would be counted twice. */}
+                did both would be counted twice. They are also not the same
+                shape — see the comment on learnActiveInWindow. */}
             <section aria-labelledby="activity-heading">
                 <h2 id="activity-heading" className="text-lg font-semibold">
                     Active learners
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                     Counted separately — someone can read a whole track without
-                    submitting once. These two figures are not added together.
+                    submitting once. These figures are not added together.
                 </p>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="mt-4 grid gap-4 sm:grid-cols-3">
                     <StatTile
                         label="Active in practice"
                         value={total(series.practiceActive).toLocaleString()}
                         footnote="User-days with a submission"
                         polarity="up-good"
                     />
+                    {/* No delta: LessonProgress.updatedAt is overwritten, so
+                        splitting this window in half would need per-day data
+                        that does not exist. computeDelta is not called rather
+                        than called with a fabricated previous value. */}
                     <StatTile
                         label="Active in lessons"
-                        value={total(series.learnActive).toLocaleString()}
-                        footnote="User-days with lesson progress"
+                        value={series.learnActiveInWindow.toLocaleString()}
+                        footnote={`Distinct learners in the last ${windowDays} days`}
+                        polarity="up-good"
+                    />
+                    <StatTile
+                        label="Lessons completed"
+                        value={total(series.lessonsCompleted).toLocaleString()}
+                        delta={computeDelta(
+                            currentHalf(series.lessonsCompleted),
+                            previousHalf(series.lessonsCompleted)
+                        )}
                         polarity="up-good"
                     />
                 </div>
@@ -2737,6 +2781,8 @@ gh pr create --base main --title "feat(analytics): V11 per-problem drill-down" -
 **Spec coverage.** Every spec section maps to a task: §1 day boundaries → Task 2; §2 snapshots → Tasks 1, 7; §3 indexes → Task 1; §4 counter drift → Tasks 6, 12; §5 failure taxonomy → Tasks 5, 13; §6 two activity series → Tasks 7, 9; §7 module structure → Tasks 2–7; §8 honesty constraints → Tasks 3, 4, 8, 9, 11, 12, 13; §9 access control → Tasks 9, 10; §10 cost and limits → Tasks 1, 2, 7; §11 phasing → the four phases; §12 testing → every task's wiring steps plus Task 10.
 
 **One spec deviation, deliberate.** §7 says surface components reuse `MetricCard`. Task 8 introduces `StatTile` instead, because `MetricCard` requires an `href` several analytics figures do not have and its `DELTA_COLOR` would render rising failure counts green — both flagged in the spec's own §7 constraints as needing resolution. The spec's requirement that this be resolved rather than discovered is satisfied; the resolution is a sibling component, not a modification of `MetricCard`, so the admin Overview is untouched.
+
+**Correction made during review.** An earlier draft defined learn activity as a per-day series over `LessonProgress.updatedAt`, and Task 1 indexed only `completedAt` — so the query had no index behind it. Fixing the index alone would have made a wrong number fast: `updatedAt` is `@updatedAt` on a table with one mutable row per `(userId, articleId)` and no `createdAt`, so it records only each row's most recent touch, and a daily series over it undercounts every day except today. Learn activity is now a completions series from the write-once `completedAt` plus a trailing-window total from `updatedAt`, and both indexes are added. Practice and learn are therefore deliberately asymmetrical in shape — that asymmetry reflects the columns and must not be "tidied up" into two matching series.
 
 **Known gap carried into implementation.** `lib/analytics/analytics-read.ts` has no unit suite. It is a query layer with no branching logic by design — everything with a testable branch lives in the pure modules. Its risk is query shape, covered by Task 10's e2e and by `tsc`. If an implementer adds a branch to that file, it belongs in a pure module instead.
 
