@@ -108,10 +108,19 @@ function fieldErrorsFromTreeifiedError(details: unknown): Record<string, string>
  * field marked — the exact failure this task exists to prevent, arriving
  * through a path `fieldErrorsFromTreeifiedError` never sees.
  *
- * Matched on the routes' exact/prefix response text since there's no
- * machine-readable error code in the response today — if that wording
- * ever changes, this silently falls back to the top banner only, same as
- * any other unmatched error, rather than mis-attributing.
+ * `.../[slug]/route.ts`'s PATCH handler now also returns a stable `code`
+ * for these four (plus `PROBLEM_NOT_FOUND`, which has no field to route to
+ * and stays banner-only either way) — matched FIRST, below, so a copy edit
+ * to the message text can't silently break routing. The text match stays
+ * as a fallback for responses that carry no code:
+ *   - the P2002 unique-slug fallback (both routes) — same wording as
+ *     SLUG_TAKEN's hand-thrown branch, but no `code` field
+ *   - `app/api/admin/problems/route.ts` (POST/create) — never adds `code`
+ *     to any of its hand-thrown branches
+ *   - every curriculum-sync error below (`CURRICULUM_ERROR_MESSAGES`) —
+ *     `addCheckpoint`/`removeCheckpoint` (lib/admin-curriculum.ts) return
+ *     `{ ok: false, status, error }` with no `code` field at all, so these
+ *     stay text-matched with no code path to prefer
  */
 const CURRICULUM_ERROR_MESSAGES = new Set([
     "curriculumLessonId does not match any lesson.",
@@ -127,16 +136,23 @@ const CURRICULUM_ERROR_MESSAGES = new Set([
 
 function fieldErrorsFromKnownServerMessage(
     message: string | undefined,
-    missing: unknown
+    missing: unknown,
+    code?: string
 ): Record<string, string> {
     if (!message) return {}
-    if (message === "schemaId does not match any SqlSchema.") {
+    if (
+        code === "SCHEMA_NOT_FOUND" ||
+        message === "schemaId does not match any SqlSchema."
+    ) {
         return { schemaId: message }
     }
-    if (message === "A problem with that slug already exists.") {
+    if (
+        code === "SLUG_TAKEN" ||
+        message === "A problem with that slug already exists."
+    ) {
         return { slug: message }
     }
-    if (message.startsWith("Unknown tag slug(s): ")) {
+    if (code === "TAGS_NOT_FOUND" || message.startsWith("Unknown tag slug(s): ")) {
         return { tagSlugs: message }
     }
     // Task 11 (SP7) — every message the curriculum-sync step in
@@ -144,13 +160,15 @@ function fieldErrorsFromKnownServerMessage(
     // the route's own pre-check plus every non-ok result string
     // addCheckpoint/removeCheckpoint (lib/admin-curriculum.ts) can return.
     // All land on the same field/tab since this route's only caller of
-    // those two functions is the curriculum-sync step.
+    // those two functions is the curriculum-sync step. None of these carry
+    // a `code` — see the doc comment above.
     if (CURRICULUM_ERROR_MESSAGES.has(message)) {
         return { curriculumLessonId: message }
     }
     if (
+        code === "PUBLISHED_DIALECT_MAP_INCOMPLETE" ||
         message ===
-        "PUBLISHED problems require non-empty solutions and expectedOutputs for every listed dialect."
+            "PUBLISHED problems require non-empty solutions and expectedOutputs for every listed dialect."
     ) {
         // `missing` is e.g. ["solutions.DUCKDB", "expectedOutputs.POSTGRES"]
         // — see getMissingPublishedDialectMapEntries in lib/admin-validation.ts.
@@ -479,12 +497,14 @@ export function ProblemForm({ initial, originalSlug }: ProblemFormProps) {
                 // Zod failures carry `details`; the four hand-thrown route
                 // errors (SCHEMA_NOT_FOUND, SLUG_TAKEN, TAGS_NOT_FOUND,
                 // PUBLISHED_DIALECT_MAP_INCOMPLETE — see the two API routes'
-                // catch blocks) don't, so they're matched on `json.error`'s
-                // text instead. Either way the result feeds the same
-                // tab-marking + jump path.
+                // catch blocks) don't, so they're matched on `json.code`
+                // first and `json.error`'s text as a fallback (see
+                // fieldErrorsFromKnownServerMessage's doc comment for which
+                // paths carry no code and stay text-only). Either way the
+                // result feeds the same tab-marking + jump path.
                 const fieldMessages = json.details
                     ? fieldErrorsFromTreeifiedError(json.details)
-                    : fieldErrorsFromKnownServerMessage(json.error, json.missing)
+                    : fieldErrorsFromKnownServerMessage(json.error, json.missing, json.code)
                 if (json.details) console.error("Validation details:", json.details)
                 setErroredFieldMessages(fieldMessages)
                 const target = firstErroredTab(Object.keys(fieldMessages))
