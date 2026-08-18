@@ -138,9 +138,9 @@ test("the status filter narrows them", async ({ page }) => {
 
     const main = page.locator("main#main-content")
     const rows = main.locator("ul.divide-y > li")
-    const statusGroup = main.getByRole("group", { name: "Filter by status" })
+    const statusGroup = main.getByRole("radiogroup", { name: "Filter by status" })
 
-    await statusGroup.getByRole("button", { name: "Draft", exact: true }).click()
+    await statusGroup.getByRole("radio", { name: "Draft", exact: true }).click()
 
     // PROBLEM_B is DRAFT, PROBLEM_A is PUBLISHED — the status control alone
     // (no search query) must narrow to just the draft one.
@@ -187,7 +187,7 @@ test("clearing restores the full list", async ({ page }) => {
     const main = page.locator("main#main-content")
     const rows = main.locator("ul.divide-y > li")
     const search = page.getByLabel("Search problems")
-    const statusGroup = main.getByRole("group", { name: "Filter by status" })
+    const statusGroup = main.getByRole("radiogroup", { name: "Filter by status" })
 
     // Compound-filter down to zero results: filterProblems ANDs the two
     // conditions, so search "Klorbeth" (title-matches only PROBLEM_A) plus
@@ -195,7 +195,7 @@ test("clearing restores the full list", async ({ page }) => {
     // excludes PROBLEM_A via status and PROBLEM_B via the search text —
     // nothing is left standing from either fixture.
     await search.fill("Klorbeth")
-    await statusGroup.getByRole("button", { name: "Draft", exact: true }).click()
+    await statusGroup.getByRole("radio", { name: "Draft", exact: true }).click()
 
     await expect(
         main.getByRole("heading", { level: 3, name: "No problems match your filters" })
@@ -207,8 +207,8 @@ test("clearing restores the full list", async ({ page }) => {
     // Both controls reset...
     await expect(search).toHaveValue("")
     await expect(
-        statusGroup.getByRole("button", { name: "All", exact: true })
-    ).toHaveAttribute("aria-pressed", "true")
+        statusGroup.getByRole("radio", { name: "All", exact: true })
+    ).toHaveAttribute("aria-checked", "true")
 
     // ...and, the part that actually proves the list came back: both
     // fixtures are visible again, including the one status alone had

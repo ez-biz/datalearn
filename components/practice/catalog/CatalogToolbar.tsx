@@ -1,6 +1,6 @@
 "use client"
 
-import type { RefObject } from "react"
+import { useRef, type KeyboardEvent, type RefObject } from "react"
 import { Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/Input"
@@ -38,6 +38,25 @@ export function CatalogToolbar({
     filteredCount,
     totalCount,
 }: CatalogToolbarProps) {
+    const sortButtonRefs = useRef<(HTMLButtonElement | null)[]>([])
+
+    function moveSortTo(nextIndex: number) {
+        const opt = SORTS[nextIndex]
+        if (!opt) return
+        onSortChange(opt.key)
+        sortButtonRefs.current[nextIndex]?.focus()
+    }
+
+    function handleSortKeyDown(e: KeyboardEvent<HTMLButtonElement>, index: number) {
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+            e.preventDefault()
+            moveSortTo((index + 1) % SORTS.length)
+        } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+            e.preventDefault()
+            moveSortTo((index - 1 + SORTS.length) % SORTS.length)
+        }
+    }
+
     return (
         <div className="flex flex-col gap-3 rounded-lg border border-line-soft bg-panel-sunken p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="relative w-full sm:max-w-xs">
@@ -61,18 +80,24 @@ export function CatalogToolbar({
 
             <div className="flex items-center gap-3">
                 <div
-                    role="group"
+                    role="radiogroup"
                     aria-label="Sort"
                     className="flex items-center gap-1 rounded-md border border-line-soft bg-panel p-1"
                 >
-                    {SORTS.map((s) => {
+                    {SORTS.map((s, index) => {
                         const active = sort === s.key
                         return (
                             <button
                                 key={s.key}
+                                ref={(el) => {
+                                    sortButtonRefs.current[index] = el
+                                }}
                                 type="button"
+                                role="radio"
                                 onClick={() => onSortChange(s.key)}
-                                aria-pressed={active}
+                                onKeyDown={(e) => handleSortKeyDown(e, index)}
+                                aria-checked={active}
+                                tabIndex={active ? 0 : -1}
                                 className={cn(
                                     "rounded px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150",
                                     active

@@ -255,7 +255,7 @@ test("a hand-thrown error with no Zod details also marks its tab and jumps to it
     // Flipping to PUBLISHED trips PUBLISHED_DIALECT_MAP_INCOMPLETE — a
     // hand-thrown route error carrying `{ error, missing }` and no
     // `details` at all.
-    await page.getByRole("button", { name: "Published", exact: true }).click()
+    await page.getByRole("radio", { name: "Published", exact: true }).click()
 
     await page.getByRole("tab", { name: "Curriculum" }).click()
     await expect(page.locator("#form-tabpanel-curriculum")).toBeVisible()
@@ -271,6 +271,10 @@ test("a hand-thrown error with no Zod details also marks its tab and jumps to it
     const body = await patchResponse.json()
     expect(body.details).toBeUndefined() // the non-Zod path — no `details` key at all
     expect(body.error).toContain("PUBLISHED problems require")
+    // The route also sends a stable `code` alongside the text — see
+    // fieldErrorsFromKnownServerMessage in ProblemForm.tsx, which now
+    // matches on this first and falls back to the text below it.
+    expect(body.code).toBe("PUBLISHED_DIALECT_MAP_INCOMPLETE")
 
     // Substring match on a prefix of the full "Solution & expected output"
     // label — Playwright's debug aria-snapshot tooling has been observed to
@@ -284,6 +288,43 @@ test("a hand-thrown error with no Zod details also marks its tab and jumps to it
     await expect(page.locator("#form-tabpanel-solution")).toContainText(
         "PUBLISHED problems require"
     )
+})
+
+test("a hand-thrown error routes by `code` even when its message text no longer matches", async ({
+    page,
+}) => {
+    // Proves fieldErrorsFromKnownServerMessage's code-first match actually
+    // drives routing, not just that it doesn't regress the text path: mocks
+    // the PATCH response with SLUG_TAKEN's real `code` but wording that
+    // matches none of the hardcoded strings the old text-only matcher knew
+    // about. If routing silently fell back to text matching, this would land
+    // on the banner only and never mark the Basics tab.
+    await page.goto(`/admin/problems/${SLUG_MAIN}/edit`)
+
+    const rewordedMessage = "This wording intentionally does not match any known string."
+    await page.route(`**/api/admin/problems/${SLUG_MAIN}`, async (route) => {
+        if (route.request().method() !== "PATCH") {
+            await route.continue()
+            return
+        }
+        await route.fulfill({
+            status: 409,
+            contentType: "application/json",
+            body: JSON.stringify({ error: rewordedMessage, code: "SLUG_TAKEN" }),
+        })
+    })
+
+    await page.getByRole("tab", { name: "Hints" }).click()
+    await expect(page.locator("#form-tabpanel-hints")).toBeVisible()
+
+    await page.getByRole("button", { name: "Save changes" }).click()
+    await expect(page.locator("#form-tabpanel-basics")).toContainText(rewordedMessage)
+
+    const basicsTab = page.getByRole("tab", { name: "Basics" })
+    await expect(basicsTab).toHaveAttribute("aria-selected", "true")
+    await expect(page.locator("#form-tabpanel-basics")).toBeVisible()
+    await expect(page.locator("#form-tabpanel-hints")).toBeHidden()
+    await expect(basicsTab).toHaveClass(/text-destructive/)
 })
 
 test("the curriculum panel shows its honest empty state when no lessons exist", async ({

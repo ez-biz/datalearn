@@ -1,5 +1,6 @@
 "use client"
 
+import { useRef, type KeyboardEvent } from "react"
 import { cn } from "@/lib/utils"
 
 export interface SegmentedOption<T extends string> {
@@ -20,10 +21,14 @@ interface SegmentedControlProps<T extends string> {
 
 /**
  * Single-select pill strip, replacing a native `<select>` for short
- * option lists (Difficulty, Status). Same `role="group"` + `aria-pressed`
- * interaction model as the status filter in `ProblemsListClient` — this
- * is presentation only, `value`/`onChange` carry the identical enum
- * values a `<select>` would, so the submitted payload is unchanged.
+ * option lists (Difficulty, Status). `role="radiogroup"` / `role="radio"`
+ * with `aria-checked` — the canonical pattern for a mutually-exclusive
+ * choice among visible options (an `aria-pressed` "group" of toggle
+ * buttons describes independently-toggleable state, which isn't what this
+ * is). Roving tabindex + arrow-key selection below match native
+ * `<input type="radio">` group behavior. This is presentation only —
+ * `value`/`onChange` carry the identical enum values a `<select>` would,
+ * so the submitted payload is unchanged.
  */
 export function SegmentedControl<T extends string>({
     id,
@@ -33,25 +38,50 @@ export function SegmentedControl<T extends string>({
     onChange,
     description,
 }: SegmentedControlProps<T>) {
+    const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
+
+    function moveTo(nextIndex: number) {
+        const opt = options[nextIndex]
+        if (!opt) return
+        onChange(opt.value)
+        buttonRefs.current[nextIndex]?.focus()
+    }
+
+    function handleKeyDown(e: KeyboardEvent<HTMLButtonElement>, index: number) {
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+            e.preventDefault()
+            moveTo((index + 1) % options.length)
+        } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+            e.preventDefault()
+            moveTo((index - 1 + options.length) % options.length)
+        }
+    }
+
     return (
         <div className="space-y-1.5">
             <span id={`${id}-label`} className="block text-sm font-medium text-foreground">
                 {label}
             </span>
             <div
-                role="group"
+                role="radiogroup"
                 aria-labelledby={`${id}-label`}
                 className="inline-flex flex-wrap items-center gap-1 rounded-md border border-border bg-surface p-1"
             >
-                {options.map((opt) => {
+                {options.map((opt, index) => {
                     const active = opt.value === value
                     return (
                         <button
                             key={opt.value}
+                            ref={(el) => {
+                                buttonRefs.current[index] = el
+                            }}
                             type="button"
                             id={`${id}-${opt.value}`}
-                            aria-pressed={active}
+                            role="radio"
+                            aria-checked={active}
+                            tabIndex={active ? 0 : -1}
                             onClick={() => onChange(opt.value)}
+                            onKeyDown={(e) => handleKeyDown(e, index)}
                             className={cn(
                                 "rounded px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer",
                                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",

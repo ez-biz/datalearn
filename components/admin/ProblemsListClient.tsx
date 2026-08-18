@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState, type KeyboardEvent } from "react"
 import Link from "next/link"
 import { Search, X } from "lucide-react"
 import type { Prisma, ProblemStatus } from "@prisma/client"
@@ -52,6 +52,7 @@ const STATUS_LABEL: Record<ProblemStatusFilter, string> = {
 export function ProblemsListClient({ problems }: { problems: ProblemListRow[] }) {
     const [query, setQuery] = useState("")
     const [status, setStatus] = useState<ProblemStatusFilter>("ALL")
+    const statusButtonRefs = useRef<(HTMLButtonElement | null)[]>([])
 
     const filtered = useMemo(
         () => filterProblems(problems, query, status),
@@ -63,6 +64,23 @@ export function ProblemsListClient({ problems }: { problems: ProblemListRow[] })
     function handleClear() {
         setQuery("")
         setStatus("ALL")
+    }
+
+    function moveStatusTo(nextIndex: number) {
+        const opt = STATUS_OPTIONS[nextIndex]
+        if (!opt) return
+        setStatus(opt.value)
+        statusButtonRefs.current[nextIndex]?.focus()
+    }
+
+    function handleStatusKeyDown(e: KeyboardEvent<HTMLButtonElement>, index: number) {
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+            e.preventDefault()
+            moveStatusTo((index + 1) % STATUS_OPTIONS.length)
+        } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+            e.preventDefault()
+            moveStatusTo((index - 1 + STATUS_OPTIONS.length) % STATUS_OPTIONS.length)
+        }
     }
 
     return (
@@ -85,18 +103,24 @@ export function ProblemsListClient({ problems }: { problems: ProblemListRow[] })
 
                 <div className="flex items-center gap-3">
                     <div
-                        role="group"
+                        role="radiogroup"
                         aria-label="Filter by status"
                         className="flex flex-wrap items-center gap-1 rounded-md border border-border bg-surface p-1"
                     >
-                        {STATUS_OPTIONS.map((opt) => {
+                        {STATUS_OPTIONS.map((opt, index) => {
                             const active = status === opt.value
                             return (
                                 <button
                                     key={opt.value}
+                                    ref={(el) => {
+                                        statusButtonRefs.current[index] = el
+                                    }}
                                     type="button"
+                                    role="radio"
                                     onClick={() => setStatus(opt.value)}
-                                    aria-pressed={active}
+                                    onKeyDown={(e) => handleStatusKeyDown(e, index)}
+                                    aria-checked={active}
+                                    tabIndex={active ? 0 : -1}
                                     className={cn(
                                         "rounded px-2.5 py-1 text-xs font-medium transition-colors",
                                         active
