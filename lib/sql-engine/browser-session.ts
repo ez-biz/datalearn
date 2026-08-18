@@ -2,6 +2,7 @@ import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm"
 import type { PGlite as PGliteType } from "@electric-sql/pglite"
 import { checkReadOnlyQuery } from "@/lib/sql-restrict"
 import { normalizeSqlRows } from "@/lib/sql-engine/normalize"
+import { evictStalePgliteDatabases } from "@/lib/sql-engine/pglite-eviction"
 import { applyRowCap, toRowLimitedSql } from "@/lib/sql-engine/result-cap"
 import {
     resolvePgliteDataDir,
@@ -80,6 +81,26 @@ async function createPostgresSession(
     const persistence = problemSlug
         ? await resolvePgliteDataDir({ slug: problemSlug, schemaSql })
         : ({ mode: "memory", reason: "no problem slug" } as const)
+
+    // Best-effort registry bookkeeping + eviction of stale/excess cached
+    // PGlite databases. Fire-and-forget: the current session's database
+    // name is always passed through as exempt (see planPgliteEviction), so
+    // waiting for this to finish before `connect` buys no correctness — it
+    // would only add up to the delete timeout (DELETE_INDEXED_DB_TIMEOUT_MS
+    // below) to Postgres startup latency, on exactly the path this cleanup
+    // is meant to improve. evictStalePgliteDatabases already swallows every
+    // failure mode internally; the trailing .catch() here is defense in
+    // depth so a future regression there can never surface as an
+    // unhandled-rejection warning.
+    void evictStalePgliteDatabases(
+        persistence.mode === "indexeddb" ? persistence.name : null,
+        {
+            deleteIndexedDb: deleteBrowserIndexedDb,
+            toIdbDatabaseName: pgliteIdbDatabaseName,
+            listIndexedDbNames: listBrowserIndexedDbNames,
+            fromIdbDatabaseName: parsePgliteIdbDatabaseName,
+        }
+    ).catch(() => {})
 
     // `connect` remembers whatever persistence the *previous* call settled
     // on (see createPostgresResourceFactory) so a session that already
@@ -408,8 +429,51 @@ async function initPostgresConnection(
  */
 const PGLITE_IDB_MOUNT_ROOT = "/pglite"
 
-function pgliteIdbDatabaseName(name: string): string {
+/**
+ * Exported so `lib/sql-engine/pglite-eviction.ts` can reuse this exact
+ * derivation instead of re-deriving it — see that module's
+ * `EvictStalePgliteDatabasesDeps.toIdbDatabaseName` doc comment.
+ */
+export function pgliteIdbDatabaseName(name: string): string {
     return `${PGLITE_IDB_MOUNT_ROOT}/${name}`
+}
+
+/**
+ * Inverse of `pgliteIdbDatabaseName` — given a real browser IndexedDB
+ * database name (as returned by `indexedDB.databases()`), returns the
+ * logical PGlite data-dir name it mounts, or `null` if the raw name isn't
+ * mounted under our PGlite IDBFS root at all (i.e. some other IndexedDB
+ * database on origin, not a PGlite cluster of ours). Exported for
+ * `pglite-eviction.ts`'s one-time adoption scan, which needs to walk every
+ * database on origin and identify which ones are PGlite clusters without
+ * re-deriving the mount-path rule documented above `pgliteIdbDatabaseName`.
+ */
+export function parsePgliteIdbDatabaseName(idbName: string): string | null {
+    const prefix = `${PGLITE_IDB_MOUNT_ROOT}/`
+    if (!idbName.startsWith(prefix)) return null
+    return idbName.slice(prefix.length)
+}
+
+/**
+ * Wraps `indexedDB.databases()` for the one-time adoption scan in
+ * pglite-eviction.ts. Returns `null` — rather than `[]` — when the API
+ * isn't available at all (unsupported browser) so the scan can tell "there
+ * is nothing to adopt" apart from "we couldn't check," and skip cleanly in
+ * the latter case rather than risk treating a false empty reading as
+ * complete information. May also reject (some browsers throw rather than
+ * omit the method); the caller treats that identically to `null`.
+ */
+export async function listBrowserIndexedDbNames(): Promise<string[] | null> {
+    if (
+        typeof indexedDB === "undefined" ||
+        typeof indexedDB.databases !== "function"
+    ) {
+        return null
+    }
+    const records = await indexedDB.databases()
+    return records
+        .map((record) => record.name)
+        .filter((name): name is string => typeof name === "string")
 }
 
 const DELETE_INDEXED_DB_TIMEOUT_MS = 3000
@@ -418,8 +482,10 @@ const DELETE_INDEXED_DB_TIMEOUT_MS = 3000
  * Deletes a browser IndexedDB database by name. Used as the production
  * default for `createPostgresResources`'s injectable `deleteIndexedDb`
  * parameter — tests inject a fake instead of touching real IndexedDB.
+ * Also exported for `pglite-eviction.ts` to reuse for its own deletes,
+ * rather than duplicating the blocked/timeout handling below.
  */
-function deleteBrowserIndexedDb(name: string): Promise<void> {
+export function deleteBrowserIndexedDb(name: string): Promise<void> {
     if (typeof indexedDB === "undefined") return Promise.resolve()
 
     const deletion = new Promise<void>((resolve, reject) => {

@@ -111,6 +111,9 @@ jobs:
       - name: Test PGlite corrupt-cache recovery
         run: npm run test:pglite-recovery
 
+      - name: Test PGlite eviction policy
+        run: npm run test:pglite-eviction
+
       - name: Test DuckDB browser init fallback
         run: npm run test:duckdb-init
 
