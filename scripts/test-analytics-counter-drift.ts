@@ -136,4 +136,21 @@ describe("findDrift", () => {
             ["2", "3", "1"]
         )
     })
+
+    it("breaks equal-magnitude ties by number, then problem id", () => {
+        const report = findDrift(
+            [
+                { problemId: "z-last", number: 3, title: "Last", attemptCount: 2, acceptedCount: 0 },
+                { problemId: "zeta", number: 2, title: "Zeta", attemptCount: 2, acceptedCount: 0 },
+                { problemId: "alpha", number: 2, title: "Alpha", attemptCount: 2, acceptedCount: 0 },
+                { problemId: "first", number: 1, title: "First", attemptCount: 2, acceptedCount: 0 },
+            ],
+            new Map()
+        )
+
+        assert.deepEqual(
+            report.drifted.map(({ problemId }) => problemId),
+            ["first", "alpha", "zeta", "z-last"]
+        )
+    })
 })

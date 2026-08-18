@@ -48,11 +48,26 @@ export function findDrift(
         ]
     })
 
-    drifted.sort(
-        (left, right) =>
-            Math.abs(right.attemptDrift) + Math.abs(right.acceptedDrift) -
+    drifted.sort((left, right) => {
+        const magnitudeDifference =
+            Math.abs(right.attemptDrift) +
+            Math.abs(right.acceptedDrift) -
             (Math.abs(left.attemptDrift) + Math.abs(left.acceptedDrift))
-    )
+
+        if (magnitudeDifference !== 0) {
+            return magnitudeDifference
+        }
+
+        if (left.number !== right.number) {
+            return left.number - right.number
+        }
+
+        if (left.problemId < right.problemId) {
+            return -1
+        }
+
+        return left.problemId > right.problemId ? 1 : 0
+    })
 
     return { checked: counters.length, drifted }
 }
