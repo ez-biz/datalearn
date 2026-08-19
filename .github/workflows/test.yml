@@ -19,7 +19,13 @@ concurrency:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Measured Aug 2026: "Install Playwright Chromium" alone takes ~10.5 min
+    # (611s / 638s / 624s across three consecutive runs) and everything else
+    # totals ~5 min, so a 15-minute budget cancelled otherwise-passing runs
+    # mid-install. The browser cache step below does not cover `--with-deps`,
+    # whose apt work runs every time. 30 leaves real headroom; the suite also
+    # grew substantially when the CI coverage gap was closed in #227.
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -280,6 +286,9 @@ jobs:
 
       - name: Test analytics daily snapshot persistence
         run: npm run test:analytics-snapshot
+
+      - name: Test analytics delta tone
+        run: npm run test:analytics-stat-tile
 
       - name: Test analytics window maths
         run: npm run test:analytics-windows
