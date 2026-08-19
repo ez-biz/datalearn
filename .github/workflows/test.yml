@@ -62,7 +62,13 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          # Must satisfy the engines floor in package.json. jsdom (via
+          # isomorphic-dompurify) requires ^22.22.2 || ^24.15.0 || >=26, and
+          # its bundled undici requires >=22.19.0; on Node 20 the suite dies
+          # with "webidl.util.markAsUncloneable is not a function". Vercel
+          # also builds on 22+, so pinning 20 here tested a runtime that
+          # never shipped.
+          node-version: "24"
           cache: "npm"
 
       - name: Install dependencies
