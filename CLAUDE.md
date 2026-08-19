@@ -27,6 +27,7 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor; querie
 - `components/sql/` — SQL UI (SqlPlayground, SqlEditor, ResultTable, ValidationResult)
 - `components/lists/` — custom problem lists (CreateListButton popover, ListDetail with rename/delete/reorder/sort, AddToListButton workspace popover, AddProblemsPicker search-and-add). All client components consuming `actions/lists.ts`.
 - `lib/` — shared modules (`auth.ts`, `prisma.ts`, `sql-validator.ts`, `duckdb.ts`, `use-problem-db.ts`, `utils.ts`, `admin-validation.ts` — kept Prisma-free; imported by `mcp-server/`, `schema-parser.ts` — server-side parser that pre-computes table info from `SqlSchema.sql` so the problem page doesn't wait on DuckDB for the Schema/INPUT panels, `curriculum-progress.ts` — pure, Prisma-free rollup/unlock math (`rollUpModule`, `rollUpTrack`, `isModuleUnlocked`, `clampProgressPercent`), `curriculum-write.ts` — userId-parameterised `LessonProgress` writer, deliberately NOT a server action, `admin-curriculum.ts` — Module/ModuleLesson/LessonCheckpoint CRUD shared by the admin API routes, MCP tools, and seed scripts)
+- `lib/analytics/` — the V11 operator portal's logic. Pure and Prisma-free except `analytics-read.ts`: `metric-windows.ts` (UTC ranges built on `toDayKey`, 365-day cap), `retention.ts`, `funnel.ts`, `failure-taxonomy.ts` (classifies free-text `Submission.reason` at read time), `counter-drift.ts`, `problem-ranking.ts`, `attempt-distribution.ts`, `delta-tone.ts` (metric polarity), `snapshot-day.ts`. `analytics-read.ts` holds the Prisma reads and is deliberately **not** a `"use server"` module.
 - `prisma/` — `schema.prisma`, migrations, `seed.ts`, `seed-analyst-track.ts` — idempotent seed for the 17-lesson "Analyst Interview Prep" track
 - `mcp-server/` — standalone stdio MCP server (own `package.json`, tsup-bundled). Lets MCP-aware assistants author SQL problems via the `/api/admin/*` REST surface using a Bearer key. Imports `lib/admin-validation.ts` directly; the bundler inlines it.
 - `scripts/mcp-e2e-test.mjs` — end-to-end harness that spawns the built MCP server with a freshly-seeded admin API key and exercises the tool surface against the live API (40 tools as of v0.8.0). Run with the dev server up.
@@ -62,6 +63,9 @@ LeetCode-style SQL practice platform. Users write SQL in a Monaco editor; querie
 - **Under `@prisma/adapter-pg`, a P2002 error's `meta.target` is always `undefined`.** The offending column names instead live at `meta.driverAdapterError.cause.constraint.fields`, and they arrive partly quoted (e.g. `["\"trackId\"", "slug"]`). Strip quotes before comparing. See `isUniqueViolationOn` in `lib/admin-curriculum.ts` for the pattern that checks both this shape and the query-engine-binary `meta.target` shape.
 - **Don't add a token to `:root` without adding it to `.light`.** Both themes ship and light is not an inversion — a missing light value fails silently and only for users on that theme. `npm run check:token-parity` enforces this.
 - **Don't render page content outside `<main>` on non-focus routes.** `ConsoleChrome` owns `#app-scroll`, `<main id="main-content">` and `<Footer>`. Focus routes (`isFocusRoute`, today only the lesson reader) opt out and must supply their own `<header>` + `<main id="main-content">` pair — ARIA forbids `banner` inside `main`, which is why the header cannot simply live in the page body of a normal route.
+- **Don't put a recomputable metric in `MetricSnapshot`.** It holds only state that cannot be reconstructed from immutable rows (published counts, in-progress lessons, the user total). Anything derived from a `createdAt`/`completedAt` is computed live for any date range — storing it too would create a second source that can only drift, which is this project's most repeated bug class.
+- **Don't turn learn activity into a per-day series.** `LessonProgress.updatedAt` is `@updatedAt` on a table with one mutable row per `(userId, articleId)` and no `createdAt`, so it records only the most recent touch. A daily breakdown would be accurate for today and undercount every earlier day by exactly the learners who came back. Use `completedAt` (write-once) for a real series, and treat `updatedAt` as a trailing-window total only. The asymmetry with practice activity is deliberate — do not "tidy" it into two matching series.
+- **Don't use `components/admin/MetricCard.tsx` for a metric where rising is bad.** Its `DELTA_COLOR` hardcodes `up → text-easy` (green), so a climbing failure or drift count renders as good news. Use `components/admin/analytics/StatTile.tsx`, which takes an explicit `polarity`. It also does not require an `href`, which `MetricCard` does.
 
 ## Running locally
 
@@ -83,6 +87,21 @@ npm run test:reading-progress     # scroll-percent maths + persistence boundarie
 npm run test:scroll-restoration   # #app-scroll restore-on-pop rules
 npm run check:token-parity        # every :root token also defined in .light
 npm run test:e2e -- lesson-reader # reader landmarks, draft gate, live progress
+```
+
+After any change under `lib/analytics/` or `/admin/analytics`. All are pure except the snapshot suite, which needs a database:
+
+```bash
+npm run test:analytics-windows              # UTC ranges, 365-day cap
+npm run test:analytics-retention            # unknown-vs-genuine-zero cohorts
+npm run test:analytics-funnel               # null rates over empty steps
+npm run test:analytics-failure-taxonomy     # driven through the real validator
+npm run test:analytics-counter-drift        # denormalized counters vs truth
+npm run test:analytics-problem-ranking      # untried sorts last, never as 0%
+npm run test:analytics-attempt-distribution # per-user attempts to first solve
+npm run test:analytics-stat-tile            # metric polarity (up-bad is not green)
+npm run test:analytics-snapshot             # needs DATABASE_URL; first-write-wins
+npm run test:e2e -- admin-analytics         # admin-only, honesty states, drill-down
 ```
 
 ## Subagent routing policy

@@ -678,6 +678,45 @@ Problems share the percent denominator with lessons — this is derived, not cho
 
 Attaching curriculum never changes `Track.status`. Publishing stays a deliberate human action.
 
+## 11.8 Analytics Portal
+
+`/admin/analytics` is the operator-facing view of platform health and content performance — distinct from `/profile`, which reports one learner's own stats. ADMIN only; `requireAdminPage()` refuses MODERATOR, whose permissions are scoped to the discussion queue.
+
+### What is computed live, and what is snapshotted
+
+The split is by **recomputability**, not convenience, because two sources for one number is this project's most repeated bug class.
+
+- **Always live.** Anything derived from an immutable timestamp: sign-ups (`User.createdAt`), submissions and acceptance (`Submission.createdAt`/`status`), lesson completions (`LessonProgress.completedAt`), retention cohorts, the funnel. A past day recomputes identically forever, so a stored copy could only drift.
+- **Snapshotted daily** into `MetricSnapshot` (PK `day`, a UTC `toDayKey`): published problem/article/track counts, in-progress lessons, and the registered-user total. These are mutable state with no history — `SQLProblem` keeps no status log, `LessonProgress.percent` is overwritten, and account deletion rewrites the user count retroactively.
+
+The cron (`app/api/cron/analytics-snapshot`, `CRON_SECRET`-gated) reads all counts in one `RepeatableRead` transaction so the vector is internally consistent, then upserts with an empty `update` — the first successful write for a day wins, so a retry cannot rewrite that day's point-in-time value.
+
+**Rule:** a metric belongs in `MetricSnapshot` only if it cannot be recomputed from immutable rows.
+
+### Day boundaries
+
+All bucketing reuses `toDayKey` from `lib/profile-stats.ts` (UTC). Analytics defining its own boundary would put the same submission on different days on different screens; reusing the function makes agreement with the `/profile` heatmap structural rather than coincidental.
+
+### Learn activity is not symmetrical with practice activity
+
+`Submission` is append-only, so practice activity is a genuine per-day series. `LessonProgress` is one mutable row per `(userId, articleId)` with `updatedAt @updatedAt` and no `createdAt`, so a row records only its most recent touch. A per-day series over `updatedAt` would be accurate for today and undercount every earlier day by exactly the learners who returned — a fabricated trend. Learn activity is therefore reported as **lessons completed per day** (from the write-once `completedAt`) plus a **trailing-window total** of active learners, which carries no delta because halving the window would need per-day data that does not exist.
+
+### Counter drift is surfaced, not hidden
+
+`/practice` renders pass rates from `SQLProblem.attemptCount`/`acceptedCount`, which drift — deleting a user cascades their submissions away and nothing decrements the counters. Analytics computes acceptance from `Submission` rows instead, so the two screens can legitimately disagree. Rather than hide that by reading the same wrong numbers, the portal reports the divergence and names the repair (`npm run verify:pass-rate -- --fix`). A zero-drift result is stated explicitly, since silence is indistinguishable from never having checked.
+
+### Modules
+
+Pure and Prisma-free under `lib/analytics/`, unit-tested with no database: `metric-windows` (UTC ranges, 365-day cap enforced by a thrown `RangeError`), `retention` (cohorts, with `null` for an unelapsed bucket kept distinct from a genuine 0%), `funnel`, `failure-taxonomy` (classifies free-text `Submission.reason` at read time, so it applies retroactively where a `reasonCode` column could not), `counter-drift`, `problem-ranking` (untried problems sort last — `0/0` is not 0%), `attempt-distribution` (per user, not global), `delta-tone` (metric polarity, so a rising failure count is never green). `analytics-read.ts` holds the Prisma queries and is deliberately **not** a `"use server"` module.
+
+### Indexes
+
+Every pre-existing `Submission` index was `userId`-leading, built for `/profile`. Analytics queries range over `createdAt` across all users or group by `problemId`, so five additive indexes were added: `Submission([createdAt])`, `Submission([problemId, status])`, `User([createdAt])`, `LessonProgress([completedAt])`, `LessonProgress([updatedAt])`. No analytics query selects `Submission.code` (`@db.Text`).
+
+### Not built
+
+Article views, time-on-page, click-through and "started but never submitted" are not derivable — there is no first-party event tracking, and the closest signal is foreclosed by the privacy policy's promise that queries you only *Run* never leave the device. The "health" group (error rates, P95 latency) lives in Vercel's dashboard, not a queryable table. All are omitted rather than stubbed.
+
 ## 12. Security Posture
 
 A consolidated view of the threat surface and the mitigations shipped to date.

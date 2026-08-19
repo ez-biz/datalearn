@@ -564,21 +564,31 @@ Curated multi-problem learning paths. `Track` + `TrackItem` schema shipped behin
 
 **Scope estimate:** Medium overall, but spread across many small wins.
 
-### V11 — Internal analytics portal
+### ✅ V11 — Internal analytics portal — SHIPPED (PRs #231, #233, #234, #235)
 
-**What:** Admin-facing analytics surface (`/admin/analytics`) covering platform health and content performance. Distinct from the per-user `/profile` stats: this is for operators, not learners.
+**What shipped:** `/admin/analytics`, ADMIN-only (MODERATOR excluded — moderator permissions are scoped to the discussion queue, and platform-wide user metrics are a different trust level).
 
-**Why:** We're flying blind today — there's no view of "which problem has the worst acceptance rate" or "which articles are read but not clicked through to practice" or "what fraction of users return weekly". Without analytics, every product decision is a guess.
+- **Platform:** sign-ups, submissions, acceptance rate, practice and learn activity, sign-up → first-submission → first-acceptance funnel, D1/D7/D30 retention cohorts.
+- **Content:** per-problem attempts / solvers / acceptance / first-try acceptance, per-track completion, and a counter-drift indicator.
+- **Drill-down:** `/admin/analytics/problems/<slug>` with attempt distribution, first-try acceptance and a failure-category breakdown.
+- **Foundation:** five additive indexes, a `MetricSnapshot` table, and a `CRON_SECRET`-gated daily snapshot cron.
 
-**Components:**
-- **Platform overview:** weekly active users, sign-ups, avg problems solved per active user, retention curves (D1 / D7 / D30), funnel from sign-up → first submission → first acceptance.
-- **Content performance:** per-problem acceptance rate + abandonment rate (started but never submitted) + median time-to-accept; per-article views, time-on-page (estimated from reading-time vs return), click-through to linked problems.
-- **Health:** error rates, slow queries, P95 page latencies (from existing Vercel Analytics integration if we expose them server-side).
-- **Implementation note:** start with materialized views in Postgres updated on a daily cron; only graduate to a separate OLAP store (DuckDB locally / Athena / ClickHouse remotely) if the materialized views start straining the operational DB. Don't over-engineer v1.
+**Deliberately not built, and why:**
 
-**Dependencies:** None blocking. V2 Contest produces a lot of new analytics needs (rating distributions, contest participation curves) — those slot in here.
+- **Health (error rates, P95 latency)** — lives in Vercel's dashboard, not in a queryable table. Per the fallback rule, omitted rather than stubbed.
+- **Per-article views, time-on-page, click-through** — no first-party event tracking exists. `@vercel/analytics` is mounted but its data is not server-queryable.
+- **Abandonment ("started but never submitted")** — foreclosed by the privacy policy, which promises that queries you only *Run* "execute entirely in your browser via WebAssembly. They never leave your device."
 
-**Scope estimate:** Medium. The data exists; the visualization layer is the work.
+Adding an events table remains a legitimate follow-up, but it needs a privacy-policy amendment.
+
+**Two decisions worth remembering:**
+
+- **Snapshots hold only what cannot be recomputed.** Anything derived from an immutable timestamp (sign-ups, submissions, completions) is always computed live; a stored copy would be a second source that can only drift. `MetricSnapshot` therefore holds just published counts, in-progress lessons and the user total.
+- **Learn activity is not symmetrical with practice activity.** `LessonProgress.updatedAt` is overwritten per row, so a per-day series over it would undercount every day but today. Learn activity is a completions series from the write-once `completedAt` plus a trailing-window total — never a fabricated trend.
+
+**Not covered:** counter drift is surfaced but not auto-repaired; `npm run verify:pass-rate -- --fix` remains manual. The portal reads all-time content performance and a 30-day platform window, neither of which is user-configurable yet.
+
+Spec: `docs/superpowers/specs/2026-08-18-v11-analytics-portal-design.md`. Plan: `docs/superpowers/plans/2026-08-18-v11-analytics-portal.md`.
 
 ### V12 — Support ticketing
 
@@ -760,7 +770,7 @@ Keeping the bar honest — these were thought about and intentionally **not** ad
 ### Q3 2026 (Jul–Sep)
 - 🔲 Complete Phase 3 — system design whiteboard
 - 🔲 Python playground (Pyodide)
-- 🔲 User analytics + content moderation
+- ✅ User analytics + content moderation — analytics shipped as V11 (PRs #231, #233, #234, #235); moderation had already shipped with the discussion queue (`/admin/discussions`, `ModeratorPermission`, `DiscussionModerationLog`)
 
 ### Q4 2026 (Oct–Dec)
 - 🔲 Phase 4 — production maturity
