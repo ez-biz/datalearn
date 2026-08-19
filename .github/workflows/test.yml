@@ -272,6 +272,9 @@ jobs:
       - name: Test admin nav model
         run: npm run test:admin-nav
 
+      - name: Test analytics attempt distribution
+        run: npm run test:analytics-attempt-distribution
+
       - name: Test analytics counter drift
         run: npm run test:analytics-counter-drift
 
