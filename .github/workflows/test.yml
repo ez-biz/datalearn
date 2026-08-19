@@ -266,6 +266,24 @@ jobs:
       - name: Test admin nav model
         run: npm run test:admin-nav
 
+      - name: Test analytics counter drift
+        run: npm run test:analytics-counter-drift
+
+      - name: Test analytics failure taxonomy
+        run: npm run test:analytics-failure-taxonomy
+
+      - name: Test analytics funnel maths
+        run: npm run test:analytics-funnel
+
+      - name: Test analytics retention cohorts
+        run: npm run test:analytics-retention
+
+      - name: Test analytics daily snapshot persistence
+        run: npm run test:analytics-snapshot
+
+      - name: Test analytics window maths
+        run: npm run test:analytics-windows
+
       - name: Admin metric deltas
         run: npm run test:metric-delta
 
@@ -328,6 +346,7 @@ jobs:
 
       - name: Test article publish routes
         run: |
+          export CRON_SECRET=analytics-test-secret
           npm run start -- -p 3101 &
           SERVER_PID=$!
           trap "kill $SERVER_PID" EXIT
@@ -341,6 +360,7 @@ jobs:
 
           curl -fsS http://localhost:3101/api/health >/dev/null
           TEST_BASE_URL=http://localhost:3101 npm run test:article-publish-routes
+          TEST_BASE_URL=http://localhost:3101 npm run test:analytics-snapshot-route
 
       - name: Run E2E tests
         run: npm run test:e2e

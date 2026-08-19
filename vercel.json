@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/cron/asset-gc", "schedule": "0 4 * * *" },
-    { "path": "/api/contests/sweep-locks", "schedule": "0 5 * * *" }
+    { "path": "/api/contests/sweep-locks", "schedule": "0 5 * * *" },
+    { "path": "/api/cron/analytics-snapshot", "schedule": "0 6 * * *" }
   ]
 }
