@@ -89,6 +89,7 @@
     "test:analytics-retention": "node --import tsx --test scripts/test-analytics-retention.ts",
     "test:analytics-snapshot": "node --import tsx --test scripts/test-analytics-snapshot.ts",
     "test:analytics-snapshot-route": "node --import tsx --test scripts/test-analytics-snapshot-route.ts",
+    "test:analytics-stat-tile": "node --import tsx --test scripts/test-analytics-stat-tile.ts",
     "test:analytics-windows": "node --import tsx --test scripts/test-analytics-windows.ts",
     "test:metric-delta": "node --import tsx --test scripts/test-metric-delta.ts",
     "test:problems-panel": "node --import tsx --test scripts/test-problems-panel.ts",

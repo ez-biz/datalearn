@@ -281,6 +281,9 @@ jobs:
       - name: Test analytics daily snapshot persistence
         run: npm run test:analytics-snapshot
 
+      - name: Test analytics delta tone
+        run: npm run test:analytics-stat-tile
+
       - name: Test analytics window maths
         run: npm run test:analytics-windows
 
