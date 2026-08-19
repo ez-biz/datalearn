@@ -95,7 +95,7 @@ export async function ContentSection() {
                                             </td>
                                             <td className="px-4 py-2">
                                                 <Link
-                                                    href={`/problems/${problem.slug}`}
+                                                    href={`/admin/analytics/problems/${problem.slug}`}
                                                     className="hover:text-primary"
                                                 >
                                                     {problem.title}

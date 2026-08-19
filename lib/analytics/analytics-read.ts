@@ -6,6 +6,12 @@ import {
     type DayBucket,
     windowBounds,
 } from "./metric-windows"
+import {
+    attemptsToFirstSolve,
+    firstTryAcceptedCount,
+    type AttemptBucket,
+} from "./attempt-distribution"
+import { tallyFailures, type FailureCategory } from "./failure-taxonomy"
 
 export interface PlatformSeries {
     signups: DayBucket[]
@@ -432,4 +438,71 @@ export async function getTrackCompletion(): Promise<TrackCompletionRow[]> {
             learnersCompleted,
         }
     })
+}
+
+export interface ProblemDetail {
+    problemId: string
+    number: number
+    title: string
+    slug: string
+    attempts: number
+    accepted: number
+    distinctAttempters: number
+    distinctSolvers: number
+    firstTryAccepted: number
+    attemptsPerSolver: AttemptBucket[]
+    failureTally: Record<FailureCategory, number>
+}
+
+/**
+ * Everything the per-problem drill-down needs, or null when the slug does
+ * not resolve.
+ *
+ * `Submission.code` is @db.Text and is deliberately not selected — this
+ * reads one row per submission for the problem and the code column would
+ * dominate the transfer for nothing.
+ */
+export async function getProblemDetail(
+    slug: string
+): Promise<ProblemDetail | null> {
+    const problem = await prisma.sQLProblem.findUnique({
+        where: { slug },
+        select: { id: true, number: true, title: true, slug: true },
+    })
+    if (!problem) return null
+
+    const submissions = await prisma.submission.findMany({
+        where: { problemId: problem.id },
+        select: { userId: true, status: true, reason: true },
+        orderBy: { createdAt: "asc" },
+    })
+
+    const events = submissions.map((submission) => ({
+        userId: submission.userId,
+        accepted: submission.status === "ACCEPTED",
+    }))
+
+    const attempters = new Set(submissions.map((s) => s.userId))
+    const solvers = new Set(
+        submissions.filter((s) => s.status === "ACCEPTED").map((s) => s.userId)
+    )
+
+    return {
+        problemId: problem.id,
+        number: problem.number,
+        title: problem.title,
+        slug: problem.slug,
+        attempts: submissions.length,
+        accepted: submissions.filter((s) => s.status === "ACCEPTED").length,
+        distinctAttempters: attempters.size,
+        distinctSolvers: solvers.size,
+        firstTryAccepted: firstTryAcceptedCount(events),
+        attemptsPerSolver: attemptsToFirstSolve(events),
+        // Only failures are classified; an accepted submission has no reason.
+        failureTally: tallyFailures(
+            submissions
+                .filter((s) => s.status !== "ACCEPTED")
+                .map((s) => s.reason)
+        ),
+    }
 }
