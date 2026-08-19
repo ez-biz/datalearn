@@ -86,6 +86,7 @@
     "test:analytics-counter-drift": "node --import tsx --test scripts/test-analytics-counter-drift.ts",
     "test:analytics-failure-taxonomy": "node --import tsx --test scripts/test-analytics-failure-taxonomy.ts",
     "test:analytics-funnel": "node --import tsx --test scripts/test-analytics-funnel.ts",
+    "test:analytics-problem-ranking": "node --import tsx --test scripts/test-analytics-problem-ranking.ts",
     "test:analytics-retention": "node --import tsx --test scripts/test-analytics-retention.ts",
     "test:analytics-snapshot": "node --import tsx --test scripts/test-analytics-snapshot.ts",
     "test:analytics-snapshot-route": "node --import tsx --test scripts/test-analytics-snapshot-route.ts",
