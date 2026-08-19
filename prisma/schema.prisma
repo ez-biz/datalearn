@@ -43,6 +43,8 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
 }
 
 enum UserRole {
@@ -374,6 +376,8 @@ model LessonProgress {
 
   @@id([userId, articleId])
   @@index([userId, completedAt])
+  @@index([completedAt])
+  @@index([updatedAt])
 }
 
 enum TrackDifficulty {
@@ -420,6 +424,8 @@ model Submission {
   @@index([userId, problemId, createdAt])
   @@index([userId, createdAt])
   @@index([userId, status])
+  @@index([createdAt])
+  @@index([problemId, status])
 }
 
 enum SubmissionStatus {
@@ -954,4 +960,21 @@ model UserAssetQuota {
   user          User     @relation(fields: [userId], references: [id])
   reservedBytes BigInt   @default(0)
   updatedAt     DateTime @updatedAt
+}
+
+/// Daily point-in-time counts for state that CANNOT be recomputed from
+/// immutable rows. Everything derivable from a createdAt/completedAt
+/// timestamp is computed live instead — a stored copy would be a second
+/// source of truth that can only drift.
+///
+/// `day` is a YYYY-MM-DD UTC key from lib/profile-stats.ts `toDayKey`,
+/// and is the primary key so the daily write is an idempotent upsert.
+model MetricSnapshot {
+  day               String   @id
+  registeredUsers   Int
+  publishedProblems Int
+  publishedArticles Int
+  publishedTracks   Int
+  lessonsInProgress Int
+  createdAt         DateTime @default(now())
 }

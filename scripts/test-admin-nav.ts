@@ -21,8 +21,8 @@ function allItems(groups: ReturnType<typeof visibleAdminNav>) {
 }
 
 describe("ADMIN_NAV shape", () => {
-    it("carries all fourteen destinations", () => {
-        assert.equal(allItems(ADMIN_NAV).length, 14)
+    it("carries all fifteen destinations", () => {
+        assert.equal(allItems(ADMIN_NAV).length, 15)
     })
 
     it("uses the five designed groups in order", () => {
@@ -46,7 +46,7 @@ describe("ADMIN_NAV shape", () => {
 
 describe("visibleAdminNav", () => {
     it("shows everything to an admin", () => {
-        assert.equal(allItems(visibleAdminNav(ADMIN)).length, 14)
+        assert.equal(allItems(visibleAdminNav(ADMIN)).length, 15)
     })
 
     it("shows a permitted moderator only the discussion queue", () => {

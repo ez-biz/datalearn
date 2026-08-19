@@ -3,6 +3,9 @@
   "version": "0.10.3",
   "private": true,
   "license": "UNLICENSED",
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
@@ -80,6 +83,16 @@
     "test:mcp-e2e-log-redaction": "node --test scripts/test-mcp-e2e-log-redaction.mjs",
     "test:console-nav": "node --import tsx --test scripts/test-console-nav.ts",
     "test:admin-nav": "node --import tsx --test scripts/test-admin-nav.ts",
+    "test:analytics-attempt-distribution": "node --import tsx --test scripts/test-analytics-attempt-distribution.ts",
+    "test:analytics-counter-drift": "node --import tsx --test scripts/test-analytics-counter-drift.ts",
+    "test:analytics-failure-taxonomy": "node --import tsx --test scripts/test-analytics-failure-taxonomy.ts",
+    "test:analytics-funnel": "node --import tsx --test scripts/test-analytics-funnel.ts",
+    "test:analytics-problem-ranking": "node --import tsx --test scripts/test-analytics-problem-ranking.ts",
+    "test:analytics-retention": "node --import tsx --test scripts/test-analytics-retention.ts",
+    "test:analytics-snapshot": "node --import tsx --test scripts/test-analytics-snapshot.ts",
+    "test:analytics-snapshot-route": "node --import tsx --test scripts/test-analytics-snapshot-route.ts",
+    "test:analytics-stat-tile": "node --import tsx --test scripts/test-analytics-stat-tile.ts",
+    "test:analytics-windows": "node --import tsx --test scripts/test-analytics-windows.ts",
     "test:metric-delta": "node --import tsx --test scripts/test-metric-delta.ts",
     "test:problems-panel": "node --import tsx --test scripts/test-problems-panel.ts",
     "test:problems-filter": "node --import tsx --test scripts/test-problems-filter.ts",

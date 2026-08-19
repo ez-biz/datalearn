@@ -10,6 +10,7 @@ import type { LucideIcon } from "lucide-react"
 import {
     BookOpen,
     CalendarCheck2,
+    ChartLine,
     Trophy,
     Database,
     Flag,
@@ -54,6 +55,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
                 icon: LayoutDashboard,
                 href: "/admin",
                 match: "exact",
+            },
+            {
+                key: "analytics",
+                label: "Analytics",
+                icon: ChartLine,
+                href: "/admin/analytics",
             },
         ],
     },

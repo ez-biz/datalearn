@@ -19,7 +19,13 @@ concurrency:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Measured Aug 2026: "Install Playwright Chromium" alone takes ~10.5 min
+    # (611s / 638s / 624s across three consecutive runs) and everything else
+    # totals ~5 min, so a 15-minute budget cancelled otherwise-passing runs
+    # mid-install. The browser cache step below does not cover `--with-deps`,
+    # whose apt work runs every time. 30 leaves real headroom; the suite also
+    # grew substantially when the CI coverage gap was closed in #227.
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -62,7 +68,13 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          # Must satisfy the engines floor in package.json. jsdom (via
+          # isomorphic-dompurify) requires ^22.22.2 || ^24.15.0 || >=26, and
+          # its bundled undici requires >=22.19.0; on Node 20 the suite dies
+          # with "webidl.util.markAsUncloneable is not a function". Vercel
+          # also builds on 22+, so pinning 20 here tested a runtime that
+          # never shipped.
+          node-version: "24"
           cache: "npm"
 
       - name: Install dependencies
@@ -260,6 +272,33 @@ jobs:
       - name: Test admin nav model
         run: npm run test:admin-nav
 
+      - name: Test analytics attempt distribution
+        run: npm run test:analytics-attempt-distribution
+
+      - name: Test analytics counter drift
+        run: npm run test:analytics-counter-drift
+
+      - name: Test analytics failure taxonomy
+        run: npm run test:analytics-failure-taxonomy
+
+      - name: Test analytics funnel maths
+        run: npm run test:analytics-funnel
+
+      - name: Test analytics problem ranking
+        run: npm run test:analytics-problem-ranking
+
+      - name: Test analytics retention cohorts
+        run: npm run test:analytics-retention
+
+      - name: Test analytics daily snapshot persistence
+        run: npm run test:analytics-snapshot
+
+      - name: Test analytics delta tone
+        run: npm run test:analytics-stat-tile
+
+      - name: Test analytics window maths
+        run: npm run test:analytics-windows
+
       - name: Admin metric deltas
         run: npm run test:metric-delta
 
@@ -322,6 +361,7 @@ jobs:
 
       - name: Test article publish routes
         run: |
+          export CRON_SECRET=analytics-test-secret
           npm run start -- -p 3101 &
           SERVER_PID=$!
           trap "kill $SERVER_PID" EXIT
@@ -335,6 +375,7 @@ jobs:
 
           curl -fsS http://localhost:3101/api/health >/dev/null
           TEST_BASE_URL=http://localhost:3101 npm run test:article-publish-routes
+          TEST_BASE_URL=http://localhost:3101 npm run test:analytics-snapshot-route
 
       - name: Run E2E tests
         run: npm run test:e2e
