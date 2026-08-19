@@ -83,6 +83,7 @@
     "test:mcp-e2e-log-redaction": "node --test scripts/test-mcp-e2e-log-redaction.mjs",
     "test:console-nav": "node --import tsx --test scripts/test-console-nav.ts",
     "test:admin-nav": "node --import tsx --test scripts/test-admin-nav.ts",
+    "test:analytics-attempt-distribution": "node --import tsx --test scripts/test-analytics-attempt-distribution.ts",
     "test:analytics-counter-drift": "node --import tsx --test scripts/test-analytics-counter-drift.ts",
     "test:analytics-failure-taxonomy": "node --import tsx --test scripts/test-analytics-failure-taxonomy.ts",
     "test:analytics-funnel": "node --import tsx --test scripts/test-analytics-funnel.ts",
