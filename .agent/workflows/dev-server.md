@@ -10,7 +10,7 @@ This workflow describes how to run the DataLearn project locally for development
 
 - Node.js (v18+) installed
 - PostgreSQL database running and accessible
-- `.env` file configured (copy from `env.example`)
+- `.env` file configured (copy from `.env.example`)
 
 ## Steps
 
@@ -61,7 +61,7 @@ Open the browser and check:
 
 | Issue | Solution |
 |-------|----------|
-| `DATABASE_URL` not set | Copy `env.example` to `.env` and fill in values |
+| `DATABASE_URL` not set | Copy `.env.example` to `.env` and fill in values |
 | Prisma Client not generated | Run `npx prisma generate` |
 | Port 3000 in use | Kill the process or use `npm run dev -- -p 3001` |
 | DuckDB-WASM not loading | Clear browser cache, check network tab for WASM file |
