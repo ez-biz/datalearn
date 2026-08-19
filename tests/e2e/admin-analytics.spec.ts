@@ -48,12 +48,25 @@ let admin: SeededUser
 let moderator: SeededUser
 let learner: SeededUser
 
+/** Attempted once and never solved — its row must show a real 0%. */
+const attemptedSlug = `${PREFIX}-attempted`
+/** Never attempted — its row must show an em dash, never 0%. */
+const untriedSlug = `${PREFIX}-untried`
+const ATTEMPTED_TITLE = "E2E Analytics Attempted Problem"
+const UNTRIED_TITLE = "E2E Analytics Untried Problem"
+
 test.describe.configure({ mode: "serial" })
 
 async function cleanup(): Promise<void> {
+    // Submissions reference both problems and users, so they go first.
+    await prisma.submission.deleteMany({
+        where: { problem: { slug: { startsWith: PREFIX } } },
+    })
     await prisma.moderatorPermission.deleteMany({
         where: { user: { email: { startsWith: PREFIX } } },
     })
+    await prisma.sQLProblem.deleteMany({ where: { slug: { startsWith: PREFIX } } })
+    await prisma.sqlSchema.deleteMany({ where: { name: { startsWith: PREFIX } } })
     await prisma.user.deleteMany({ where: { email: { startsWith: PREFIX } } })
 }
 
@@ -78,6 +91,61 @@ test.beforeAll(async () => {
             userId: moderator.id,
             permission: "VIEW_DISCUSSION_QUEUE",
             grantedById: admin.id,
+        },
+    })
+
+    // Two problems and exactly one submission, so the content table's
+    // behaviour is deterministic regardless of what else the database holds:
+    // the submission guarantees the table renders at all (it is replaced by a
+    // zero-state when nothing has ever been attempted), and the untried
+    // problem guarantees there is a row whose acceptance is genuinely unknown.
+    const schema = await prisma.sqlSchema.create({
+        data: {
+            name: `${PREFIX}-schema`,
+            sql: "CREATE TABLE t (id INTEGER); INSERT INTO t VALUES (1);",
+        },
+    })
+    const maxNumber = await prisma.sQLProblem.aggregate({ _max: { number: true } })
+    const baseNumber = (maxNumber._max.number ?? 0) + 94_001
+
+    const [attempted] = await Promise.all([
+        prisma.sQLProblem.create({
+            data: {
+                number: baseNumber,
+                title: ATTEMPTED_TITLE,
+                slug: attemptedSlug,
+                difficulty: "EASY",
+                status: "PUBLISHED",
+                description: "Return one row.",
+                schemaDescription: "One table.",
+                schemaId: schema.id,
+                expectedOutput: JSON.stringify([{ id: 1 }]),
+                solutionSql: "SELECT id FROM t",
+            },
+        }),
+        prisma.sQLProblem.create({
+            data: {
+                number: baseNumber + 1,
+                title: UNTRIED_TITLE,
+                slug: untriedSlug,
+                difficulty: "EASY",
+                status: "PUBLISHED",
+                description: "Return one row.",
+                schemaDescription: "One table.",
+                schemaId: schema.id,
+                expectedOutput: JSON.stringify([{ id: 1 }]),
+                solutionSql: "SELECT id FROM t",
+            },
+        }),
+    ])
+
+    await prisma.submission.create({
+        data: {
+            userId: learner.id,
+            problemId: attempted.id,
+            status: "WRONG_ANSWER",
+            code: "SELECT 1;",
+            reason: "Row count mismatch — got 0, expected 1.",
         },
     })
 })
@@ -146,4 +214,52 @@ test("a cohort too young for its bucket reads as unknown, not as zero", async ({
     const todayRow = d30.locator("tr").filter({ hasText: todayKey })
     await expect(todayRow).toHaveCount(1)
     await expect(todayRow).toContainText("Not enough history yet")
+})
+
+test("the content sections render for an ADMIN", async ({ page }) => {
+    await page.context().addCookies([sessionCookie(admin.sessionToken, BASE_URL)])
+    await page.goto("/admin/analytics")
+
+    for (const heading of ["Problem performance", "Track completion"]) {
+        await expect(page.getByRole("heading", { name: heading, level: 2 })).toBeVisible()
+    }
+})
+
+test("an untried problem reads as unknown, while an attempted-and-unsolved one reads as a real zero", async ({
+    page,
+}) => {
+    await page.context().addCookies([sessionCookie(admin.sessionToken, BASE_URL)])
+    await page.goto("/admin/analytics")
+
+    const table = page.getByRole("table", { name: /Per-problem acceptance/ })
+    await expect(table).toBeVisible()
+
+    // Attempted once, never solved: 0% is the true answer and must be shown
+    // with its denominator rather than hidden behind a dash.
+    const attemptedRow = table.locator("tr").filter({ hasText: ATTEMPTED_TITLE })
+    await expect(attemptedRow).toHaveCount(1)
+    await expect(attemptedRow).toContainText("0%")
+    await expect(attemptedRow).toContainText("(0 of 1)")
+
+    // Never attempted: there is no rate to report. Rendering 0% here would
+    // claim the problem is unsolvable when nobody has tried it, and would
+    // also sort it to the top of a table meant to surface broken problems.
+    const untriedRow = table.locator("tr").filter({ hasText: UNTRIED_TITLE })
+    await expect(untriedRow).toHaveCount(1)
+    await expect(untriedRow).not.toContainText("%")
+    await expect(untriedRow).toContainText("—")
+})
+
+test("the drift indicator always states a result, never stays silent", async ({
+    page,
+}) => {
+    await page.context().addCookies([sessionCookie(admin.sessionToken, BASE_URL)])
+    await page.goto("/admin/analytics")
+
+    // Zero drift is a checked result, not an absence — the component must
+    // say one or the other, because silence is indistinguishable from
+    // "we never looked".
+    const inSync = page.getByText(/Pass-rate counters match submission history/)
+    const drifted = page.getByText(/problems have drifted pass-rate counters/)
+    await expect(inSync.or(drifted)).toBeVisible()
 })
