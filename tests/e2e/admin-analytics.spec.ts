@@ -263,3 +263,80 @@ test("the drift indicator always states a result, never stays silent", async ({
     const drifted = page.getByText(/problems have drifted pass-rate counters/)
     await expect(inSync.or(drifted)).toBeVisible()
 })
+
+test("a non-admin is refused the per-problem drill-down too", async ({ page }) => {
+    await page.context().addCookies([sessionCookie(learner.sessionToken, BASE_URL)])
+    await page.goto(`/admin/analytics/problems/${attemptedSlug}`)
+
+    await expect(page).not.toHaveURL(/\/admin\/analytics\/problems/)
+
+    // Assert on content unique to the drill-down, NOT on the problem title:
+    // the redirect lands on a public page where a PUBLISHED problem's title
+    // legitimately appears, so a title check would fail on correct behaviour.
+    await expect(
+        page.getByRole("heading", { name: "Why submissions failed" })
+    ).toHaveCount(0)
+    await expect(
+        page.getByRole("heading", { name: "Attempts before solving" })
+    ).toHaveCount(0)
+})
+
+test("the drill-down classifies the failure and still shows the empty categories", async ({
+    page,
+}) => {
+    await page.context().addCookies([sessionCookie(admin.sessionToken, BASE_URL)])
+    await page.goto(`/admin/analytics/problems/${attemptedSlug}`)
+
+    await expect(
+        page.getByRole("heading", { level: 1, name: new RegExp(ATTEMPTED_TITLE) })
+    ).toBeVisible()
+
+    // The fixture's single failure is "Row count mismatch — got 0, expected 1.",
+    // which the taxonomy maps to ROW_COUNT. Asserting the label AND the share
+    // proves the classifier ran, rather than that some text happens to exist.
+    const rowCount = page.locator("li").filter({ hasText: "Wrong number of rows" })
+    await expect(rowCount).toContainText("1")
+    await expect(rowCount).toContainText("100%")
+
+    // Categories with no occurrences must still render. Dropping them would
+    // read as "this never happens", and would hide a rising Unclassified
+    // share — which is how a changed validator message announces itself.
+    for (const label of ["Wrong columns", "Wrong values", "Unclassified"]) {
+        await expect(page.locator("li").filter({ hasText: label })).toHaveCount(1)
+    }
+})
+
+test("a problem with no submissions says so instead of reporting 0%", async ({
+    page,
+}) => {
+    await page.context().addCookies([sessionCookie(admin.sessionToken, BASE_URL)])
+    await page.goto(`/admin/analytics/problems/${untriedSlug}`)
+
+    await expect(
+        page.getByRole("heading", { level: 1, name: new RegExp(UNTRIED_TITLE) })
+    ).toBeVisible()
+    await expect(page.getByText(/No submissions for this problem yet/)).toBeVisible()
+
+    // The failure mode: an acceptance rate of 0% on a problem nobody has
+    // attempted reads as "unsolvable" rather than "untried".
+    await expect(page.getByText("0%")).toHaveCount(0)
+})
+
+test("an unknown problem slug renders not-found, not an empty shell", async ({
+    page,
+}) => {
+    await page.context().addCookies([sessionCookie(admin.sessionToken, BASE_URL)])
+    await page.goto(`/admin/analytics/problems/${PREFIX}-does-not-exist`)
+
+    // Asserts the rendered not-found UI rather than a 404 status code: this
+    // app answers notFound() with HTTP 200 throughout (verified against
+    // /practice/<missing>, which calls notFound() and also returns 200), so a
+    // status assertion here would invent a convention the codebase does not
+    // follow and would fail for reasons unrelated to this page.
+    await expect(
+        page.getByRole("heading", { name: "Page not found", level: 1 })
+    ).toBeVisible()
+    await expect(
+        page.getByRole("heading", { name: "Why submissions failed" })
+    ).toHaveCount(0)
+})
