@@ -281,6 +281,9 @@ jobs:
       - name: Test analytics funnel maths
         run: npm run test:analytics-funnel
 
+      - name: Test analytics problem ranking
+        run: npm run test:analytics-problem-ranking
+
       - name: Test analytics retention cohorts
         run: npm run test:analytics-retention
 

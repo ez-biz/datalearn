@@ -348,3 +348,88 @@ export async function writeDailySnapshot(day: string): Promise<void> {
         update: {},
     })
 }
+
+export interface TrackCompletionRow {
+    trackId: string
+    name: string
+    slug: string
+    lessonCount: number
+    learnersStarted: number
+    learnersCompleted: number
+}
+
+/**
+ * Per-track completion for published tracks.
+ *
+ * "Completed" means the learner has a completedAt on every lesson in the
+ * track, not merely on some. A track with no lessons yet reports
+ * lessonCount 0 and zero learners rather than a vacuous 100% — the caller
+ * renders that as "No lessons yet".
+ *
+ * One LessonProgress query covers every track: doing it per track would be
+ * an N+1 against the operational database.
+ */
+export async function getTrackCompletion(): Promise<TrackCompletionRow[]> {
+    const tracks = await prisma.track.findMany({
+        where: { status: "PUBLISHED" },
+        select: {
+            id: true,
+            name: true,
+            slug: true,
+            modules: { select: { lessons: { select: { articleId: true } } } },
+        },
+        orderBy: { name: "asc" },
+    })
+
+    const articleIdsByTrack = new Map<string, Set<string>>()
+    const allArticleIds = new Set<string>()
+    for (const track of tracks) {
+        const ids = new Set(
+            track.modules.flatMap((module) =>
+                module.lessons.map((lesson) => lesson.articleId)
+            )
+        )
+        articleIdsByTrack.set(track.id, ids)
+        for (const id of ids) allArticleIds.add(id)
+    }
+
+    const progress =
+        allArticleIds.size === 0
+            ? []
+            : await prisma.lessonProgress.findMany({
+                  where: { articleId: { in: [...allArticleIds] } },
+                  select: { userId: true, articleId: true, completedAt: true },
+              })
+
+    return tracks.map((track) => {
+        const articleIds = articleIdsByTrack.get(track.id) ?? new Set<string>()
+
+        const started = new Set<string>()
+        const completedPerUser = new Map<string, Set<string>>()
+
+        for (const row of progress) {
+            if (!articleIds.has(row.articleId)) continue
+            started.add(row.userId)
+            if (!row.completedAt) continue
+            const done = completedPerUser.get(row.userId) ?? new Set<string>()
+            done.add(row.articleId)
+            completedPerUser.set(row.userId, done)
+        }
+
+        let learnersCompleted = 0
+        if (articleIds.size > 0) {
+            for (const done of completedPerUser.values()) {
+                if (done.size >= articleIds.size) learnersCompleted++
+            }
+        }
+
+        return {
+            trackId: track.id,
+            name: track.name,
+            slug: track.slug,
+            lessonCount: articleIds.size,
+            learnersStarted: started.size,
+            learnersCompleted,
+        }
+    })
+}
