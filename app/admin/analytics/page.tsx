@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { requireAdminPage } from "@/lib/admin-page-auth"
 import { Container } from "@/components/ui/Container"
 import { PlatformSection } from "@/components/admin/analytics/PlatformSection"
+import { ContentSection } from "@/components/admin/analytics/ContentSection"
 
 export const metadata: Metadata = {
     title: "Analytics",
@@ -27,6 +28,10 @@ export default async function AnalyticsPage() {
                 midnight, matching the profile heatmap.
             </p>
             <PlatformSection windowDays={WINDOW_DAYS} />
+            {/* Content performance is all-time, not windowed: acceptance rate
+                over the last 30 days would be noise on a low-traffic problem,
+                and the point is finding problems that are broken, not busy. */}
+            <ContentSection />
         </Container>
     )
 }
