@@ -71,6 +71,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             if (session.user) {
                 session.user.role = (user as any).role
                 session.user.id = user.id
+                session.user.onboardingCompleted =
+                    (user as any).onboardingCompletedAt !== null
             }
             return session
         },
