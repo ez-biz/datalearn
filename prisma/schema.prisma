@@ -14,6 +14,9 @@ model User {
   emailVerified               DateTime?
   image                       String?
   role                        UserRole                  @default(USER)
+  sqlLevel                    SqlLevel?
+  onboardingStartedAt         DateTime?
+  onboardingCompletedAt       DateTime?
   accounts                    Account[]
   sessions                    Session[]
   submissions                 Submission[]
@@ -52,6 +55,14 @@ enum UserRole {
   CONTRIBUTOR
   MODERATOR
   ADMIN
+}
+
+/// Self-declared during first-run onboarding. Null means the learner
+/// skipped the question or was backfilled as already-onboarded.
+enum SqlLevel {
+  NEW
+  INTERMEDIATE
+  ADVANCED
 }
 
 model Account {
