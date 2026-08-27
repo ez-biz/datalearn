@@ -299,6 +299,9 @@ jobs:
       - name: Test analytics window maths
         run: npm run test:analytics-windows
 
+      - name: Test onboarding entry point
+        run: npm run test:onboarding-entry
+
       - name: Admin metric deltas
         run: npm run test:metric-delta
 
