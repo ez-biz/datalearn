@@ -17,10 +17,19 @@ export const ONBOARDING_LAUNCHED_AT = new Date("2026-09-01T00:00:00.000Z")
 
 export type OnboardingCounts = {
     signedUp: number
-    started: number
+    /** Reached the flow. OR-ed across all three fields so the fire-and-forget
+     *  `void recordOnboardingStart()` write racing a fast skip cannot make
+     *  this smaller than `completed`. */
+    reached: number
+    /** Answered the level question. NOT a funnel step — answering is optional
+     *  by design, so it is not a subset of anything and would break
+     *  monotonicity. Reported as a standalone figure. */
     answered: number
     completed: number
-    submitted: number
+    /** Completed onboarding AND has at least one submission. Scoped to
+     *  completers so the step is a true subset of `completed`; a cohort-wide
+     *  submission count would not be. */
+    submittedAfterCompleting: number
     /** Completed with no level — the definition of a deliberate skip. */
     skipped: number
 }
@@ -28,10 +37,13 @@ export type OnboardingCounts = {
 export function buildOnboardingFunnel(counts: OnboardingCounts): FunnelStep[] {
     return buildFunnel([
         { key: "signedUp", label: "Signed up", count: counts.signedUp },
-        { key: "started", label: "Reached onboarding", count: counts.started },
-        { key: "answered", label: "Answered the level question", count: counts.answered },
+        { key: "reached", label: "Reached onboarding", count: counts.reached },
         { key: "completed", label: "Finished onboarding", count: counts.completed },
-        { key: "submitted", label: "Made a first submission", count: counts.submitted },
+        {
+            key: "submitted",
+            label: "Submitted after finishing",
+            count: counts.submittedAfterCompleting,
+        },
     ])
 }
 
