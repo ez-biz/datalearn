@@ -141,22 +141,23 @@ Without a read, this ships as a conversion feature whose conversion is unknown.
 One section on `/admin/analytics`, built on the existing pure `buildFunnel` from `lib/analytics/funnel.ts`:
 
 ```text
-signed up → started → answered → completed → first submission
+signed up → reached onboarding → finished onboarding → made a submission
 ```
 
-Each step maps to exactly one condition, so the read has no interpretation layer:
+**Every step must be a genuine subset of the one before it.** `buildFunnel` divides each count by the previous one and does not clamp, and `FunnelBar` renders the result directly — so a step that is not a subset produces "250% of previous step" on an operator's screen. This is not hypothetical here: a learner can skip straight from screen 1, which completes onboarding without ever answering, and onboarding is an invitation rather than a gate, so a learner can submit without ever reaching the flow. An earlier draft of this spec chained `signed up → started → answered → completed → first submission`, which fails the subset rule at two of its four transitions. The chain below is the corrected one.
 
 | Step | Condition |
 | --- | --- |
 | signed up | `createdAt >= ONBOARDING_LAUNCHED_AT` |
-| started | `onboardingStartedAt` is not null |
-| answered | `sqlLevel` is not null |
-| completed | `onboardingCompletedAt` is not null |
-| first submission | at least one `Submission` — the same definition V11's platform funnel already uses |
+| reached onboarding | `onboardingStartedAt` OR `sqlLevel` OR `onboardingCompletedAt` is not null |
+| finished onboarding | `onboardingCompletedAt` is not null |
+| made a submission | finished onboarding AND has at least one `Submission` |
 
-Alongside it, one **skip rate** tile: users with `completedAt` set and `sqlLevel` null, over all users with `completedAt` set. Rising is bad, which is why it renders through `StatTile` with an explicit polarity.
+Two details carry weight. **"Reached onboarding" is OR-ed across all three columns**, not just `onboardingStartedAt`: that write is fire-and-forget from a mount effect, so a fast skip could otherwise complete before it lands and make the step smaller than the one it contains. And **the submission step is scoped to those who finished**, because a cohort-wide submission count is not a subset of the completers above it. It is deliberately not time-ordered against `completedAt` — a learner who signs in from a problem-page callback, submits, and onboards later still counts — which is why the label says "made a submission" rather than "submitted after finishing".
 
-`getOnboardingFunnelCounts` lands in `lib/analytics/analytics-read.ts` — the one module in `lib/analytics/` that holds Prisma reads and is deliberately not a `"use server"` file.
+**`answered` (`sqlLevel` is not null) is deliberately NOT a funnel step.** Answering is optional by design, so it is a subset of nothing. It is reported as a standalone figure alongside a **skip rate** tile: users with `completedAt` set and `sqlLevel` null, over all users with `completedAt` set. Rising is bad, which is why it renders through `StatTile` with an explicit polarity.
+
+`getOnboardingCounts` lands in `lib/analytics/analytics-read.ts` — the one module in `lib/analytics/` that holds Prisma reads and is deliberately not a `"use server"` file.
 
 **The cohort is bounded by an explicit `ONBOARDING_LAUNCHED_AT` constant.** Backfilled users have `onboardingCompletedAt` set and `startedAt` null; counting them would poison the denominator from the first day and make the funnel read as a catastrophic drop-off forever. Identifying them by `completedAt == createdAt` would work and is rejected as too clever — an explicit launch constant states the intent.
 
@@ -199,7 +200,7 @@ Three PRs, each independently revertible.
 | `npm run test:onboarding-entry` (new, pure) | Level→index mapping; clamping at one and two modules; empty curriculum → null; every `SqlLevel` value handled with no fallthrough |
 | `npm run test:console-nav` (widened) | `/welcome` is a focus route; `isAppRoute`/`isFocusRoute` remain mutually exclusive over every real route |
 | `tests/e2e/welcome.spec.ts` (new) | New user redirected from `/`; exactly one `banner`, one `main`, one `h1`; skip completes and never redirects again; answering lands on the expected lesson; a completed user hitting `/welcome` is bounced to `/`; the no-track fallback renders a catalog CTA and never "0 lessons" |
-| `npm run test:analytics-funnel` (extended) | Onboarding steps produce null rates over empty cohorts rather than zeros |
+| `npm run test:analytics-onboarding-funnel` (new, pure) | Onboarding steps produce null rates over empty cohorts rather than zeros; and no step's `rateFromPrevious` exceeds 1, asserted over a skip-heavy cohort where more users completed than answered |
 
 Every new guard is proven non-vacuous by breaking the thing it guards and watching it fail before the commit lands — the standard this repository has applied since SP1.
 
