@@ -284,6 +284,9 @@ jobs:
       - name: Test analytics funnel maths
         run: npm run test:analytics-funnel
 
+      - name: Test analytics onboarding funnel
+        run: npm run test:analytics-onboarding-funnel
+
       - name: Test analytics problem ranking
         run: npm run test:analytics-problem-ranking
 
