@@ -127,9 +127,19 @@ test.describe("first-run onboarding", () => {
         // published featured track with at least one lesson: CI has none, a
         // developer machine that ran seed:analyst-track has one. Assert the
         // branch that actually applies — and the honesty rule in both.
+        //
+        // Mirrors getTrackCurriculumForUser's own filter (lib/curriculum-read.ts):
+        // a track lesson is only visible if its underlying Article is itself
+        // PUBLISHED — that filter is unconditional, applied even for a staff
+        // viewer with allowDraft set, since allowDraft only relaxes the
+        // track-level status check, not the per-lesson one. Without this
+        // clause a lesson whose Article was edited back to DRAFT while its
+        // track stayed PUBLISHED would inflate this count and assert
+        // "Start lesson" for a destination the real app filters out.
         const publishedLessonCount = await prisma.moduleLesson.count({
             where: {
                 module: { track: { slug: FEATURED_TRACK_SLUG, status: "PUBLISHED" } },
+                article: { status: "PUBLISHED" },
             },
         })
 
