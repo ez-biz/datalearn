@@ -26,9 +26,14 @@ export type OnboardingCounts = {
      *  monotonicity. Reported as a standalone figure. */
     answered: number
     completed: number
-    /** Completed onboarding AND has at least one submission. Scoped to
+    /** Completed onboarding AND has at least one submission, ever. Scoped to
      *  completers so the step is a true subset of `completed`; a cohort-wide
-     *  submission count would not be. */
+     *  submission count would not be. NOT time-ordered relative to
+     *  completion — the underlying query is a distinct `userId` over ALL of
+     *  a completer's submissions, with no `createdAt` comparison against
+     *  `onboardingCompletedAt`. A user who submitted before ever finishing
+     *  onboarding (e.g. signed in from a problem-page `callbackUrl`) is
+     *  counted here too. */
     submittedAfterCompleting: number
     /** Completed with no level — the definition of a deliberate skip. */
     skipped: number
@@ -41,7 +46,13 @@ export function buildOnboardingFunnel(counts: OnboardingCounts): FunnelStep[] {
         { key: "completed", label: "Finished onboarding", count: counts.completed },
         {
             key: "submitted",
-            label: "Submitted after finishing",
+            // Not "Submitted after finishing" — the query behind this count
+            // is not time-ordered against completion (see the doc comment
+            // on `submittedAfterCompleting`). A funnel step is already
+            // understood as a subset of the step above it, so "Made a
+            // submission" under "Finished onboarding" reads correctly
+            // without asserting an ordering the data doesn't back up.
+            label: "Made a submission",
             count: counts.submittedAfterCompleting,
         },
     ])

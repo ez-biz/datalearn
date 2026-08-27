@@ -1,13 +1,23 @@
 import type { FunnelStep } from "@/lib/analytics/funnel"
 
-export function FunnelBar({ steps }: { steps: FunnelStep[] }) {
+export function FunnelBar({
+    steps,
+    emptyMessage = "No sign-ups in this window, so there is no funnel to report.",
+}: {
+    steps: FunnelStep[]
+    /** Override the empty-state copy for callers whose funnel isn't
+     *  windowed — e.g. the onboarding funnel, which is cohort-scoped, not
+     *  time-windowed, and would otherwise contradict a "Sign-ups" tile
+     *  elsewhere on the same page that reads a non-zero window count. */
+    emptyMessage?: string
+}) {
     // With no sign-ups there is no population to convert, so every rate
     // would be null and every bar empty. Say that instead of rendering
     // three blank rows.
     if (steps.length === 0 || steps[0].count === 0) {
         return (
             <p className="rounded-lg border border-border bg-surface p-4 text-sm text-muted-foreground">
-                No sign-ups in this window, so there is no funnel to report.
+                {emptyMessage}
             </p>
         )
     }

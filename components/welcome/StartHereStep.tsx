@@ -26,6 +26,7 @@ export function StartHereStep({
     onBrowse,
     onBack,
     busy,
+    error,
 }: {
     entry: EntryPoint | null
     trackSlug: string | null
@@ -35,6 +36,7 @@ export function StartHereStep({
     onBrowse: () => void
     onBack: () => void
     busy: boolean
+    error: string | null
 }) {
     const lessonHref =
         entry && trackSlug ? `/learn/tracks/${trackSlug}/${entry.lessonSlug}` : null
@@ -58,16 +60,23 @@ export function StartHereStep({
                             <span>{entry.moduleName}</span>
                         </div>
                         <p className="mt-3 text-base font-medium">{entry.lessonTitle}</p>
+                        {entry.readingMinutes !== null ? (
+                            <p className="mt-1 text-sm text-muted-foreground tabular-nums">
+                                First lesson · ~{entry.readingMinutes} min
+                            </p>
+                        ) : null}
                         <p className="mt-1 text-sm text-muted-foreground tabular-nums">
                             {entry.lessonCount} lesson{entry.lessonCount === 1 ? "" : "s"} in this module
-                            {entry.readingMinutes !== null
-                                ? ` · ~${entry.readingMinutes} min to read`
-                                : ""}
                         </p>
                     </div>
                     {trackName ? (
                         <p className="mt-3 text-sm text-muted-foreground tabular-nums">
                             {trackName} · {moduleCount} modules
+                        </p>
+                    ) : null}
+                    {error ? (
+                        <p className="mt-4 text-sm text-destructive" role="alert">
+                            {error}
                         </p>
                     ) : null}
                     <div className="mt-8 flex items-center justify-between gap-4">
@@ -102,6 +111,11 @@ export function StartHereStep({
                             Filter by difficulty and topic once you&rsquo;re in.
                         </p>
                     </div>
+                    {error ? (
+                        <p className="mt-4 text-sm text-destructive" role="alert">
+                            {error}
+                        </p>
+                    ) : null}
                     <div className="mt-8 flex items-center justify-between gap-4">
                         <Button variant="ghost" onClick={onBack} disabled={busy}>
                             Back

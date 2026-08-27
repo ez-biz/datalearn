@@ -24,12 +24,20 @@ export async function markOnboardingStartedForUser(userId: string): Promise<void
     })
 }
 
-/** Last write wins: a learner may go back and change their answer. */
+/**
+ * Last write wins: a learner may go back and change their answer.
+ *
+ * `updateMany`, not `update`: a plain `update` throws P2025 if the row is
+ * gone (deleted account, stale session), unlike its two siblings here which
+ * silently no-op via `updateMany`. That inconsistency was the concrete way a
+ * user could get stuck on this screen with no recovery — see WelcomeFlow's
+ * error handling, which now surfaces a failed write instead of advancing.
+ */
 export async function recordSqlLevelForUser(
     userId: string,
     level: SqlLevel,
 ): Promise<void> {
-    await prisma.user.update({
+    await prisma.user.updateMany({
         where: { id: userId },
         data: { sqlLevel: level },
     })

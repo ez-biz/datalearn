@@ -50,7 +50,10 @@ export async function OnboardingSection() {
             </div>
 
             <div className="mt-6">
-                <FunnelBar steps={steps} />
+                <FunnelBar
+                    steps={steps}
+                    emptyMessage="Nobody has signed up since onboarding launched."
+                />
             </div>
         </section>
     )

@@ -32,6 +32,7 @@ export function WelcomeFlow({
     const [level, setLevel] = useState<SqlLevel | null>(initialLevel)
     const [step, setStep] = useState<1 | 2>(initialLevel ? 2 : 1)
     const [busy, setBusy] = useState(false)
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
         // Write-on-view, fired from the client rather than during server
@@ -46,24 +47,57 @@ export function WelcomeFlow({
     async function handleContinue() {
         if (!level) return
         setBusy(true)
-        await recordSqlLevel(level)
-        setBusy(false)
-        setStep(2)
+        setError(null)
+        try {
+            const result = await recordSqlLevel(level)
+            if (!result.ok) {
+                setError("Couldn't save that — try again.")
+                return
+            }
+            setStep(2)
+        } catch {
+            setError("Couldn't save that — try again.")
+        } finally {
+            setBusy(false)
+        }
     }
 
     async function finish(destination: string) {
         setBusy(true)
-        await completeOnboarding(level)
-        // Not router.push: the session's onboardingCompleted flag is stale in
-        // this client's cache, and "/" redirects on the stale value. A hard
-        // navigation re-reads the session server-side.
-        window.location.assign(destination)
+        setError(null)
+        try {
+            const result = await completeOnboarding(level)
+            if (!result.ok) {
+                setError("Couldn't save that — try again.")
+                setBusy(false)
+                return
+            }
+            // Not router.push: the session's onboardingCompleted flag is
+            // stale in this client's cache, and "/" redirects on the stale
+            // value. A hard navigation re-reads the session server-side.
+            // busy is intentionally left true here: we are navigating away.
+            window.location.assign(destination)
+        } catch {
+            setError("Couldn't save that — try again.")
+            setBusy(false)
+        }
     }
 
     async function handleSkip() {
         setBusy(true)
-        await completeOnboarding(null)
-        window.location.assign("/")
+        setError(null)
+        try {
+            const result = await completeOnboarding(null)
+            if (!result.ok) {
+                setError("Couldn't save that — try again.")
+                setBusy(false)
+                return
+            }
+            window.location.assign("/")
+        } catch {
+            setError("Couldn't save that — try again.")
+            setBusy(false)
+        }
     }
 
     if (step === 1) {
@@ -75,6 +109,7 @@ export function WelcomeFlow({
                 onContinue={handleContinue}
                 onSkip={handleSkip}
                 busy={busy}
+                error={error}
             />
         )
     }
@@ -87,8 +122,12 @@ export function WelcomeFlow({
             moduleCount={modules.length}
             onLaunch={(href) => void finish(href)}
             onBrowse={() => void finish("/practice")}
-            onBack={() => setStep(1)}
+            onBack={() => {
+                setError(null)
+                setStep(1)
+            }}
             busy={busy}
+            error={error}
         />
     )
 }

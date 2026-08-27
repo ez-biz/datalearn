@@ -71,8 +71,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             if (session.user) {
                 session.user.role = (user as any).role
                 session.user.id = user.id
+                // != null (not !== null): fails CLOSED (treats as
+                // not-onboarded) if a future `select` narrows the adapter
+                // query and this field arrives as undefined rather than
+                // null. `!== null` would instead read `undefined` as
+                // "onboarded", silently disabling onboarding for everyone.
                 session.user.onboardingCompleted =
-                    (user as any).onboardingCompletedAt !== null
+                    (user as any).onboardingCompletedAt != null
             }
             return session
         },
