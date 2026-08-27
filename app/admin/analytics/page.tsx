@@ -3,6 +3,7 @@ import { requireAdminPage } from "@/lib/admin-page-auth"
 import { Container } from "@/components/ui/Container"
 import { PlatformSection } from "@/components/admin/analytics/PlatformSection"
 import { ContentSection } from "@/components/admin/analytics/ContentSection"
+import { OnboardingSection } from "@/components/admin/analytics/OnboardingSection"
 
 export const metadata: Metadata = {
     title: "Analytics",
@@ -32,6 +33,7 @@ export default async function AnalyticsPage() {
                 over the last 30 days would be noise on a low-traffic problem,
                 and the point is finding problems that are broken, not busy. */}
             <ContentSection />
+            <OnboardingSection />
         </Container>
     )
 }
