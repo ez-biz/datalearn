@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import { Container } from "@/components/ui/Container"
 import { getProblems } from "@/actions/problems"
 import { getTopics } from "@/actions/content"
@@ -19,6 +20,15 @@ export default async function Home() {
         getTopics(),
         auth(),
     ])
+
+    // First-run onboarding. Placed before the dashboard reads below so an
+    // onboarding user never pays for getUserStats / getDailyStatus /
+    // getHomeData on a page they will not see. A learner who signed in from
+    // a callbackUrl lands on that page instead and is never interrupted —
+    // onboarding is an invitation, not a gate.
+    if (session?.user?.id && !session.user.onboardingCompleted) {
+        redirect("/welcome")
+    }
 
     // Logged-in users get a personalized dashboard. Anonymous visitors get
     // the marketing pitch below.

@@ -277,6 +277,20 @@ describe("isFocusRoute", () => {
     it("is false for the site root", () => {
         assert.equal(isFocusRoute("/"), false)
     })
+
+    it("treats /welcome as a focus route", () => {
+        // Onboarding replaces the shell: no sidebar, no rail, no footer.
+        assert.equal(isFocusRoute("/welcome"), true)
+    })
+
+    it("tolerates a trailing slash on /welcome", () => {
+        assert.equal(isFocusRoute("/welcome/"), true)
+    })
+
+    it("does not match a deeper path under /welcome", () => {
+        // There is no /welcome/<step> route; steps are client state.
+        assert.equal(isFocusRoute("/welcome/step-2"), false)
+    })
 })
 
 describe("isAppRoute", () => {
@@ -311,6 +325,7 @@ describe("shell modes are mutually exclusive", () => {
     // reliably. This is what makes the third one safe to add.
     const ROUTES = [
         "/",
+        "/welcome",
         "/practice",
         "/practice/two-sum",
         "/learn",
