@@ -31,13 +31,22 @@ export async function seedUser(opts: {
     role?: "USER" | "CONTRIBUTOR" | "MODERATOR" | "ADMIN"
     name?: string
 }): Promise<SeededUser> {
+    // Default to already-onboarded: V17 added a first-run redirect from `/`
+    // to `/welcome` for any un-onboarded user, and this fixture is shared by
+    // every spec in the suite, not just welcome.spec.ts. Stamping
+    // onboardingCompletedAt here (on both the create AND the update branch,
+    // so a re-used row is normalised too) makes the default mean "an
+    // ordinary existing user", which is what every other spec assumes.
+    // welcome.spec.ts explicitly nulls these fields back out for the users
+    // that need to exercise the flow.
     const user = await prisma.user.upsert({
         where: { email: opts.email },
-        update: { role: opts.role ?? "USER" },
+        update: { role: opts.role ?? "USER", onboardingCompletedAt: new Date() },
         create: {
             email: opts.email,
             name: opts.name ?? opts.email.split("@")[0],
             role: opts.role ?? "USER",
+            onboardingCompletedAt: new Date(),
         },
     })
 

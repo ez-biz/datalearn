@@ -36,12 +36,21 @@ export default async function WelcomePage() {
     if (!session?.user?.id) redirect(signInPath("/welcome"))
     if (session.user.onboardingCompleted) redirect("/")
 
+    // Both reads are best-effort: a transient rejection here must degrade,
+    // not throw into app/error.tsx. That page's only escape is "Back to
+    // home", which redirects right back to /welcome for an un-onboarded
+    // user — an error here would otherwise lock them out of the whole
+    // product. Matches ConsoleShell's identical `.catch(() => null)` on the
+    // same curriculum read. StartHereStep already has a null-entry branch
+    // that renders the catalog fallback, which is the correct degraded UI.
     const [user, curriculum] = await Promise.all([
-        prisma.user.findUnique({
-            where: { id: session.user.id },
-            select: { sqlLevel: true, name: true },
-        }),
-        getTrackCurriculum(FEATURED_TRACK_SLUG),
+        prisma.user
+            .findUnique({
+                where: { id: session.user.id },
+                select: { sqlLevel: true, name: true },
+            })
+            .catch(() => null),
+        getTrackCurriculum(FEATURED_TRACK_SLUG).catch(() => null),
     ])
 
     // Structural mapping, not a cast: entry-point.ts stays Prisma-free by
@@ -64,7 +73,14 @@ export default async function WelcomePage() {
                     <Logo />
                 </div>
             </header>
-            <main id="main-content" className="px-4 py-12 sm:py-16">
+            {/* tabIndex={-1} + focus:outline-none: the root layout's skip
+                link targets #main-content and needs a focusable landing.
+                Matches the lesson reader, the other focus route. */}
+            <main
+                id="main-content"
+                tabIndex={-1}
+                className="px-4 py-12 focus:outline-none sm:py-16"
+            >
                 <WelcomeFlow
                     firstName={firstNameOf(user?.name ?? session.user.name ?? null)}
                     initialLevel={(user?.sqlLevel as SqlLevel | null) ?? null}

@@ -12,6 +12,10 @@ import {
     type AttemptBucket,
 } from "./attempt-distribution"
 import { tallyFailures, type FailureCategory } from "./failure-taxonomy"
+import {
+    ONBOARDING_LAUNCHED_AT,
+    type OnboardingCounts,
+} from "./onboarding-funnel"
 
 export interface PlatformSeries {
     signups: DayBucket[]
@@ -504,5 +508,68 @@ export async function getProblemDetail(
                 .filter((s) => s.status !== "ACCEPTED")
                 .map((s) => s.reason)
         ),
+    }
+}
+
+export async function getOnboardingCounts(): Promise<OnboardingCounts> {
+    const cohort = { createdAt: { gte: ONBOARDING_LAUNCHED_AT } }
+
+    const cohortUsers = await prisma.user.findMany({
+        where: cohort,
+        select: { id: true },
+    })
+
+    if (cohortUsers.length === 0) {
+        return {
+            signedUp: 0,
+            reached: 0,
+            answered: 0,
+            completed: 0,
+            submittedAfterCompleting: 0,
+            skipped: 0,
+        }
+    }
+
+    const [reached, answered, completed, skipped, completedUsers] =
+        await Promise.all([
+            prisma.user.count({
+                where: {
+                    ...cohort,
+                    OR: [
+                        { onboardingStartedAt: { not: null } },
+                        { sqlLevel: { not: null } },
+                        { onboardingCompletedAt: { not: null } },
+                    ],
+                },
+            }),
+            prisma.user.count({ where: { ...cohort, sqlLevel: { not: null } } }),
+            prisma.user.count({ where: { ...cohort, onboardingCompletedAt: { not: null } } }),
+            prisma.user.count({
+                where: { ...cohort, onboardingCompletedAt: { not: null }, sqlLevel: null },
+            }),
+            prisma.user.findMany({
+                where: { ...cohort, onboardingCompletedAt: { not: null } },
+                select: { id: true },
+            }),
+        ])
+
+    const submittedAfterCompleting =
+        completedUsers.length === 0
+            ? 0
+            : (
+                  await prisma.submission.findMany({
+                      where: { userId: { in: completedUsers.map((user) => user.id) } },
+                      distinct: ["userId"],
+                      select: { userId: true },
+                  })
+              ).length
+
+    return {
+        signedUp: cohortUsers.length,
+        reached,
+        answered,
+        completed,
+        submittedAfterCompleting,
+        skipped,
     }
 }

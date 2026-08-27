@@ -29,6 +29,7 @@ export function LevelStep({
     onContinue,
     onSkip,
     busy,
+    error,
 }: {
     firstName: string | null
     selected: SqlLevel | null
@@ -36,6 +37,7 @@ export function LevelStep({
     onContinue: () => void
     onSkip: () => void
     busy: boolean
+    error: string | null
 }) {
     return (
         <div className="mx-auto w-full max-w-lg">
@@ -84,6 +86,12 @@ export function LevelStep({
                     })}
                 </div>
             </fieldset>
+
+            {error ? (
+                <p className="mt-4 text-sm text-destructive" role="alert">
+                    {error}
+                </p>
+            ) : null}
 
             <div className="mt-8 flex items-center justify-between gap-4">
                 <Button variant="ghost" onClick={onSkip} disabled={busy}>
