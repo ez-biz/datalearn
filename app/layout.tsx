@@ -89,7 +89,14 @@ export default async function RootLayout({
                 <Analytics />
                 <SpeedInsights />
                 {googleAnalyticsId ? (
-                    <GoogleAnalytics gaId={googleAnalyticsId} />
+                    /* nonce is required, not optional: middleware.ts puts a
+                       strict CSP on /learn/** and GoogleAnalytics renders an
+                       inline dataLayer/gtag bootstrap. Without the nonce the
+                       browser refuses to execute it and GA silently records
+                       nothing on every Learn page — the external gtag.js
+                       still loads, so it looks wired up. Outside /learn there
+                       is no CSP and `nonce` is undefined, which is fine. */
+                    <GoogleAnalytics gaId={googleAnalyticsId} nonce={nonce} />
                 ) : null}
             </body>
         </html>
