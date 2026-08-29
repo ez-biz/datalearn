@@ -50,6 +50,22 @@ const E2E_ENV: Record<string, string> = {
     ...(process.env.DATABASE_URL
         ? { DATABASE_URL: process.env.DATABASE_URL }
         : {}),
+    // Force Google Analytics to render, so the Learn CSP nonce assertion in
+    // learn-csp.spec.ts has something to assert on.
+    //
+    // Without this the suite was passing vacuously for months. app/layout.tsx
+    // only renders <GoogleAnalytics> when a measurement id resolves, and it
+    // resolves from NEXT_PUBLIC_GA_MEASUREMENT_ID or a VERCEL_ENV=production
+    // fallback — neither of which CI has. So CI rendered no GA script, the
+    // "every inline script carries the nonce" check ran over a set that
+    // excluded the only script that failed it, and a real production bug (GA
+    // blocked by CSP on every /learn/** page since 2026-05-10) stayed green.
+    //
+    // This is read at runtime by `next start`, not inlined at build time, so
+    // pinning it here is enough — no workflow change needed. The value is a
+    // deliberately invalid property id, and the spec blocks the outbound
+    // request to googletagmanager.com, so nothing is ever reported anywhere.
+    NEXT_PUBLIC_GA_MEASUREMENT_ID: "G-E2ENEVERREAL",
 }
 
 export default defineConfig({

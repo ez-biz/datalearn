@@ -38,6 +38,14 @@ test.describe("CSP on /learn/**", () => {
             }
         })
 
+        // Keep the run hermetic. playwright.config.ts pins a deliberately
+        // invalid NEXT_PUBLIC_GA_MEASUREMENT_ID so <GoogleAnalytics> renders;
+        // its inline bootstrap is what this test exists to check, and the
+        // outbound fetch of gtag.js contributes nothing to that.
+        await page.route("https://www.googletagmanager.com/**", (route) =>
+            route.fulfill({ status: 200, contentType: "text/javascript", body: "" })
+        )
+
         const response = await page.goto("/learn/joins/how-a-join-works", {
             waitUntil: "networkidle",
         })
@@ -47,13 +55,38 @@ test.describe("CSP on /learn/**", () => {
         const nonce = /'nonce-([^']+)'/.exec(csp)?.[1]
         expect(nonce).toBeTruthy()
 
-        const inlineScriptNonces = await page
+        const inlineScripts = await page
             .locator("script:not([src])")
-            .evaluateAll((scripts) => scripts.map((script) => script.nonce))
-        expect(inlineScriptNonces.length).toBeGreaterThan(0)
+            .evaluateAll((scripts) =>
+                scripts.map((script) => ({
+                    nonce: script.nonce,
+                    body: script.textContent ?? "",
+                }))
+            )
+        expect(inlineScripts.length).toBeGreaterThan(0)
+
+        // Non-vacuity guard. This assertion is the whole point of the test:
+        // the Google Analytics bootstrap is a third-party inline script that
+        // does NOT get a nonce for free, and for months it was absent from
+        // CI entirely, so "every inline script is nonced" was true over a set
+        // that excluded the only interesting member. If GA stops rendering
+        // here, fail loudly rather than quietly proving nothing.
+        const gaBootstrap = inlineScripts.filter((script) =>
+            script.body.includes("dataLayer")
+        )
         expect(
-            inlineScriptNonces.every((scriptNonce) => scriptNonce === nonce)
-        ).toBe(true)
+            gaBootstrap,
+            "expected the GoogleAnalytics inline bootstrap to be present — " +
+                "without it this test passes vacuously"
+        ).toHaveLength(1)
+
+        const unnonced = inlineScripts.filter(
+            (script) => script.nonce !== nonce
+        )
+        expect(
+            unnonced.map((script) => script.body.slice(0, 80)),
+            "every inline script on /learn/** must carry the CSP nonce"
+        ).toEqual([])
         expect(cspErrors).toEqual([])
     })
 })
