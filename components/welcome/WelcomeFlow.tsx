@@ -62,11 +62,17 @@ export function WelcomeFlow({
         }
     }
 
-    async function finish(destination: string) {
+    // The one exit from onboarding: stamp completion, then leave. Skipping is
+    // the same path with no level recorded, so both share this body — a second
+    // copy would be a second place to forget the hard navigation below.
+    async function completeAndLeave(
+        levelToSave: SqlLevel | null,
+        destination: string
+    ) {
         setBusy(true)
         setError(null)
         try {
-            const result = await completeOnboarding(level)
+            const result = await completeOnboarding(levelToSave)
             if (!result.ok) {
                 setError("Couldn't save that — try again.")
                 setBusy(false)
@@ -83,21 +89,12 @@ export function WelcomeFlow({
         }
     }
 
-    async function handleSkip() {
-        setBusy(true)
-        setError(null)
-        try {
-            const result = await completeOnboarding(null)
-            if (!result.ok) {
-                setError("Couldn't save that — try again.")
-                setBusy(false)
-                return
-            }
-            window.location.assign("/")
-        } catch {
-            setError("Couldn't save that — try again.")
-            setBusy(false)
-        }
+    function finish(destination: string) {
+        return completeAndLeave(level, destination)
+    }
+
+    function handleSkip() {
+        return completeAndLeave(null, "/")
     }
 
     if (step === 1) {
